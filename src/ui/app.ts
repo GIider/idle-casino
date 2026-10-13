@@ -202,7 +202,8 @@ export class App {
 
     if (g.notice && g.notice.seq !== this.toastSeq) {
       this.toastSeq = g.notice.seq;
-      this.toast(g.notice.text);
+      if (this.selected === 'casino') this.toast(g.notice.text);
+      else this.panels.get(this.selected)!.showNotice(g.notice.text);
     }
   }
 

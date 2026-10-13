@@ -55,6 +55,8 @@ export class TablePanel {
   private stage: HTMLElement;
   private resultEl: HTMLElement;
   private netEl: HTMLElement;
+  private noticeEl: HTMLElement;
+  private noticeTimer = 0;
   private bigMin: HTMLElement;
   private bigMinOld: HTMLElement;
   private bigMax: HTMLElement;
@@ -107,7 +109,7 @@ export class TablePanel {
       streak: kv('Streak', 'gain'),
     };
     this.streakTile = h('div', { class: 'kv' }, h('small', { text: 'Streak' }), this.statTiles.streak);
-    this.winOld = h('small', { class: 'kv-old hidden' });
+    this.winOld = h('small', { class: 'kv-old concealed' });
     this.winTile = h('div', { class: 'kv' }, h('small', { text: 'Winnings' }), this.statTiles.winnings, this.winOld);
     this.statsEl = h(
       'div',
@@ -126,7 +128,8 @@ export class TablePanel {
     this.netEl = h('div', { class: 'net', text: ' ' });
     this.canvasStage = new Stage(def.icon, id);
     this.resultEl.setAttribute('aria-live', 'polite');
-    this.stage = h('div', { class: 'stage' }, this.canvasStage.canvas, this.resultEl, this.netEl);
+    this.noticeEl = h('div', { class: 'stage-notice hidden' });
+    this.stage = h('div', { class: 'stage' }, this.canvasStage.canvas, this.resultEl, this.netEl, this.noticeEl);
 
     this.bigMin = h('div', { class: 'big-value' });
     this.bigMinOld = h('div', { class: 'big-old' });
@@ -200,6 +203,7 @@ export class TablePanel {
       h(
         'div',
         { class: 'col main' },
+        h('div', { class: 'card play-card' }, this.stage),
         h(
           'div',
           { class: 'card header-card hero' },
@@ -224,7 +228,6 @@ export class TablePanel {
           this.statsEl,
           this.barWrap,
         ),
-        h('div', { class: 'card play-card' }, this.stage),
       ),
     );
     const showSide = (mode: 'upgrades' | 'achievements'): void => {
@@ -245,6 +248,14 @@ export class TablePanel {
     showSide('upgrades');
 
     this.root = h('section', { class: 'panel' }, this.locked, this.body);
+  }
+
+  /** Shows a popup over the animation stage. */
+  showNotice(text: string, ms = 5000): void {
+    this.noticeEl.textContent = text;
+    this.noticeEl.classList.remove('hidden');
+    window.clearTimeout(this.noticeTimer);
+    this.noticeTimer = window.setTimeout(() => this.noticeEl.classList.add('hidden'), ms);
   }
 
   update(): void {
@@ -307,7 +318,7 @@ export class TablePanel {
     if (pv && this.frozenWin === null) this.frozenWin = curWin;
     if (!pv) this.frozenWin = null;
     setText(this.winOld, `was ×${(this.frozenWin ?? curWin).toFixed(2)}`);
-    toggleClass(this.winOld, 'hidden', !pv);
+    toggleClass(this.winOld, 'concealed', !pv);
     for (const t of this.bigTiles) toggleClass(t, 'preview', pv);
     toggleClass(this.winTile, 'preview', pv);
     toggleClass(this.streakTile, 'hidden', !ts.levels.streak);
