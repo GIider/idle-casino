@@ -3,9 +3,7 @@ import { GameHistoryView, VIEW_LABELS } from './historyViews';
 import { COLORS, setupCanvas } from './stage/canvas';
 import { h, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
-
-type Range = 'recent' | 'all';
-const RECENT_PLAYS = 100;
+import { RANGES, visiblePoints, type Range } from './chartRange';
 
 /** Profit/loss over time for one table, from the sampled `History` series. */
 export class HistoryChart {
@@ -18,6 +16,7 @@ export class HistoryChart {
   private data: [number, number][] = [];
   private marks: number[] = [];
   private btns: Record<Range, HTMLButtonElement>;
+  private step = 1;
   private gameView: GameHistoryView;
   private tabs: Record<'profit' | 'game', HTMLButtonElement>;
   private rangeBox: HTMLElement;
@@ -32,9 +31,10 @@ export class HistoryChart {
     };
     this.canvas = h('canvas', { class: 'history-canvas' });
     this.info = h('div', { class: 'history-info', text: ' ' });
-    const mk = (r: Range, label: string) =>
-      h('button', { class: 'btn small', text: label, onclick: () => this.setRange(r) });
-    this.btns = { recent: mk('recent', `Last ${RECENT_PLAYS}`), all: mk('all', 'All') };
+    this.btns = {} as Record<Range, HTMLButtonElement>;
+    for (const r of RANGES) {
+      this.btns[r.id] = h('button', { class: 'btn small', text: r.label, onclick: () => this.setRange(r.id) });
+    }
     this.canvas.setAttribute('role', 'img');
     this.canvas.setAttribute('aria-label', 'Profit and loss history');
     const move = (e: PointerEvent) => {
@@ -50,7 +50,7 @@ export class HistoryChart {
       this.key = '';
       this.draw();
     });
-    this.rangeBox = h('div', { class: 'history-range' }, this.btns.recent, this.btns.all);
+    this.rangeBox = h('div', { class: 'history-range' }, ...RANGES.map((r) => this.btns[r.id]));
     this.root = h(
       'div',
       { class: 'card history' },
@@ -84,7 +84,7 @@ export class HistoryChart {
   }
 
   private syncButtons(): void {
-    for (const r of ['recent', 'all'] as const) toggleClass(this.btns[r], 'active', this.range === r);
+    for (const r of RANGES) toggleClass(this.btns[r.id], 'active', this.range === r.id);
     for (const m of ['profit', 'game'] as const) toggleClass(this.tabs[m], 'active', this.mode === m);
   }
 
@@ -103,18 +103,12 @@ export class HistoryChart {
     else if (last[0] === plays) pts[pts.length - 1] = [plays, lifetimeProfit];
     this.data = pts;
     this.marks = history.marks;
+    this.step = history.step;
     this.draw();
   }
 
   private visible(): [number, number][] {
-    if (this.range === 'all' || this.data.length === 0) return this.data;
-    const end = this.data[this.data.length - 1][0];
-    const from = end - RECENT_PLAYS;
-    const out = this.data.filter((p) => p[0] >= from);
-    // Include the point just before the window so the line enters from the left edge.
-    const idx = this.data.length - out.length - 1;
-    if (idx >= 0) out.unshift(this.data[idx]);
-    return out.length >= 2 ? out : this.data.slice(-2);
+    return visiblePoints(this.data, this.range, this.step);
   }
 
   private draw(): void {

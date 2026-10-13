@@ -12,7 +12,7 @@ export interface AchievementDef {
   goal: string;
   /** `collect` is earned by upgrade purchases, not rounds: tier 1 = every upgrade owned, tier 2 = every upgrade maxed. */
   kind: 'grind' | 'streak' | 'collect';
-  /** Grind: a single target. Streak: ascending thresholds, one per rarity tier. Collect: one entry per tier. */
+  /** Grind: cumulative counts. Streak: run lengths. Both ascend, one per rarity tier. Collect: one entry per tier. */
   targets: number[];
   /** Grind: how much this round adds to the count (0 = nothing). Streak: 1 if the round extends the run. */
   score(view: PlayView, outcome: Outcome): number;
@@ -29,16 +29,17 @@ export function perkKey(id: string): string {
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const byTier = <T>(values: T[], tier: number): T => values[Math.min(values.length, Math.max(1, tier)) - 1];
 
-export const COIN_HEADS_CHANCE = 0.015;
+export const COIN_HEADS_CHANCE = [0.005, 0.01, 0.015];
 export const DOUBLE_HEADER_CHANCE = [0.03, 0.06, 0.1];
 export const CONSOLATION_REFUND = [0.1, 0.2, 0.3];
-export const POLISHED_TRIPLE_BONUS = 1.1;
-export const SWEET_PAIR_MULT = 1.25;
+export const POLISHED_TRIPLE_BONUS = [1.04, 1.07, 1.1];
+export const SWEET_PAIR_MULT = [1.1, 1.18, 1.25];
 export const NEAR_MISS_REFUND = [0.1, 0.2, 0.3];
-export const HOT_SEVENTEEN_MULT = 40;
+export const HOT_SEVENTEEN_MULT = [37, 38.5, 40];
+export const LA_PARTAGE_REFUND = [0.2, 0.35, 0.5];
 export const COLOUR_MEMORY_MULT = [2.1, 2.2, 2.3];
-export const MARKED_DECK_MULT = 3;
-export const SECOND_THOUGHTS_CHANCE = 0.15;
+export const MARKED_DECK_MULT = [2.7, 2.85, 3];
+export const SECOND_THOUGHTS_CHANCE = [0.05, 0.1, 0.15];
 export const GENTLEMAN_PUSH_MULT = [1.1, 1.2, 1.3];
 
 const collection = (table: TableId, name: string): AchievementDef => ({
@@ -66,9 +67,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Heads Collector',
     goal: 'Flip heads',
     kind: 'grind',
-    targets: [1000],
+    targets: [10000, 100000, 1000000],
     score: (v) => (v.kind === 'coin' && v.heads ? 1 : 0),
-    perk: { name: 'Lucky Penny', describe: () => `+${(COIN_HEADS_CHANCE * 100).toFixed(1)}% heads chance` },
+    perk: { name: 'Lucky Penny', describe: (t) => `+${(byTier(COIN_HEADS_CHANCE, t) * 100).toFixed(1)}% heads chance` },
   },
   {
     id: 'hotHand',
@@ -76,7 +77,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Hot Hand',
     goal: 'Flip heads in a row',
     kind: 'streak',
-    targets: [6, 10, 15],
+    targets: [20, 38, 54],
     score: (v) => (v.kind === 'coin' && v.heads ? 1 : 0),
     perk: {
       name: 'Double Header',
@@ -89,7 +90,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Cold Comfort',
     goal: 'Flip tails in a row',
     kind: 'streak',
-    targets: [4, 6, 8],
+    targets: [7, 9, 12],
     score: (v) => (v.kind === 'coin' && !v.heads ? 1 : 0),
     perk: {
       name: 'Consolation Prize',
@@ -102,9 +103,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Triple Crown',
     goal: 'Land three of a kind',
     kind: 'grind',
-    targets: [250],
+    targets: [5000, 50000, 500000],
     score: (v) => (v.kind === 'slots' && v.reels[0] === v.reels[1] && v.reels[1] === v.reels[2] ? 1 : 0),
-    perk: { name: 'Polished Reels', describe: () => `Three of a kind pays +${pct(POLISHED_TRIPLE_BONUS - 1)}` },
+    perk: { name: 'Polished Reels', describe: (t) => `Three of a kind pays +${pct(byTier(POLISHED_TRIPLE_BONUS, t) - 1)}` },
   },
   {
     id: 'cherrySeason',
@@ -112,9 +113,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Cherry Season',
     goal: 'See cherries on the reels',
     kind: 'grind',
-    targets: [2500],
+    targets: [20000, 200000, 2000000],
     score: (v) => (v.kind === 'slots' ? v.reels.filter((r) => r === 0).length : 0),
-    perk: { name: 'Sweet Pair', describe: () => `Two cherries pay ${SWEET_PAIR_MULT}× instead of 1×` },
+    perk: { name: 'Sweet Pair', describe: (t) => `Two cherries pay ${byTier(SWEET_PAIR_MULT, t)}× instead of 1×` },
   },
   {
     id: 'hotStreak',
@@ -122,7 +123,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Hot Streak',
     goal: 'Get paid at least your stake in a row',
     kind: 'streak',
-    targets: [5, 8, 12],
+    targets: [14, 30, 46],
     score: (v, o) => (v.kind === 'slots' && o.payout >= o.bet ? 1 : 0),
     perk: {
       name: 'Near Miss',
@@ -135,9 +136,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Zero Hero',
     goal: 'Watch the ball land on zero',
     kind: 'grind',
-    targets: [25],
+    targets: [1000, 10000, 100000],
     score: (v) => (v.kind === 'roulette' && v.pocket === 0 ? 1 : 0),
-    perk: { name: 'La Partage', describe: () => 'Zero returns half your bet on colour and dozen bets' },
+    perk: { name: 'La Partage', describe: (t) => `Zero returns ${pct(byTier(LA_PARTAGE_REFUND, t))} of your bet on colour and dozen bets` },
   },
   {
     id: 'luckySeventeen',
@@ -145,9 +146,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Lucky Seventeen',
     goal: 'Hit 17',
     kind: 'grind',
-    targets: [20],
+    targets: [750, 7500, 75000],
     score: (v) => (v.kind === 'roulette' && v.pocket === 17 ? 1 : 0),
-    perk: { name: 'Hot Seventeen', describe: () => `Number bets pay ${HOT_SEVENTEEN_MULT}× instead of 36×` },
+    perk: { name: 'Hot Seventeen', describe: (t) => `Number bets pay ${byTier(HOT_SEVENTEEN_MULT, t)}× instead of 36×` },
   },
   {
     id: 'colourRun',
@@ -155,7 +156,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Red Run',
     goal: 'Spin red in a row',
     kind: 'streak',
-    targets: [5, 8, 11],
+    targets: [9, 18, 28],
     score: (v) => (v.kind === 'roulette' && RED_POCKETS.has(v.pocket) ? 1 : 0),
     perk: {
       name: 'Colour Memory',
@@ -168,9 +169,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Natural Born',
     goal: 'Be dealt a natural',
     kind: 'grind',
-    targets: [25],
+    targets: [3000, 30000, 300000],
     score: (v) => (v.kind === 'blackjack' && v.outcome === 'natural' ? 1 : 0),
-    perk: { name: 'Marked Deck', describe: () => `Naturals pay ${MARKED_DECK_MULT}× instead of 2.5×` },
+    perk: { name: 'Marked Deck', describe: (t) => `Naturals pay ${byTier(MARKED_DECK_MULT, t)}× instead of 2.5×` },
   },
   {
     id: 'bustOut',
@@ -178,11 +179,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Bust Out',
     goal: 'Bust',
     kind: 'grind',
-    targets: [250],
+    targets: [2500, 25000, 250000],
     score: (v) => (v.kind === 'blackjack' && v.outcome === 'bust' ? 1 : 0),
     perk: {
       name: 'Second Thoughts',
-      describe: () => `${pct(SECOND_THOUGHTS_CHANCE)} chance a busting card is re-drawn once`,
+      describe: (t) => `${pct(byTier(SECOND_THOUGHTS_CHANCE, t))} chance a busting card is re-drawn once`,
     },
   },
   {
@@ -191,7 +192,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Winning Run',
     goal: 'Win hands in a row',
     kind: 'streak',
-    targets: [4, 7, 10],
+    targets: [9, 22, 36],
     score: (v) => (v.kind === 'blackjack' && (v.outcome === 'win' || v.outcome === 'natural') ? 1 : 0),
     perk: {
       name: "Gentleman's Agreement",
@@ -333,8 +334,15 @@ export function normalizeAchievements(raw: unknown): Record<string, AchievementP
     p.count = n(src.count);
     p.best = n(src.best);
     p.run = Math.min(n(src.run), p.best);
-    if (def.kind === 'collect') p.tier = Math.min(n(src.tier), maxTier(def));
-    else p.tier = tierFor(def, p);
+    const saved = Math.min(n(src.tier), maxTier(def));
+    if (def.kind === 'collect') p.tier = saved;
+    else if (def.kind === 'grind' && saved > 0 && p.count < def.targets[0]) {
+      // Earned under the old single-tier target: keep the full perk the player already had.
+      p.tier = maxTier(def);
+    } else {
+      // Targets can be raised between versions; a tier that was earned is never taken back.
+      p.tier = Math.max(saved, tierFor(def, p));
+    }
   }
   return out;
 }

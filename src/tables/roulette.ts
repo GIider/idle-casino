@@ -1,5 +1,5 @@
 import type { TableDef } from '../core/types';
-import { COLOUR_MEMORY_MULT, HOT_SEVENTEEN_MULT } from '../core/achievements';
+import { COLOUR_MEMORY_MULT, HOT_SEVENTEEN_MULT, LA_PARTAGE_REFUND } from '../core/achievements';
 
 export const RED_POCKETS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 const LUCKY_NUMBER = 17;
@@ -51,13 +51,14 @@ export const roulette: TableDef = {
     const detail = `🎡 ${pocket} ${colorOf(pocket)}`;
     const view = { kind: 'roulette' as const, pocket, option };
     // La Partage: zero returns half the stake on the safer bets.
-    const partage = pocket === 0 && option !== 'number' && levels.perk_zeroHero ? 0.5 : 0;
+    const partage =
+      pocket === 0 && option !== 'number' && levels.perk_zeroHero ? LA_PARTAGE_REFUND[levels.perk_zeroHero - 1] : 0;
     switch (option) {
       case 'dozen':
         return { mult: pocket >= 1 && pocket <= 12 ? 3 : partage, detail, view };
       case 'number': {
         const hit = Math.abs(pocket - LUCKY_NUMBER) <= (levels.magnet ?? 0);
-        return { mult: hit ? (levels.perk_luckySeventeen ? HOT_SEVENTEEN_MULT : 36) : 0, detail, view };
+        return { mult: hit ? (levels.perk_luckySeventeen ? HOT_SEVENTEEN_MULT[levels.perk_luckySeventeen - 1] : 36) : 0, detail, view };
       }
       default: {
         const red = levels.perk_colourRun ? COLOUR_MEMORY_MULT[levels.perk_colourRun - 1] : 2;

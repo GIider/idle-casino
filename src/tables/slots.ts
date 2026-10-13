@@ -37,12 +37,12 @@ export const slots: TableDef = {
     const reels = [0, 1, 2].map(() => pickWeighted(rng, weights));
     const detail = reels.map((r) => SYMBOLS[r]).join(' ');
     if (reels[0] === reels[1] && reels[1] === reels[2]) {
-      const polish = levels.perk_tripleCrown ? POLISHED_TRIPLE_BONUS : 1;
+      const polish = levels.perk_tripleCrown ? POLISHED_TRIPLE_BONUS[levels.perk_tripleCrown - 1] : 1;
       return { mult: TRIPLE_PAYOUT[reels[0]] * polish, detail, view: { kind: 'slots', reels } };
     }
     const cherries = reels.filter((r) => r === 0).length;
     if (cherries === 2) {
-      return { mult: levels.perk_cherrySeason ? SWEET_PAIR_MULT : 1, detail, view: { kind: 'slots', reels } };
+      return { mult: levels.perk_cherrySeason ? SWEET_PAIR_MULT[levels.perk_cherrySeason - 1] : 1, detail, view: { kind: 'slots', reels } };
     }
     const pair = reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2];
     const nearMiss = pair && levels.perk_hotStreak ? NEAR_MISS_REFUND[levels.perk_hotStreak - 1] : 0;

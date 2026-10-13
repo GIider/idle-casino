@@ -23,7 +23,7 @@ export const coinflip: TableDef = {
     },
   ],
   play(rng, levels) {
-    const luckyPenny = levels.perk_headsCollector ? COIN_HEADS_CHANCE : 0;
+    const luckyPenny = levels.perk_headsCollector ? COIN_HEADS_CHANCE[levels.perk_headsCollector - 1] : 0;
     const chance = 0.55 + 0.012 * (levels.edge ?? 0) + luckyPenny;
     const win = rng() < chance;
     const view = { kind: 'coin' as const, heads: win };

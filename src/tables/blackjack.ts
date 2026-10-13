@@ -87,7 +87,7 @@ export const blackjack: TableDef = {
       insured,
     });
     if (playerNatural && dealerNatural) return { mult: 1, detail: '🃏 Both natural — push', view: view('push') };
-    if (playerNatural) return { mult: levels.perk_naturalBorn ? MARKED_DECK_MULT : 2.5, detail: '🃏 Blackjack!', view: view('natural') };
+    if (playerNatural) return { mult: levels.perk_naturalBorn ? MARKED_DECK_MULT[levels.perk_naturalBorn - 1] : 2.5, detail: '🃏 Blackjack!', view: view('natural') };
     if (dealerNatural) return { mult: 0, detail: '🃏 Dealer blackjack', view: view('lose') };
 
     const standAt = (): number => {
@@ -98,7 +98,7 @@ export const blackjack: TableDef = {
     while (total(player) < standAt()) player.push(draw(rng));
 
     let p = total(player);
-    if (p > 21 && levels.perk_bustOut && rng() < SECOND_THOUGHTS_CHANCE) {
+    if (p > 21 && levels.perk_bustOut && rng() < SECOND_THOUGHTS_CHANCE[levels.perk_bustOut - 1]) {
       // Second Thoughts: the busting card is discarded and drawn again.
       player.pop();
       player.push(draw(rng));

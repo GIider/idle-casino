@@ -55,7 +55,7 @@ export class AchievementsCard {
       const value = def.kind === 'grind' ? p.count : p.best;
       const next = def.targets[Math.min(p.tier, top - 1)];
       const prev = p.tier > 0 ? def.targets[p.tier - 1] : 0;
-      const rarity = p.tier > 0 && def.kind === 'streak' ? ` · ${RARITIES[p.tier - 1]}` : '';
+      const rarity = p.tier > 0 ? ` · ${RARITIES[p.tier - 1]}` : '';
 
       setText(row.title, `${p.tier > 0 ? '🏆' : '🔒'} ${def.name}${rarity}`);
       setText(
@@ -101,19 +101,19 @@ export class AchievementsCard {
   /** Full explanation shown on hover: the goal, every tier's reward, and how progress is counted. */
   private tooltip(def: AchievementDef, p: AchievementProgress): string {
     const lines: string[] = [];
-    if (def.kind === 'grind') {
-      lines.push(`${def.goal} ${fmt(def.targets[0])} times in total.`);
+    const grind = def.kind === 'grind';
+    if (grind) {
+      lines.push(`${def.goal}, counted in total across all your plays.`);
       lines.push(`Progress: ${fmt(p.count)} so far.`);
-      lines.push(`Reward — ${def.perk.name}: ${def.perk.describe(1)}.`);
     } else {
       lines.push(`${def.goal}. Only your longest run counts, and a miss resets the current run.`);
       lines.push(`Longest run: ${p.best} · current run: ${p.run}.`);
-      def.targets.forEach((target, i) => {
-        const mark = p.tier > i ? '✓' : '•';
-        lines.push(`${mark} ${RARITIES[i]} (${target}): ${def.perk.name} — ${def.perk.describe(i + 1)}`);
-      });
-      lines.push('Each tier upgrades the same perk.');
     }
+    def.targets.forEach((target, i) => {
+      const mark = p.tier > i ? '✓' : '•';
+      lines.push(`${mark} ${RARITIES[i]} (${grind ? fmt(target) : target}): ${def.perk.name} — ${def.perk.describe(i + 1)}`);
+    });
+    lines.push('Each tier upgrades the same perk.');
     lines.push('Auto-players count; offline progress does not.');
     lines.push('The perk is permanent and survives prestige and ascension.');
     return lines.join('\n');

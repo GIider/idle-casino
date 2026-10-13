@@ -23,22 +23,24 @@ const heads = (h: boolean): Outcome => outcome({ kind: 'coin', heads: h });
 describe('achievements', () => {
   it('streaks advance tiers at thresholds and reset on a miss', () => {
     const s = createInitialState(0);
-    for (let i = 0; i < 5; i++) observeRound(s.achievements, 'coinflip', heads(true));
+    const [t1, t2] = ACHIEVEMENTS.find((a) => a.id === 'hotHand')!.targets;
+    for (let i = 0; i < t1 - 1; i++) observeRound(s.achievements, 'coinflip', heads(true));
     expect(s.achievements.hotHand.tier).toBe(0);
     const gained = observeRound(s.achievements, 'coinflip', heads(true));
     expect(gained.map((g) => g.def.id)).toEqual(['hotHand']);
     expect(s.achievements.hotHand.tier).toBe(1);
     observeRound(s.achievements, 'coinflip', heads(false));
     expect(s.achievements.hotHand.run).toBe(0);
-    expect(s.achievements.hotHand.best).toBe(6);
+    expect(s.achievements.hotHand.best).toBe(t1);
     expect(s.achievements.coldComfort.run).toBe(1);
-    for (let i = 0; i < 10; i++) observeRound(s.achievements, 'coinflip', heads(true));
+    for (let i = 0; i < t2; i++) observeRound(s.achievements, 'coinflip', heads(true));
     expect(s.achievements.hotHand.tier).toBe(2);
   });
 
   it('grind achievements unlock exactly at the target', () => {
     const s = createInitialState(0);
-    for (let i = 0; i < 999; i++) observeRound(s.achievements, 'coinflip', heads(true));
+    const [target] = ACHIEVEMENTS.find((a) => a.id === 'headsCollector')!.targets;
+    s.achievements.headsCollector.count = target - 1;
     expect(s.achievements.headsCollector.tier).toBe(0);
     observeRound(s.achievements, 'coinflip', heads(true));
     expect(s.achievements.headsCollector.tier).toBe(1);
@@ -61,7 +63,7 @@ describe('achievements', () => {
 
   it('notifies on unlock while playing', () => {
     const g = new Game(createInitialState(0), mulberry32(1));
-    g.state.achievements.headsCollector.count = 999;
+    g.state.achievements.headsCollector.count = ACHIEVEMENTS.find((a) => a.id === 'headsCollector')!.targets[0] - 1;
     g.table('coinflip').wallet = 1e6;
     for (let i = 0; i < 50 && !g.notice?.text.includes('Lucky Penny'); i++) g.play('coinflip', 1);
     expect(g.notice?.text).toContain('Lucky Penny');
@@ -69,17 +71,17 @@ describe('achievements', () => {
 
   it('normalizes junk and backfills old saves from play stats', () => {
     const a = normalizeAchievements({ hotHand: { best: 'x', tier: 99 }, bogus: { count: 5 } });
-    expect(a.hotHand.tier).toBe(0);
+    expect(a.hotHand.tier).toBe(3);
     expect(a.bogus).toBeUndefined();
     const s = createInitialState(0);
-    s.tables.coinflip.history.stats.coin.heads = 1500;
+    s.tables.coinflip.history.stats.coin.heads = 15000;
     s.tables.blackjack.history.stats.blackjack.natural = 3;
     const raw: any = JSON.parse(JSON.stringify(s));
     delete raw.achievements;
     const loaded = normalizeState(raw);
     expect(loaded.achievements.headsCollector.tier).toBe(1);
     expect(loaded.achievements.naturalBorn.count).toBe(3);
-    expect(backfillAchievements(s).headsCollector.count).toBe(1500);
+    expect(backfillAchievements(s).headsCollector.count).toBe(15000);
   });
 
   it('has a perk for every achievement and bounded balance at max tier', () => {
@@ -124,6 +126,25 @@ describe('achievements', () => {
   it('collection perk adds 5% winnings per tier', () => {
     expect(payoutMultiplier({ perk_collection: 2 }, 0)).toBeCloseTo(1.1);
     expect(payoutMultiplier({}, 0)).toBe(1);
+  });
+
+  it('earned tiers survive raised targets, and old single-tier grinds keep the full perk', () => {
+    const streak = normalizeAchievements({ hotHand: { best: 6, tier: 1 } });
+    expect(streak.hotHand.tier).toBe(1);
+    const old = normalizeAchievements({ headsCollector: { count: 1000, tier: 1 }, zeroHero: { count: 3, tier: 0 } });
+    expect(old.headsCollector.tier).toBe(3);
+    expect(old.zeroHero.tier).toBe(0);
+    // A new-rules save at tier 1 has met the first target and stays at tier 1.
+    const fresh = normalizeAchievements({ headsCollector: { count: 10000, tier: 1 } });
+    expect(fresh.headsCollector.tier).toBe(1);
+  });
+
+  it('every achievement has ascending targets and a perk table that covers all tiers', () => {
+    for (const a of ACHIEVEMENTS.filter((x) => x.kind !== 'collect')) {
+      expect(a.targets.length).toBe(3);
+      expect([...a.targets].sort((x, y) => x - y)).toEqual(a.targets);
+      for (let t = 1; t <= 3; t++) expect(a.perk.describe(t)).not.toContain('undefined');
+    }
   });
 
   it('collection tiers backfill from owned upgrades and are sanitized on load', () => {

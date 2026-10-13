@@ -3,9 +3,8 @@ import { TABLES, TABLE_IDS } from '../tables';
 import { COLORS, setupCanvas } from './stage/canvas';
 import { h, setText, toggleClass } from './dom';
 import { fmt } from './format';
+import { RANGES, visiblePoints, windowStart, type Range } from './chartRange';
 
-type Range = 'recent' | 'all';
-const RECENT_ROUNDS = 200;
 
 type View = 'bankroll' | 'games';
 const GAME_COLORS: Record<TableId, string> = {
@@ -27,6 +26,7 @@ export class BankrollChart {
   private key = '';
   private data: [number, number][] = [];
   private marks: number[] = [];
+  private step = 1;
   private view: View = 'bankroll';
   private contrib: Record<TableId, [number, number][]> | null = null;
   private viewBtns: Record<View, HTMLButtonElement>;
@@ -52,10 +52,11 @@ export class BankrollChart {
       }),
     );
     this.btns = {
-      recent: h('button', { class: 'btn small', text: `Last ${RECENT_ROUNDS}`, onclick: () => this.setRange('recent') }),
-      all: h('button', { class: 'btn small', text: 'All', onclick: () => this.setRange('all') }),
       scale: h('button', { class: 'btn small', onclick: () => this.toggleScale() }),
-    };
+    } as Record<Range | 'scale', HTMLButtonElement>;
+    for (const r of RANGES) {
+      this.btns[r.id] = h('button', { class: 'btn small', text: r.label, onclick: () => this.setRange(r.id) });
+    }
     const move = (e: PointerEvent) => {
       const rect = this.canvas.getBoundingClientRect();
       this.hover = rect.width > 0 ? (e.clientX - rect.left) / rect.width : null;
@@ -76,7 +77,7 @@ export class BankrollChart {
         h('h3', { text: 'Bankroll history' }),
         h('div', { class: 'history-range' }, this.viewBtns.bankroll, this.viewBtns.games),
       ),
-      h('div', { class: 'history-sub' }, h('div', { class: 'history-range' }, this.btns.scale, this.btns.recent, this.btns.all)),
+      h('div', { class: 'history-sub' }, h('div', { class: 'history-range' }, this.btns.scale, ...RANGES.map((r) => this.btns[r.id]))),
       this.canvas,
       this.legend,
       this.info,
@@ -106,7 +107,7 @@ export class BankrollChart {
   }
 
   private syncButtons(): void {
-    for (const r of ['recent', 'all'] as const) toggleClass(this.btns[r], 'active', this.range === r);
+    for (const r of RANGES) toggleClass(this.btns[r.id], 'active', this.range === r.id);
     setText(this.btns.scale, this.log ? 'Log' : 'Linear');
     for (const v of ['bankroll', 'games'] as const) toggleClass(this.viewBtns[v], 'active', this.view === v);
     // Contributions can be negative, so that view is always linear.
@@ -124,6 +125,7 @@ export class BankrollChart {
     else pts[pts.length - 1] = [last[0], money];
     this.data = pts;
     this.marks = bankroll.marks;
+    this.step = bankroll.step;
     const contrib = {} as Record<TableId, [number, number][]>;
     for (const id of TABLE_IDS) {
       // Each table pays in its own currency, so compare them in that table's minimum bets.
@@ -140,12 +142,7 @@ export class BankrollChart {
   }
 
   private visible(): [number, number][] {
-    if (this.range === 'all' || this.data.length === 0) return this.data;
-    const end = this.data[this.data.length - 1][0];
-    const out = this.data.filter((p) => p[0] >= end - RECENT_ROUNDS);
-    const idx = this.data.length - out.length - 1;
-    if (idx >= 0) out.unshift(this.data[idx]);
-    return out.length >= 2 ? out : this.data.slice(-2);
+    return visiblePoints(this.data, this.range, this.step);
   }
 
   private draw(): void {
@@ -217,12 +214,13 @@ export class BankrollChart {
     }
   }
 
-  /** x range shared by every table's series, windowed by the "last N rounds" button. */
+  /** x range shared by every table's series, windowed by the range buttons. */
   private gameWindow(): [number, number] {
     const all = TABLE_IDS.flatMap((id) => this.contrib?.[id] ?? []);
     if (all.length === 0) return [0, 1];
     const end = Math.max(...all.map((p) => p[0]));
-    const start = this.range === 'recent' ? Math.max(0, end - RECENT_ROUNDS) : Math.min(...all.map((p) => p[0]));
+    const first = Math.min(...all.map((p) => p[0]));
+    const start = windowStart(this.range, first, end, this.step * 2);
     return [start, Math.max(start + 1, end)];
   }
 
