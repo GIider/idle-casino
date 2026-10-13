@@ -196,6 +196,7 @@ export class App {
     toggleClass(this.casinoTab, 'ready', casinoSeen && canAscend);
     toggleClass(this.casinoTab, 'hidden-feature', !casinoSeen);
     this.casinoTab.disabled = !casinoSeen;
+    this.casinoTab.title = casinoSeen ? 'Casino' : '';
     this.syncActivity();
     if (this.selected === 'casino' ? !casinoSeen : !g.tableVisible(this.selected)) this.select('coinflip');
     this.updateSelected();
@@ -244,6 +245,7 @@ export class App {
       toggleClass(t.root, 'ready', seen && g.canPrestige(id));
       t.fill.style.transform = `scaleX(${g.prestigeProgress(id)})`;
       t.root.disabled = !seen;
+      t.root.title = seen ? TABLES[id].name : '';
       const chip = this.chips.get(id);
       if (chip) {
         const prev = previousTable(id)!;
