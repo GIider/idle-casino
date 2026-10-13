@@ -38,7 +38,7 @@ function start(state = loadGame() ?? freshGame(), offline = true): void {
       if (report.plays > 0) {
         const sign = report.net >= 0 ? 'won' : 'lost';
         app.toast(
-          `Welcome back! In ${fmtDuration(away)} away your auto-players made ${fmt(report.plays)} plays and ${sign} ${fmt(Math.abs(report.net))}.`,
+          `Welcome back! In ${fmtDuration(away)} away your tables made ${fmt(report.plays)} plays and ${sign} ${fmt(Math.abs(report.net))}.`,
           10000,
         );
       }

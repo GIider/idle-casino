@@ -121,7 +121,7 @@ export class AchievementsCard {
       lines.push(`${mark} ${RARITIES[i]} (${grind ? fmt(target) : target}): ${def.perk.describe(i + 1)}`);
     });
     lines.push('Each tier upgrades the same perk.');
-    lines.push('Auto-players count; offline progress does not.');
+    lines.push('Automatic table play counts; offline progress does not.');
     lines.push('The perk is permanent and survives prestige and ascension.');
     return lines.join('\n');
   }

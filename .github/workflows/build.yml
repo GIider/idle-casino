@@ -24,6 +24,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
 
       - name: Name the release file
         run: cp dist/index.html dist/idle-casino.html
