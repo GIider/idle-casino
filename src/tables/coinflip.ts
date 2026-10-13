@@ -24,14 +24,14 @@ export const coinflip: TableDef = {
     {
       id: 'edge',
       name: 'Weighted Coin',
-      description: '+1.2% chance for heads to land',
+      description: '+1.8% chance for heads to land',
       baseCost: 80,
       growth: 1.9,
       maxLevel: 8,
     },
   ],
   play(rng, levels) {
-    const chance = 0.55 + 0.012 * (levels.edge ?? 0);
+    const chance = 0.55 + 0.018 * (levels.edge ?? 0);
     const gold = levels.perk_collect_coinflip ? GOLD_COIN_CHANCE[levels.perk_collect_coinflip - 1] : 0;
     // Gold Coin (capstone): a rare jackpot flip.
     if (gold > 0 && rng() < gold) {

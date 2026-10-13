@@ -6,7 +6,7 @@ export const COMMON_UPGRADES: UpgradeDef[] = [
   {
     id: 'luck',
     name: 'Lucky Charm',
-    description: '+2.5% chance per level to re-roll a losing round',
+    description: '+3% chance per level to re-roll a losing round',
     baseCost: 25,
     growth: 1.7,
     maxLevel: 20,
@@ -38,7 +38,7 @@ export const COMMON_UPGRADES: UpgradeDef[] = [
   {
     id: 'cashback',
     name: 'Cashback',
-    description: 'Lost rounds refund +4% of your bet per level',
+    description: 'Lost rounds refund +6% of your bet per level',
     baseCost: 50,
     growth: 1.6,
     maxLevel: 8,
@@ -70,15 +70,17 @@ export const MIN_BET_GROWTH = 3;
 export const MAX_BET_GROWTH = 5;
 export const MAX_PAYOUT_GROWTH = 5;
 /** Upgrade prices grow this much per table prestige (steeper than the max bet). */
-export const UPGRADE_PRESTIGE_GROWTH = 8;
-export const PRESTIGE_THRESHOLD_GROWTH = 10;
-export const PRESTIGE_PAYOUT_BONUS = 0.1;
+export const UPGRADE_PRESTIGE_GROWTH = 3;
+export const PRESTIGE_THRESHOLD_GROWTH = 8;
+/** Earlier tables are cheap to run and feed every later table, so their prestige targets climb faster. */
+export const PRESTIGE_THRESHOLD_GROWTH_BY_TABLE: Record<string, number> = { coinflip: 12, slots: 10, roulette: 9, blackjack: 8 };
+export const PRESTIGE_PAYOUT_BONUS = 0.3;
 export const AUTO_BASE_RATE = 1;
 /** Hot Streak: winnings bonus per level per consecutive win, and the streak length that stops counting. */
 export const STREAK_BONUS_PER_LEVEL = 0.03;
 export const STREAK_CAP = 10;
 /** Cashback: share of a lost bet refunded, per level. */
-export const CASHBACK_PER_LEVEL = 0.04;
+export const CASHBACK_PER_LEVEL = 0.06;
 /** Second Dealer: chance per level of a bonus play, and the longest chain of bonus plays after one play. */
 export const DEALER_CHANCE_PER_LEVEL = 0.05;
 export const MAX_BONUS_PLAYS = 10;
@@ -88,6 +90,12 @@ export const MAX_AUTO_PLAYS_PER_TICK = 300;
 export const OFFLINE_CAP_SECONDS = 8 * 3600;
 export const OFFLINE_EFFICIENCY = 0.5;
 export const BAILOUT_BETS = 10;
+
+/**
+ * Upgrades that clearly pay for themselves (measured by the balance sim); the Floor Manager buys these before
+ * niche ones so cheap situational upgrades don't drain the wallet that funds bet size and speed.
+ */
+export const CORE_UPGRADES = ['autobet', 'speed', 'payout', 'edge', 'loaded', 'dealer', 'streak', 'luck'];
 
 export function allUpgrades(def: TableDef): UpgradeDef[] {
   return [...COMMON_UPGRADES, ...def.upgrades];
@@ -118,13 +126,13 @@ export function upgradeCost(
 }
 
 export function prestigeThreshold(def: TableDef, prestige: number, bonus: CasinoBonus = NO_BONUS): number {
-  return Math.ceil(def.baseMinBet * 2500 * PRESTIGE_THRESHOLD_GROWTH ** prestige * bonus.prestigeCost);
+  return Math.ceil(def.baseMinBet * 2500 * (PRESTIGE_THRESHOLD_GROWTH_BY_TABLE[def.id] ?? PRESTIGE_THRESHOLD_GROWTH) ** prestige * bonus.prestigeCost);
 }
 
 export function luckChance(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {
   // Card Sharp (blackjack perk) amplifies Lucky Charm itself.
   const sharp = levels.perk_loseCards4 ? CARD_SHARP_LUCK[levels.perk_loseCards4 - 1] : 1;
-  return Math.min(0.95, (0.025 * (levels.luck ?? 0) + bonus.luck) * sharp);
+  return Math.min(0.95, (0.03 * (levels.luck ?? 0) + bonus.luck) * sharp);
 }
 
 /** Longest win streak that still adds winnings; Heat Wave (coin flip perk) raises it. */

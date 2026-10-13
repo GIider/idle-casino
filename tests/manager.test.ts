@@ -43,6 +43,22 @@ describe('Floor Manager', () => {
     expect(poor.autoBuy('coinflip')).toBe(false);
   });
 
+  it('buys core upgrades before niche ones even when a niche upgrade is cheaper', () => {
+    const g = newGame();
+    g.state.casino.levels.manager = 1;
+    g.table('blackjack').unlocked = true;
+    const ts = g.table('blackjack');
+    ts.wallet = 1e9;
+    // Pretend every core upgrade is maxed except luck, which costs more than a niche upgrade here.
+    for (const u of allUpgrades(TABLES.blackjack)) ts.levels[u.id] = u.maxLevel;
+    ts.levels.luck = 0;
+    ts.levels.sleeve = 0;
+    expect(upgradeCost(TABLES.blackjack, allUpgrades(TABLES.blackjack).find((u) => u.id === 'luck')!, 0, 0)).toBeGreaterThan(0);
+    g.autoBuy('blackjack');
+    expect(ts.levels.luck).toBe(1);
+    expect(ts.levels.sleeve).toBe(0);
+  });
+
   it('honors per-upgrade switches only with Purchasing Policy', () => {
     const g = newGame();
     g.table('coinflip').wallet = 1e6;
@@ -108,13 +124,13 @@ describe('mechanic upgrades', () => {
 
   it('cashback refunds part of a loss but never makes it a win', () => {
     const def = TABLES.coinflip;
-    expect(cashbackFraction({ cashback: 2 })).toBeCloseTo(0.08);
+    expect(cashbackFraction({ cashback: 2 })).toBeCloseTo(0.12);
     // A rigged rng that always lands tails.
     const tails = () => 0.99;
     const plain = resolvePlay(def, {}, 0, 100, tails);
     const back = resolvePlay(def, { cashback: 8 }, 0, 100, tails);
     expect(plain.net).toBe(-100);
-    expect(back.net).toBe(-68);
+    expect(back.net).toBe(-52);
   });
 
   it('second dealer plays extra rounds without exceeding the bound', () => {

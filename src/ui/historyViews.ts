@@ -5,6 +5,39 @@ import { COLORS, setupCanvas } from './stage/canvas';
 import { h, setText } from './dom';
 import { fmt } from './format';
 
+/** Slots-only: the last few spins as rows of three symbols, newest first. */
+export class SlotsCombosView {
+  readonly root: HTMLElement;
+  private key = '';
+
+  constructor() {
+    this.root = h('div', { class: 'combo-list hidden' });
+  }
+
+  update(s: SlotsStats, force = false): void {
+    const key = JSON.stringify(s.recent);
+    if (!force && key === this.key) return;
+    this.key = key;
+    this.root.replaceChildren();
+    if (s.recent.length === 0) {
+      this.root.append(h('div', { class: 'history-info', text: 'No spins yet' }));
+      return;
+    }
+    for (const reels of s.recent.slice().reverse()) {
+      const [a, b, c] = reels;
+      const kind = a === b && b === c ? 'triple' : a === b || b === c || a === c ? 'pair' : '';
+      this.root.append(
+        h(
+          'div',
+          { class: `combo ${kind}` },
+          h('span', { class: 'combo-reels', text: reels.map((r) => SYMBOLS[r]).join(' ') }),
+          h('span', { class: 'combo-tag', text: kind === 'triple' ? 'Triple' : kind === 'pair' ? 'Pair' : '' }),
+        ),
+      );
+    }
+  }
+}
+
 export const VIEW_LABELS: Record<TableId, string> = {
   coinflip: 'Flips',
   slots: 'Reels',

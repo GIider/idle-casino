@@ -107,7 +107,7 @@ describe('achievements', () => {
     expect(g.state.achievements.collect_coinflip.count).toBe(ups.length - 1);
     g.buyUpgrade('coinflip', ups[ups.length - 1].id);
     expect(g.state.achievements.collect_coinflip.tier).toBe(1);
-    expect(g.notice?.text).toContain('Fully Loaded Coin');
+    expect(g.notice?.text).toContain('Gold Coin');
     expect(g.levelsFor('coinflip').perk_collect_coinflip).toBe(1);
     // Other tables are unaffected.
     expect(g.levelsFor('slots').perk_collect_slots).toBeUndefined();

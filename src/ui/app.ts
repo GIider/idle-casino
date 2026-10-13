@@ -8,7 +8,7 @@ import { TablePanel } from './tablePanel';
 import { CasinoPanel } from './casinoPanel';
 import { cycleQuality } from './quality';
 
-const RECENT_MAX = 4;
+const RECENT_MAX = 12;
 
 export interface AppHandlers {
   onImport(text: string): void;
@@ -98,7 +98,7 @@ export class App {
       wins: h('button', { class: 'btn small', text: 'Recent wins', onclick: () => this.setActivity('wins') }),
       history: h('button', { class: 'btn small', text: 'History', onclick: () => this.setActivity('history') }),
     };
-    this.recentEl = h('div', {});
+    this.recentEl = h('div', { class: 'recent-list' });
     for (const id of TABLE_IDS) {
       const panel = new TablePanel(game, id);
       this.panels.set(id, panel);

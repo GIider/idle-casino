@@ -42,6 +42,10 @@ export class TablePanel {
   private locked: HTMLElement;
   private unlockBtn: HTMLButtonElement;
   private unlockNote: HTMLElement;
+  private unlockFill: HTMLElement;
+  private unlockLabel: HTMLElement;
+  private statTiles: Record<'wallet' | 'prestige' | 'luck' | 'winnings' | 'streak', HTMLElement>;
+  private streakTile: HTMLElement;
   private body: HTMLElement;
 
   private statsEl: HTMLElement;
@@ -71,19 +75,40 @@ export class TablePanel {
 
     // Locked view
     this.unlockBtn = h('button', { class: 'btn primary', onclick: () => game.unlock(id) });
-    this.unlockNote = h('p', { class: 'unlock-note' });
+    this.unlockNote = h('div', { class: 'unlock-note' });
+    this.unlockFill = h('div', { class: 'bar-fill' });
+    this.unlockLabel = h('div', { class: 'unlock-label' });
+    const meter = h('div', { class: 'unlock-meter' }, h('div', { class: 'bar' }, this.unlockFill), this.unlockLabel);
     this.locked = h(
       'div',
       { class: 'locked' },
       h('div', { class: 'big-icon', text: def.icon }),
       h('h2', { text: def.name }),
       h('p', { text: def.blurb }),
+      meter,
       this.unlockBtn,
       this.unlockNote,
     );
 
     // Play area
-    this.statsEl = h('div', { class: 'stats' });
+    const kv = (_label: string, cls = ''): HTMLElement => h('div', { class: 'kv-value ' + cls });
+    this.statTiles = {
+      wallet: kv('Wallet'),
+      prestige: kv('Prestige'),
+      luck: kv('Luck', 'gain'),
+      winnings: kv('Winnings', 'gain'),
+      streak: kv('Streak', 'gain'),
+    };
+    this.streakTile = h('div', { class: 'kv' }, h('small', { text: 'Streak' }), this.statTiles.streak);
+    this.statsEl = h(
+      'div',
+      { class: 'kv-grid' },
+      h('div', { class: 'kv' }, h('small', { text: 'Wallet' }), this.statTiles.wallet),
+      h('div', { class: 'kv' }, h('small', { text: 'Prestige' }), this.statTiles.prestige),
+      h('div', { class: 'kv' }, h('small', { text: 'Luck' }), this.statTiles.luck),
+      h('div', { class: 'kv' }, h('small', { text: 'Winnings' }), this.statTiles.winnings),
+      this.streakTile,
+    );
     this.tileProfit = h('div', { class: 'tile-value', text: '0' });
     this.tileIncome = h('div', { class: 'tile-value', text: '0' });
     this.tilePlays = h('div', { class: 'tile-value', text: '0' });
@@ -197,23 +222,38 @@ export class TablePanel {
       const payer = game.unlockPayer(id);
       setText(this.unlockBtn, `Unlock for ${fmt(def.unlockCost)} ${prevDef?.currency.name ?? ''}`.trim());
       setDisabled(this.unlockBtn, !game.canUnlock(id));
+      const have = payer?.wallet ?? 0;
+      const frac = def.unlockCost > 0 ? Math.max(0, Math.min(1, have / def.unlockCost)) : 1;
+      this.unlockFill.style.transform = `scaleX(${frac})`;
+      setText(
+        this.unlockLabel,
+        prevDef && payer ? `${fmt(have)} / ${fmt(def.unlockCost)} ${prevDef.currency.name}` : '',
+      );
       setText(
         this.unlockNote,
         prevDef
           ? payer
-            ? `Paid from your ${prevDef.name} wallet: ${fmt(payer.wallet)} ${prevDef.currency.name} so far. You'll start here with ${fmt(starterWallet(def))} ${cur.name}.`
-            : `Unlock ${prevDef.name} first.`
+            ? `✦ Start with ${fmt(starterWallet(def))} ${cur.name}`
+            : `▸ Unlock ${prevDef.name} first`
           : '',
       );
+      toggleClass(this.unlockNote, 'goal', !!prevDef && !payer);
+      toggleClass(this.unlockNote, 'gain', !!prevDef && !!payer);
       return;
     }
 
     const lo = minBet(def, ts.prestige);
     const hi = maxBet(def, ts.prestige);
+    const levels = game.levelsFor(id);
+    setText(this.statTiles.wallet, `${cur.icon} ${fmt(ts.wallet)}`);
+    setText(this.statTiles.prestige, `${ts.prestige}`);
+    setText(this.statTiles.luck, `${(luckChance(levels, game.bonus) * 100).toFixed(1)}%`);
     setText(
-      this.statsEl,
-      `Wallet ${fmt(ts.wallet)} ${cur.icon} ${cur.name} · Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(game.levelsFor(id), game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak).toFixed(2)}${ts.levels.streak ? ` · streak ${ts.streak}` : ''}`,
+      this.statTiles.winnings,
+      `×${payoutMultiplier(levels, ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak).toFixed(2)}`,
     );
+    toggleClass(this.streakTile, 'hidden', !ts.levels.streak);
+    setText(this.statTiles.streak, `${ts.streak}`);
 
     setText(this.tileProfit, fmtSigned(ts.profit));
     setText(this.tileIncome, `≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}`);
@@ -254,8 +294,8 @@ export class TablePanel {
     const progress = Math.max(0, Math.min(1, ts.profit / threshold));
     setText(
       this.prestigeText,
-      `Earn ${fmt(threshold)} ${cur.name} profit at this table to prestige (${fmt(Math.max(0, ts.profit))} so far). ` +
-        `Next level: min bet ${fmt(minBet(def, ts.prestige + 1))}, max payout ${fmt(maxPayout(def, ts.prestige + 1))}, +10% winnings; wallet resets to ${fmt(prestigeWallet(def, ts.prestige + 1))} ${cur.name}.${feeds}`,
+      `▸ Earn ${fmt(threshold)} ${cur.name} profit to prestige (${fmt(Math.max(0, ts.profit))} so far). ` +
+        `✦ Next level: min bet ${fmt(minBet(def, ts.prestige + 1))}, max payout ${fmt(maxPayout(def, ts.prestige + 1))}, +10% winnings; wallet resets to ${fmt(prestigeWallet(def, ts.prestige + 1))} ${cur.name}.${feeds}`,
     );
     this.prestigeBar.style.transform = `scaleX(${progress})`;
     setDisabled(this.prestigeBtn, !game.canPrestige(id));

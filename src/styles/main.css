@@ -862,8 +862,19 @@ small {
   overflow: hidden;
 }
 
-.activity > div:nth-child(2) {
+/* Rows that don't fit wrap into hidden extra columns, so only whole rows show. */
+.recent-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
   overflow: hidden;
+}
+
+.recent-list > * {
+  width: 100%;
 }
 
 .side-panel > .card.upgrades > h3,
@@ -874,3 +885,26 @@ small {
 .activity .history-canvas {
   height: 130px;
 }
+
+/* Design language: goal (what to do) vs gain (what you get) */
+:root { --goal: var(--cyan); --gain: var(--gold); }
+.goal { color: var(--goal); font-size: 12px; line-height: 1.4; }
+.gain { color: var(--gain); font-size: 12px; font-weight: 700; line-height: 1.4; }
+.achievement:not(.earned) .gain { opacity: .75; }
+.unlock-meter { width: min(360px, 90%); display: flex; flex-direction: column; gap: 6px; }
+.unlock-meter .bar { height: 14px; }
+.unlock-label { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.unlock-note { font-size: 13px; }
+.kv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
+.kv { border-left: 2px solid var(--line); padding-left: 8px; min-width: 0; }
+.kv small { display: block; text-transform: uppercase; letter-spacing: .12em; font-size: 10px; }
+.kv-value { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.kv-value.gain { font-size: 15px; }
+
+.combo-list { display: flex; flex-direction: column; gap: 4px; }
+.combo { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; }
+.combo-reels { font-size: 20px; letter-spacing: .15em; }
+.combo-tag { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.combo.pair .combo-tag { color: var(--cyan); }
+.combo.triple { border-color: var(--gold); }
+.combo.triple .combo-tag { color: var(--gold); font-weight: 800; }

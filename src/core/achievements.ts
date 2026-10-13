@@ -236,7 +236,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Hot Hand',
     goal: 'Flip heads in a row',
     kind: 'streak',
-    targets: [20, 38, 54],
+    targets: [24, 48, 72],
     score: (v) => (v.kind === 'coin' && v.heads ? 1 : 0),
     perk: {
       name: 'Heat Wave',
@@ -273,7 +273,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Ceiling Breaker',
     goal: 'Hit the maximum payout',
     kind: 'grind',
-    targets: [100, 1000, 10000],
+    targets: [500, 10000, 250000],
     score: (_v, o) => (o.capped ? 1 : 0),
     perk: { name: 'Raised Ceiling', describe: (t) => `+${pct(byTier(RAISED_CEILING, t))} maximum payout on this table` },
   },

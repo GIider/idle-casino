@@ -8,7 +8,7 @@ const TRIPLE_PAYOUT = [5, 8, 15, 30, 80, 200];
 const BASE_WEIGHTS = [40, 30, 15, 10, 4, 1];
 
 export function slotWeights(cherries: number): number[] {
-  return [BASE_WEIGHTS[0] + 0.8 * cherries, ...BASE_WEIGHTS.slice(1)];
+  return [BASE_WEIGHTS[0] + 1.5 * cherries, ...BASE_WEIGHTS.slice(1)];
 }
 
 export const slots: TableDef = {

@@ -61,7 +61,7 @@ export const blackjack: TableDef = {
     {
       id: 'sleeve',
       name: 'Card Sleeve',
-      description: '+3% chance per level to start with an ace and a ten',
+      description: '+5% chance per level to start with an ace and a ten',
       baseCost: 150,
       growth: 1.8,
       maxLevel: 8,
@@ -69,7 +69,7 @@ export const blackjack: TableDef = {
     {
       id: 'insure',
       name: 'Bust Insurance',
-      description: '12% chance per level that a bust refunds half your bet',
+      description: '20% chance per level that a bust refunds half your bet',
       baseCost: 200,
       growth: 2,
       maxLevel: 5,
@@ -105,7 +105,7 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   const tenWeight = levels.perk_naturalBorn ? TEN_WEIGHT[levels.perk_naturalBorn - 1] : 4;
   const drawPlayer = () => draw(rng, tenWeight);
 
-  const player = rng() < 0.03 * sleeve ? [1, 10] : [drawPlayer(), drawPlayer()];
+  const player = rng() < 0.05 * sleeve ? [1, 10] : [drawPlayer(), drawPlayer()];
   const dealer = [draw(rng), draw(rng)];
   const upcard = dealer[0] === 1 ? 11 : dealer[0];
   // Perfect Pairs: a side bet on the first two cards, paid whatever the hand does.
@@ -219,7 +219,7 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
     const live = [pa, pb].filter((x) => x <= 21);
     const d = live.length > 0 ? dealerPlay(Math.min(...live)) : total(dealer);
     const handMult = (p: number): number => {
-      if (p > 21) return rng() < 0.12 * insure ? 0.5 : 0;
+      if (p > 21) return rng() < 0.2 * insure ? 0.5 : 0;
       return settle(p, d);
     };
     const mult = handMult(pa) + handMult(pb);
@@ -243,7 +243,7 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
     }
   }
   if (p > 21) {
-    const saved = rng() < 0.12 * insure;
+    const saved = rng() < 0.2 * insure;
     return done({
       mult: saved ? 0.5 : 0,
       detail: saved ? `🃏 Bust (${p}) — insured` : `🃏 Bust (${p})`,

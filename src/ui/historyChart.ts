@@ -1,9 +1,11 @@
 import type { History, TableId } from '../core/types';
-import { GameHistoryView, VIEW_LABELS } from './historyViews';
+import { GameHistoryView, SlotsCombosView, VIEW_LABELS } from './historyViews';
 import { COLORS, setupCanvas } from './stage/canvas';
 import { h, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
 import { RANGES, visiblePoints, type Range } from './chartRange';
+
+type Mode = 'profit' | 'game' | 'combos';
 
 /** Net income (currency/sec) over a table's plays, from the sampled `History.rate` series. */
 export class HistoryChart {
@@ -18,9 +20,10 @@ export class HistoryChart {
   private btns: Record<Range, HTMLButtonElement>;
   private step = 1;
   private gameView: GameHistoryView;
-  private tabs: Record<'profit' | 'game', HTMLButtonElement>;
+  private combosView: SlotsCombosView | null;
+  private tabs: Record<Mode, HTMLButtonElement | undefined>;
   private rangeBox: HTMLElement;
-  private mode: 'profit' | 'game' = 'profit';
+  private mode: Mode = 'profit';
   private history: History | null = null;
 
   constructor(id: TableId) {
@@ -28,7 +31,12 @@ export class HistoryChart {
     this.tabs = {
       profit: h('button', { class: 'btn small', text: 'Income', onclick: () => this.setMode('profit') }),
       game: h('button', { class: 'btn small', text: VIEW_LABELS[id], onclick: () => this.setMode('game') }),
+      combos:
+        id === 'slots'
+          ? h('button', { class: 'btn small', text: 'Combos', onclick: () => this.setMode('combos') })
+          : undefined,
     };
+    this.combosView = id === 'slots' ? new SlotsCombosView() : null;
     this.canvas = h('canvas', { class: 'history-canvas' });
     this.info = h('div', { class: 'history-info', text: ' ' });
     this.btns = {} as Record<Range, HTMLButtonElement>;
@@ -58,21 +66,24 @@ export class HistoryChart {
         'div',
         { class: 'history-head' },
         h('h3', { text: 'History' }),
-        h('div', { class: 'history-range' }, this.tabs.profit, this.tabs.game),
+        h('div', { class: 'history-range' }, ...([this.tabs.profit, this.tabs.game, this.tabs.combos].filter(Boolean) as HTMLElement[])),
       ),
       h('div', { class: 'history-profit' }, h('div', { class: 'history-sub' }, this.rangeBox), this.canvas, this.info),
       this.gameView.root,
+      ...(this.combosView ? [this.combosView.root] : []),
     );
     this.syncButtons();
   }
 
-  private setMode(mode: 'profit' | 'game'): void {
+  private setMode(mode: Mode): void {
     this.mode = mode;
     this.key = '';
     toggleClass(this.root.querySelector('.history-profit') as HTMLElement, 'hidden', mode !== 'profit');
     toggleClass(this.gameView.root, 'hidden', mode !== 'game');
     this.syncButtons();
-    if (mode === 'game' && this.history) this.gameView.update(this.history.stats, true);
+    if (this.combosView) toggleClass(this.combosView.root, 'hidden', mode !== 'combos');
+    if (mode === 'combos' && this.history && this.combosView) this.combosView.update(this.history.stats.slots, true);
+    else if (mode === 'game' && this.history) this.gameView.update(this.history.stats, true);
     else this.draw();
   }
 
@@ -85,13 +96,20 @@ export class HistoryChart {
 
   private syncButtons(): void {
     for (const r of RANGES) toggleClass(this.btns[r.id], 'active', this.range === r.id);
-    for (const m of ['profit', 'game'] as const) toggleClass(this.tabs[m], 'active', this.mode === m);
+    for (const m of ['profit', 'game', 'combos'] as const) {
+      const t = this.tabs[m];
+      if (t) toggleClass(t, 'active', this.mode === m);
+    }
   }
 
   update(history: History, plays: number): void {
     this.history = history;
     if (this.mode === 'game') {
       this.gameView.update(history.stats);
+      return;
+    }
+    if (this.mode === 'combos') {
+      this.combosView?.update(history.stats.slots);
       return;
     }
     const series = history.rate.points;

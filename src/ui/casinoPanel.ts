@@ -125,20 +125,20 @@ export class CasinoPanel {
     setText(
       this.managerEl,
       interval > 0
-        ? `Buys the cheapest affordable upgrade at every table every ${interval}s, keeping ${MANAGER_RESERVE_BETS} minimum bets in reserve.`
+        ? `Buys core upgrades first (cheapest first), then the rest, at every table every ${interval}s, keeping ${MANAGER_RESERVE_BETS} minimum bets in reserve.`
         : 'Buy the Floor Manager in the shop below to have upgrades purchased for you.',
     );
     toggleClass(this.autoPrestige, 'hidden', game.casinoLevel('concierge') < 1);
     if (this.autoPrestigeBox.checked !== casino.autoPrestige) this.autoPrestigeBox.checked = casino.autoPrestige;
 
     const threshold = ascensionThreshold(casino.ascensions);
-    const money = game.state.tables[FINAL_TABLE].wallet;
+    const money = game.ascensionMoney();
     const currency = TABLES[FINAL_TABLE].currency;
     setText(
       this.ascendText,
       game.canAscend()
         ? `Ready: ascending now earns ${fmt(game.ascendReward())} chips. Earn more first for +3 chips per 10× above ${fmt(threshold)} ${currency.name}.`
-        : `Reach ${fmt(threshold)} ${currency.name} at ${TABLES[FINAL_TABLE].name} to ascend (${fmt(money)} now).`,
+        : `Reach ${fmt(threshold)} ${currency.name} at ${TABLES[FINAL_TABLE].name} to ascend (best so far: ${fmt(money)}).`,
     );
     this.ascendBar.style.transform = `scaleX(${Math.max(0, Math.min(1, money / threshold))})`;
     setDisabled(this.ascendBtn, !game.canAscend());

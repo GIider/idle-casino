@@ -33,7 +33,7 @@ export const roulette: TableDef = {
     {
       id: 'bet_dozen',
       name: 'Dozen Bet',
-      description: 'Also bet on the first dozen (pays 3×); the stake is split across every bet you own',
+      description: 'Also bet on the first dozen (pays 3.1×); the stake is split across every bet you own',
       baseCost: 300,
       growth: 1,
       maxLevel: 1,
@@ -41,7 +41,7 @@ export const roulette: TableDef = {
     {
       id: 'bet_number',
       name: 'Lucky 17 Bet',
-      description: 'Also bet on number 17 (pays 36×); the stake is split across every bet you own',
+      description: 'Also bet on number 17 (pays 37×); the stake is split across every bet you own',
       baseCost: 1500,
       growth: 1,
       maxLevel: 1,
@@ -106,9 +106,9 @@ function spinOnce(rng: Rng, levels: Record<string, number>): PlayResult {
   const returns = bets.map((bet) => {
     switch (bet) {
       case 'dozen':
-        return green || (pocket >= 1 && pocket <= dozenTop ? 3 : 0);
+        return green || (pocket >= 1 && pocket <= dozenTop ? 3.1 : 0);
       case 'number':
-        return green || (magnetHit ? 36 : 0);
+        return green || (magnetHit ? 37 : 0);
       default:
         return green || (colorOf(pocket) === 'red' || bleed.includes(pocket) ? 2 : 0);
     }

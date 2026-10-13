@@ -10,7 +10,8 @@ interface Row {
   root: HTMLElement;
   title: HTMLElement;
   progress: HTMLElement;
-  perk: HTMLElement;
+  goal: HTMLElement;
+  gain: HTMLElement;
   fill: HTMLElement;
 }
 
@@ -26,17 +27,19 @@ export class AchievementsCard {
     for (const def of achievementsFor(table)) {
       const title = h('strong');
       const progress = h('span', { class: 'level' });
-      const perk = h('small');
+      const goal = h('div', { class: 'goal' });
+      const gain = h('div', { class: 'gain' });
       const fill = h('div', { class: 'bar-fill' });
       const root = h(
         'div',
         { class: 'achievement' },
         h('div', {}, title, ' ', progress),
         h('div', { class: 'bar' }, fill),
-        perk,
+        goal,
+        gain,
       );
       this.root.append(root);
-      this.rows.push({ def, root, title, progress, perk, fill });
+      this.rows.push({ def, root, title, progress, goal, gain, fill });
     }
   }
 
@@ -57,7 +60,7 @@ export class AchievementsCard {
       const prev = p.tier > 0 ? def.targets[p.tier - 1] : 0;
       const rarity = p.tier > 0 ? ` · ${RARITIES[p.tier - 1]}` : '';
 
-      setText(row.title, `${p.tier > 0 ? '🏆' : '🔒'} ${def.name}${rarity}`);
+      setText(row.title, `${p.tier > 0 ? '🏆' : '🔒'} ${def.perk.name}${rarity}`);
       setText(
         row.progress,
         done ? 'Complete' : def.kind === 'grind' ? `${fmt(value)} / ${fmt(next)}` : `best ${value} / ${next}`,
@@ -65,7 +68,9 @@ export class AchievementsCard {
       row.fill.style.transform = `scaleX(${done ? 1 : Math.min(1, (value - prev) / (next - prev))})`;
       const effect = p.tier > 0 ? def.perk.describe(p.tier) : def.perk.describe(1);
       const goal = def.kind === 'grind' ? `${def.goal} ${fmt(next)} times` : `${def.goal}: ${next}`;
-      setText(row.perk, p.tier > 0 ? `${def.perk.name}: ${effect}` : `${goal} → ${def.perk.name}: ${effect}`);
+      setText(row.goal, done ? '' : `▸ ${goal}`);
+      toggleClass(row.goal, 'hidden', done);
+      setText(row.gain, `✦ ${effect}`);
       toggleClass(row.root, 'earned', p.tier > 0);
       row.root.title = this.tooltip(def, p);
     }
@@ -83,12 +88,14 @@ export class AchievementsCard {
     const nextTier = Math.min(top, p.tier + 1);
     const have = p.tier === 0 ? owned : maxed;
     const rarity = p.tier > 0 ? ` · ${RARITIES[p.tier - 1]}` : '';
-    setText(row.title, `${p.tier > 0 ? '🏆' : '🔒'} ${def.name}${rarity}`);
+    setText(row.title, `${p.tier > 0 ? '🏆' : '🔒'} ${def.perk.name}${rarity}`);
     setText(row.progress, done ? 'Complete' : `${have} / ${upgrades.length} ${p.tier === 0 ? 'owned' : 'maxed'}`);
     row.fill.style.transform = `scaleX(${done ? 1 : have / upgrades.length})`;
     const goal = p.tier === 0 ? 'Own every upgrade' : 'Max every upgrade';
     const effect = def.perk.describe(nextTier);
-    setText(row.perk, done ? `${def.perk.name}: ${effect}` : `${goal} → ${def.perk.name}: ${effect}`);
+    setText(row.goal, done ? '' : `▸ ${goal}`);
+    toggleClass(row.goal, 'hidden', done);
+    setText(row.gain, `✦ ${effect}`);
     toggleClass(row.root, 'earned', p.tier > 0);
     row.root.title = [
       `Own at least one level of every upgrade on this table (Rare: ${def.perk.describe(1)}),`,
@@ -111,7 +118,7 @@ export class AchievementsCard {
     }
     def.targets.forEach((target, i) => {
       const mark = p.tier > i ? '✓' : '•';
-      lines.push(`${mark} ${RARITIES[i]} (${grind ? fmt(target) : target}): ${def.perk.name} — ${def.perk.describe(i + 1)}`);
+      lines.push(`${mark} ${RARITIES[i]} (${grind ? fmt(target) : target}): ${def.perk.describe(i + 1)}`);
     });
     lines.push('Each tier upgrades the same perk.');
     lines.push('Auto-players count; offline progress does not.');

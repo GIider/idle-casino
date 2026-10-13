@@ -8,11 +8,12 @@ export const SLOT_SYMBOLS = 6;
 export const POCKETS = 37;
 export const RECENT_COINS = 60;
 export const RECENT_POCKETS = 30;
+export const RECENT_SPINS = 12;
 
 export function newStats(): PlayStats {
   return {
     coin: { heads: 0, tails: 0, streak: 0, longest: 0, recent: [] },
-    slots: { symbols: new Array(SLOT_SYMBOLS).fill(0), triples: 0, pairs: 0, rounds: 0 },
+    slots: { symbols: new Array(SLOT_SYMBOLS).fill(0), triples: 0, pairs: 0, rounds: 0, recent: [] },
     roulette: { pockets: new Array(POCKETS).fill(0), recent: [] },
     blackjack: { natural: 0, win: 0, push: 0, lose: 0, bust: 0 },
   };
@@ -53,6 +54,8 @@ export function recordView(h: History, view: PlayView | undefined): void {
       const [a, b, c] = view.reels;
       if (a === b && b === c) sl.triples++;
       else if (a === b || b === c || a === c) sl.pairs++;
+      sl.recent.push([...view.reels]);
+      if (sl.recent.length > RECENT_SPINS) sl.recent.shift();
       break;
     }
     case 'roulette': {
@@ -156,6 +159,12 @@ export function normalizeStats(raw: unknown): PlayStats {
     s.slots.triples = count(r.slots.triples);
     s.slots.pairs = count(r.slots.pairs);
     s.slots.rounds = count(r.slots.rounds);
+    if (Array.isArray(r.slots.recent)) {
+      s.slots.recent = r.slots.recent
+        .map((x: unknown) => recent(x, 3, SLOT_SYMBOLS - 1))
+        .filter((x: number[]) => x.length === 3)
+        .slice(-RECENT_SPINS);
+    }
   }
   if (r.roulette && typeof r.roulette === 'object') {
     s.roulette.pockets = counts(r.roulette.pockets, POCKETS);

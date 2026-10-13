@@ -17,6 +17,8 @@ export interface TableState {
   history: History;
   /** Consecutive won rounds (feeds the Hot Streak upgrade); reset by a loss, prestige and ascension. */
   streak: number;
+  /** Highest wallet reached since the last ascension; prestiging or spending never lowers it. Ascension progress reads it. */
+  peakWallet: number;
 }
 
 /** A bounded, down-sampled series of [x, value] points with vertical event marks at given x positions. */
@@ -57,6 +59,8 @@ export interface SlotsStats {
   /** Rounds with exactly two matching reels. */
   pairs: number;
   rounds: number;
+  /** The last few spins' reels, oldest first. */
+  recent: number[][];
 }
 
 export interface RouletteStats {

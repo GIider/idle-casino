@@ -15,9 +15,9 @@ A single-player browser idle game. Every table plays itself the moment it opens;
 - **Cross-table bonus**: every prestige level of a table gives the next table in the chain +4% winnings, so earlier tables stay worth playing and prestiging.
 - **Luck**: a chance to re-roll a losing round. **Payout perks**: bigger winnings. **Hot Streak**: each win in a row adds winnings (up to 10 wins). **Cashback**: lost rounds refund part of the bet. **Second Dealer**: a play may trigger an immediate bonus play.
 - **Auto-play**: there is no manual play. A table starts playing as soon as it is unlocked, at the minimum bet and 1 play/sec. *Faster Dealer* adds +0.5 plays/sec per level (20 levels) and *Bigger Bets* raises the wager to a growing share of the table's wallet (up to 50%, clamped to the table's min/max bet). Roulette bets (dozen, number 17) are one-time upgrades; every owned bet is placed each spin with the stake split evenly.
-- **Prestige** (per table): reach the profit target, reset that table's upgrades and wallet (to a starter stack of 50 new minimum bets), and permanently raise its minimum bet, maximum bet and maximum payout (plus +10% winnings per level). Upgrade prices grow 8× per prestige level, in the table's own currency.
-- **Ascension** (casino-wide): reach 500M Markers at Blackjack (×5 each time) on the *Casino* tab to reset every table, upgrade, prestige and wallet (table history too) for casino chips. Every ascension also permanently multiplies winnings ×1.5 on all tables (compounding, no purchase needed). Chips buy permanent casino upgrades: the *Floor Manager* line (Floor Manager buys table upgrades for you every 10s; *Overtime Shifts* speeds it to 5s then 2s; *Purchasing Policy* adds per-upgrade switches; *Concierge* auto-prestiges), *House Edge* (more winnings), *Seed Capital* (starting cash and cheaper upgrades) and *Night Shift* (better offline earnings).
-- **Achievements** (per table): grind goals ("flip heads 10k / 100k / 1M times") and streak goals ("heads in a row: 20 / 38 / 54"), each with Rare / Epic / Legendary tiers sized for automated play. Each grants a permanent perk that changes a rule of its table and strengthens with its tier; perks survive prestige and ascension. Offline progress doesn't count.
+- **Prestige** (per table): reach the profit target, reset that table's upgrades and wallet (to a starter stack of 50 new minimum bets), and permanently raise its minimum bet, maximum bet and maximum payout (plus +30% winnings per level). The profit target grows 8× per level and upgrade prices 3× (in the table's own currency).
+- **Ascension** (casino-wide): reach 500M Markers at Blackjack (×5 each time; your best wallet since the last ascension counts, so spending or prestiging never sets you back) on the *Casino* tab to reset every table, upgrade, prestige and wallet (table history too) for casino chips. Every ascension also permanently multiplies winnings ×1.5 on all tables (compounding, no purchase needed). Chips buy permanent casino upgrades: the *Floor Manager* line (Floor Manager buys table upgrades for you every 10s, core upgrades first, and prestiges before buying once Concierge is on; *Overtime Shifts* speeds it to 5s then 2s; *Purchasing Policy* adds per-upgrade switches; *Concierge* auto-prestiges), *House Edge* (more winnings), *Seed Capital* (starting cash and cheaper upgrades) and *Night Shift* (better offline earnings).
+- **Achievements** (per table): grind goals ("flip heads 10k / 100k / 1M times") and streak goals ("heads in a row: 24 / 48 / 72"), each with Rare / Epic / Legendary tiers sized for automated play. Each grants a permanent perk that changes a rule of its table and strengthens with its tier; perks survive prestige and ascension. Offline progress doesn't count.
   - **Coin Flip**: *Let It Ride* (re-flip wins for double or nothing), *Heat Wave* (longer Hot Streak, softer losses), *Edge Landing* (rim landings pay 5×), *Pity Flip* (tails can earn a free play), *Raised Ceiling* (higher max payout) and *Double Luck* (a second Lucky Charm re-roll).
   - **Slots**: *Cascade* (triples chain free spins), *Hold & Respin*, *Free Spins*, *Wild Diamond* (💎 completes low lines) and *Scatter Sevens*.
   - **Roulette**: *Green Machine* (zero wins), *House Chip* (free chip on 17), *Black Bleed*, *Dozen Creep* and *Double Spin*.
@@ -42,3 +42,14 @@ Game logic lives in `src/core` and `src/tables` (no DOM); the UI is in `src/ui`.
 
 ## Dev
 Open the game with `?cardcounting=1` to show an *Unlock everything* button (unlocks every table, maxes all upgrades, fills wallets).
+
+## Balance simulator
+
+`src/sim/bots.ts` plays the real `Game` with a set of bot strategies (greedy, value-aware, random, expensive-first,
+junk-first, slow-to-prestige, lazy, hoarder, never-prestige). Targets: greedy and optimal-ish bots ascend within 60 minutes,
+every other strategy within 90.
+
+- `npx vitest run tests/sim/balance.test.ts` – time to first ascension per bot, with the target assertions.
+- `SIM_REPORT=1 npx vitest run tests/sim/upgrades.test.ts` / `perks.test.ts` / `achievements.test.ts` – minutes each upgrade and
+  achievement perk saves, and when each achievement tier is reached (tuning reports; they print, they don't assert).
+- `npm run dev`, then open `/sim.html` – charts each bot's progress, wallets and events.

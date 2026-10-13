@@ -8,6 +8,7 @@ import {
   MAX_BONUS_PLAYS,
   OFFLINE_CAP_SECONDS,
   OFFLINE_EFFICIENCY,
+  CORE_UPGRADES,
   allUpgrades,
   autoPlaysPerSecond,
   chooseAutoBet,
@@ -97,8 +98,8 @@ export class Game {
       gained
         .map(({ def: a, tier }) =>
           a.kind === 'grind'
-            ? `🏆 ${a.name}! ${a.perk.name}: ${a.perk.describe(tier)}`
-            : `🏆 ${a.name} — ${RARITIES[tier - 1]}! ${a.perk.name}: ${a.perk.describe(tier)}`,
+            ? `🏆 ${a.perk.name}! ${a.perk.describe(tier)}`
+            : `🏆 ${a.perk.name} — ${RARITIES[tier - 1]}! ${a.perk.describe(tier)}`,
         )
         .join(' · '),
     );
@@ -158,6 +159,21 @@ export class Game {
     }
     this.runManager(dt);
     this.bailout();
+    this.trackPeak();
+  }
+
+  /** Keeps each table's all-time (since ascension) wallet high-water mark, which ascension progress reads. */
+  private trackPeak(): void {
+    for (const id of TABLE_IDS) {
+      const ts = this.state.tables[id];
+      if (ts.wallet > ts.peakWallet) ts.peakWallet = ts.wallet;
+    }
+  }
+
+  /** Final-table money that counts toward ascending: the best wallet reached, not what is left after spending or prestige. */
+  ascensionMoney(): number {
+    const ts = this.state.tables[FINAL_TABLE];
+    return Math.max(ts.wallet, ts.peakWallet);
   }
 
   private managerInterval(): number {
@@ -184,27 +200,31 @@ export class Game {
     this.state.casino.autoPrestige = on;
   }
 
-  /** The Floor Manager's purchase for one table: the cheapest enabled upgrade that leaves the bet reserve intact. */
+  /**
+   * The Floor Manager's purchase for one table: the cheapest enabled core upgrade that leaves the bet reserve
+   * intact, otherwise the cheapest of the rest.
+   */
   autoBuy(id: TableId): boolean {
     const def = TABLES[id];
     const ts = this.state.tables[id];
     if (!ts.unlocked) return false;
     const reserve = minBet(def, ts.prestige) * MANAGER_RESERVE_BETS;
-    let best: { id: string; cost: number } | null = null;
+    let best: { id: string; cost: number; core: boolean } | null = null;
     for (const upg of allUpgrades(def)) {
       const level = ts.levels[upg.id] ?? 0;
       if (level >= upg.maxLevel || !this.autoBuyEnabled(id, upg.id)) continue;
       const cost = upgradeCost(def, upg, ts.prestige, level, this.bonus);
       if (ts.wallet - cost < reserve) continue;
-      if (!best || cost < best.cost) best = { id: upg.id, cost };
+      const core = CORE_UPGRADES.includes(upg.id);
+      if (!best || (core && !best.core) || (core === best.core && cost < best.cost)) best = { id: upg.id, cost, core };
     }
     return best !== null && this.buyUpgrade(id, best.id);
   }
 
-  /** One manager pass at a table: buy an upgrade, otherwise (Concierge, if enabled) prestige. */
+  /** One manager pass at a table: (Concierge, if enabled) prestige as soon as possible, otherwise buy an upgrade. */
   private managerStep(id: TableId): boolean {
-    if (this.autoBuy(id)) return true;
-    return this.casinoLevel('concierge') >= 1 && this.state.casino.autoPrestige && this.prestige(id);
+    if (this.casinoLevel('concierge') >= 1 && this.state.casino.autoPrestige && this.prestige(id)) return true;
+    return this.autoBuy(id);
   }
 
   private runManager(dt: number): void {
@@ -297,12 +317,12 @@ export class Game {
   }
 
   canAscend(): boolean {
-    return canAscendWith(this.state.tables[FINAL_TABLE].wallet, this.state.casino.ascensions);
+    return canAscendWith(this.ascensionMoney(), this.state.casino.ascensions);
   }
 
   /** Chips an ascension would grant right now (0 if the threshold isn't met). */
   ascendReward(): number {
-    return ascensionReward(this.state.tables[FINAL_TABLE].wallet, this.state.casino.ascensions);
+    return ascensionReward(this.ascensionMoney(), this.state.casino.ascensions);
   }
 
   /** Resets every table (including history) and every wallet in exchange for casino chips. */
@@ -387,6 +407,7 @@ export class Game {
       report.net += applied;
     }
     this.bailout();
+    this.trackPeak();
     return report;
   }
 

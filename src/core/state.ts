@@ -33,6 +33,7 @@ export function newTableState(def: TableDef): TableState {
     plays: 0,
     history: newHistory(),
     streak: 0,
+    peakWallet: def.unlockCost === 0 ? START_MONEY : 0,
   };
 }
 
@@ -101,6 +102,7 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
     ts.lifetimeProfit = num(src.lifetimeProfit, 0, -Infinity);
     ts.plays = Math.floor(num(src.plays, 0));
     ts.streak = Math.min(MAX_STREAK_STORED, Math.floor(num(src.streak, 0)));
+    ts.peakWallet = Math.max(ts.wallet, Math.floor(num(src.peakWallet, 0)));
     ts.history = normalizeHistory(src.history, ts.plays, ts.lifetimeProfit);
     if (src.levels && typeof src.levels === 'object') {
       // Only current upgrades survive (e.g. the retired `auto` level is dropped), clamped to their max.
