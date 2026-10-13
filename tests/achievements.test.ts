@@ -1,0 +1,99 @@
+import { describe, expect, it } from 'vitest';
+import { Game } from '../src/core/game';
+import { createInitialState, normalizeState } from '../src/core/state';
+import { exportSave, importSave } from '../src/core/save';
+import { mulberry32 } from '../src/core/rng';
+import { estimateNetPerPlay } from '../src/core/economy';
+import { ACHIEVEMENTS, backfillAchievements, normalizeAchievements, observeRound, perkKey, perkLevels } from '../src/core/achievements';
+import { TABLES, TABLE_IDS } from '../src/tables';
+import type { PlayView } from '../src/core/types';
+import type { Outcome } from '../src/core/economy';
+
+const outcome = (view: PlayView, bet = 10, payout = 0): Outcome => ({
+  bet,
+  payout,
+  net: payout - bet,
+  detail: '',
+  view,
+  rerolled: false,
+  capped: false,
+});
+const heads = (h: boolean): Outcome => outcome({ kind: 'coin', heads: h });
+
+describe('achievements', () => {
+  it('streaks advance tiers at thresholds and reset on a miss', () => {
+    const s = createInitialState(0);
+    for (let i = 0; i < 5; i++) observeRound(s.achievements, 'coinflip', heads(true));
+    expect(s.achievements.hotHand.tier).toBe(0);
+    const gained = observeRound(s.achievements, 'coinflip', heads(true));
+    expect(gained.map((g) => g.def.id)).toEqual(['hotHand']);
+    expect(s.achievements.hotHand.tier).toBe(1);
+    observeRound(s.achievements, 'coinflip', heads(false));
+    expect(s.achievements.hotHand.run).toBe(0);
+    expect(s.achievements.hotHand.best).toBe(6);
+    expect(s.achievements.coldComfort.run).toBe(1);
+    for (let i = 0; i < 10; i++) observeRound(s.achievements, 'coinflip', heads(true));
+    expect(s.achievements.hotHand.tier).toBe(2);
+  });
+
+  it('grind achievements unlock exactly at the target', () => {
+    const s = createInitialState(0);
+    for (let i = 0; i < 999; i++) observeRound(s.achievements, 'coinflip', heads(true));
+    expect(s.achievements.headsCollector.tier).toBe(0);
+    observeRound(s.achievements, 'coinflip', heads(true));
+    expect(s.achievements.headsCollector.tier).toBe(1);
+    expect(perkLevels(s.achievements, 'coinflip')[perkKey('headsCollector')]).toBe(1);
+    expect(perkLevels(s.achievements, 'slots')).toEqual({});
+  });
+
+  it('perks reach play() and survive prestige and save round trips', () => {
+    const g = new Game(createInitialState(0), mulberry32(3));
+    g.state.achievements.hotHand.best = 15;
+    g.state.achievements.hotHand.tier = 3;
+    expect(g.levelsFor('coinflip').perk_hotHand).toBe(3);
+    g.state.money = 1e12;
+    g.table('coinflip').profit = 1e12;
+    expect(g.prestige('coinflip')).toBe(true);
+    expect(g.levelsFor('coinflip').perk_hotHand).toBe(3);
+    const back = importSave(exportSave(g.state));
+    expect(back.achievements.hotHand).toMatchObject({ best: 15, tier: 3 });
+  });
+
+  it('notifies on unlock while playing', () => {
+    const g = new Game(createInitialState(0), mulberry32(1));
+    g.state.achievements.headsCollector.count = 999;
+    g.state.money = 1e6;
+    for (let i = 0; i < 50 && !g.notice?.text.includes('Lucky Penny'); i++) g.play('coinflip', 1);
+    expect(g.notice?.text).toContain('Lucky Penny');
+  });
+
+  it('normalizes junk and backfills old saves from play stats', () => {
+    const a = normalizeAchievements({ hotHand: { best: 'x', tier: 99 }, bogus: { count: 5 } });
+    expect(a.hotHand.tier).toBe(0);
+    expect(a.bogus).toBeUndefined();
+    const s = createInitialState(0);
+    s.tables.coinflip.history.stats.coin.heads = 1500;
+    s.tables.blackjack.history.stats.blackjack.natural = 3;
+    const raw: any = JSON.parse(JSON.stringify(s));
+    delete raw.achievements;
+    const loaded = normalizeState(raw);
+    expect(loaded.achievements.headsCollector.tier).toBe(1);
+    expect(loaded.achievements.naturalBorn.count).toBe(3);
+    expect(backfillAchievements(s).headsCollector.count).toBe(1500);
+  });
+
+  it('has a perk for every achievement and bounded balance at max tier', () => {
+    expect(new Set(ACHIEVEMENTS.map((a) => a.id)).size).toBe(ACHIEVEMENTS.length);
+    for (const id of TABLE_IDS) {
+      const def = TABLES[id];
+      const option = def.options?.[0].id ?? '';
+      const maxed: Record<string, number> = {};
+      for (const a of ACHIEVEMENTS.filter((x) => x.table === id)) maxed[perkKey(a.id)] = a.targets.length;
+      const bet = def.baseMinBet * 10;
+      const base = estimateNetPerPlay(def, {}, 0, option, bet, mulberry32(5), 20000) / bet;
+      const perked = estimateNetPerPlay(def, maxed, 0, option, bet, mulberry32(5), 20000) / bet;
+      expect(perked).toBeGreaterThanOrEqual(base - 0.02);
+      expect(perked - base).toBeLessThan(0.35);
+    }
+  });
+});

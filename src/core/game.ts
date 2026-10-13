@@ -1,4 +1,4 @@
-import type { AutoStrategy, GameState, Rng, TableDef, TableId, TableState } from './types';
+import type { GameState, Rng, TableDef, TableId, TableState } from './types';
 import { TABLES, TABLE_IDS } from '../tables';
 import { mulberry32 } from './rng';
 import {
@@ -17,7 +17,17 @@ import {
   upgradeCost,
   type Outcome,
 } from './economy';
-import { newTableState } from './state';
+import { START_MONEY, newTableState } from './state';
+import { observeRound, perkLevels, RARITIES } from './achievements';
+import { markPrestige, recordSample, recordView } from './history';
+import {
+  CASINO_UPGRADES,
+  ascensionReward,
+  canAscendWith,
+  casinoBonus,
+  casinoUpgradeCost,
+  type CasinoBonus,
+} from './casino';
 
 export interface LastPlay {
   seq: number;
@@ -44,12 +54,22 @@ export class Game {
     this.state = state;
   }
 
+  /** Casino-wide shop modifiers currently in effect. */
+  get bonus(): CasinoBonus {
+    return casinoBonus(this.state.casino);
+  }
+
   def(id: TableId): TableDef {
     return TABLES[id];
   }
 
   table(id: TableId): TableState {
     return this.state.tables[id];
+  }
+
+  /** Table upgrade levels plus the perks earned from achievements, as `TableDef.play` reads them. */
+  levelsFor(id: TableId): Record<string, number> {
+    return { ...this.state.tables[id].levels, ...perkLevels(this.state.achievements, id) };
   }
 
   private say(text: string): void {
@@ -65,11 +85,25 @@ export class Game {
     if (this.state.money < stake) return null;
 
     this.state.money -= stake;
-    const outcome = resolvePlay(def, ts.levels, ts.prestige, ts.option, stake, this.rng);
+    const outcome = resolvePlay(def, this.levelsFor(id), ts.prestige, ts.option, stake, this.rng, this.bonus);
     this.state.money += outcome.payout;
     ts.plays++;
     ts.profit += outcome.net;
     ts.lifetimeProfit += outcome.net;
+    recordSample(ts.history, ts.plays, ts.lifetimeProfit);
+    recordView(ts.history, outcome.view);
+    const gained = observeRound(this.state.achievements, id, outcome);
+    if (gained.length > 0) {
+      this.say(
+        gained
+          .map(({ def: a, tier }) =>
+            a.kind === 'streak'
+              ? `🏆 ${a.name} — ${RARITIES[tier - 1]}! ${a.perk.name}: ${a.perk.describe(tier)}`
+              : `🏆 ${a.name}! ${a.perk.name}: ${a.perk.describe(tier)}`,
+          )
+          .join(' · '),
+      );
+    }
     this.sessionNet += outcome.net;
     this.last[id] = { seq: ++this.seq, outcome, auto };
     if (!auto) this.bailout();
@@ -78,10 +112,11 @@ export class Game {
 
   /** Advances auto-players by `dt` seconds. */
   tick(dt: number): void {
+    const bonus = this.bonus;
     for (const id of TABLE_IDS) {
       const ts = this.state.tables[id];
       if (!ts.unlocked) continue;
-      const rate = autoPlaysPerSecond(ts.levels);
+      const rate = autoPlaysPerSecond(ts.levels, bonus);
       if (rate <= 0) {
         this.acc[id] = 0;
         continue;
@@ -122,10 +157,6 @@ export class Game {
     if (TABLES[id].options?.some((o) => o.id === option)) this.state.tables[id].option = option;
   }
 
-  setStrategy(id: TableId, strategy: AutoStrategy): void {
-    this.state.tables[id].autoStrategy = strategy;
-  }
-
   unlock(id: TableId): boolean {
     const def = TABLES[id];
     const ts = this.state.tables[id];
@@ -146,7 +177,7 @@ export class Game {
     if (!upg || !ts.unlocked) return false;
     const level = ts.levels[upgradeId] ?? 0;
     if (level >= upg.maxLevel) return false;
-    const cost = upgradeCost(def, upg, ts.prestige, level);
+    const cost = upgradeCost(def, upg, ts.prestige, level, this.bonus);
     if (this.state.money < cost) return false;
     this.state.money -= cost;
     ts.levels[upgradeId] = level + 1;
@@ -155,7 +186,7 @@ export class Game {
 
   canPrestige(id: TableId): boolean {
     const ts = this.state.tables[id];
-    return ts.unlocked && ts.profit >= prestigeThreshold(TABLES[id], ts.prestige);
+    return ts.unlocked && ts.profit >= prestigeThreshold(TABLES[id], ts.prestige, this.bonus);
   }
 
   /** Resets the table's upgrades and run profit, permanently raising its stakes. */
@@ -164,35 +195,83 @@ export class Game {
     const def = TABLES[id];
     const ts = this.state.tables[id];
     const fresh = newTableState(def);
+    markPrestige(ts.history, ts.plays);
     ts.prestige += 1;
     ts.levels = {};
     ts.profit = 0;
     ts.bet = clampBet(def, ts.prestige, fresh.bet);
-    ts.autoStrategy = 'pct';
     this.acc[id] = 0;
     this.bailout();
+    return true;
+  }
+
+  canAscend(): boolean {
+    return canAscendWith(this.state.money, this.state.casino.ascensions);
+  }
+
+  /** Chips an ascension would grant right now (0 if the threshold isn't met). */
+  ascendReward(): number {
+    return ascensionReward(this.state.money, this.state.casino.ascensions);
+  }
+
+  /** Resets every table (including history) and the bankroll in exchange for casino chips. */
+  ascend(): boolean {
+    if (!this.canAscend()) return false;
+    const reward = this.ascendReward();
+    const casino = this.state.casino;
+    casino.chips += reward;
+    casino.totalChips += reward;
+    casino.ascensions += 1;
+    for (const id of TABLE_IDS) {
+      this.state.tables[id] = newTableState(TABLES[id]);
+      this.acc[id] = 0;
+      delete this.last[id];
+    }
+    this.state.money = START_MONEY + this.bonus.startCash;
+    this.say(`Ascended! +${reward} casino chips.`);
+    return true;
+  }
+
+  casinoLevel(upgradeId: string): number {
+    return this.state.casino.levels[upgradeId] ?? 0;
+  }
+
+  buyCasinoUpgrade(upgradeId: string): boolean {
+    const upg = CASINO_UPGRADES.find((u) => u.id === upgradeId);
+    if (!upg) return false;
+    const casino = this.state.casino;
+    const level = casino.levels[upgradeId] ?? 0;
+    if (level >= upg.maxLevel) return false;
+    const cost = casinoUpgradeCost(upg, level);
+    if (casino.chips < cost) return false;
+    casino.chips -= cost;
+    casino.levels[upgradeId] = level + 1;
     return true;
   }
 
   /** Approximates auto-play for time spent away using an expected-value estimate. */
   applyOffline(seconds: number): OfflineReport {
     const report: OfflineReport = { seconds, plays: 0, net: 0 };
-    const effective = Math.min(Math.max(seconds, 0), OFFLINE_CAP_SECONDS);
+    const bonus = this.bonus;
+    const cap = OFFLINE_CAP_SECONDS + bonus.offlineHours * 3600;
+    const efficiency = Math.min(1, OFFLINE_EFFICIENCY + bonus.offlineEfficiency);
+    const effective = Math.min(Math.max(seconds, 0), cap);
     for (const id of TABLE_IDS) {
       const def = TABLES[id];
       const ts = this.state.tables[id];
       if (!ts.unlocked) continue;
-      const plays = Math.floor(autoPlaysPerSecond(ts.levels) * effective * OFFLINE_EFFICIENCY);
+      const plays = Math.floor(autoPlaysPerSecond(ts.levels, bonus) * effective * efficiency);
       if (plays <= 0) continue;
       const bet = chooseAutoBet(def, ts, this.state.money);
       if (bet <= 0) continue;
-      const avg = estimateNetPerPlay(def, ts.levels, ts.prestige, ts.option, bet, mulberry32(1337));
+      const avg = estimateNetPerPlay(def, this.levelsFor(id), ts.prestige, ts.option, bet, mulberry32(1337), 2000, bonus);
       const net = Math.round(avg * plays);
       const applied = Math.max(net, -this.state.money);
       this.state.money += applied;
       ts.profit += applied;
       ts.lifetimeProfit += applied;
       ts.plays += plays;
+      recordSample(ts.history, ts.plays, ts.lifetimeProfit, true);
       report.plays += plays;
       report.net += applied;
     }
@@ -204,10 +283,11 @@ export class Game {
   incomeEstimate(id: TableId): number {
     const def = TABLES[id];
     const ts = this.state.tables[id];
-    const rate = autoPlaysPerSecond(ts.levels);
+    const bonus = this.bonus;
+    const rate = autoPlaysPerSecond(ts.levels, bonus);
     if (rate <= 0) return 0;
     const bet = chooseAutoBet(def, ts, this.state.money);
     if (bet <= 0) return 0;
-    return rate * estimateNetPerPlay(def, ts.levels, ts.prestige, ts.option, bet, mulberry32(7), 400);
+    return rate * estimateNetPerPlay(def, this.levelsFor(id), ts.prestige, ts.option, bet, mulberry32(7), 400, bonus);
   }
 }

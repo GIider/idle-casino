@@ -5,6 +5,7 @@ import { exportSave } from '../core/save';
 import { h, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
 import { TablePanel } from './tablePanel';
+import { CasinoPanel } from './casinoPanel';
 
 export interface AppHandlers {
   onImport(text: string): void;
@@ -15,7 +16,9 @@ export class App {
   private game: Game;
   private panels = new Map<TableId, TablePanel>();
   private tabs = new Map<TableId, HTMLButtonElement>();
-  private selected: TableId = 'coinflip';
+  private selected: TableId | 'casino' = 'coinflip';
+  private casinoPanel: CasinoPanel;
+  private casinoTab: HTMLButtonElement;
   private moneyEl: HTMLElement;
   private rateEl: HTMLElement;
   private toastEl: HTMLElement;
@@ -59,15 +62,27 @@ export class App {
       tab.title = def.name;
     }
 
+    this.casinoPanel = new CasinoPanel(game);
+    this.casinoTab = h('button', { class: 'tab', title: 'Casino', onclick: () => this.select('casino') });
+    nav.append(this.casinoTab);
+    main.append(this.casinoPanel.root);
+
     host.replaceChildren(header, nav, main, this.toastEl);
     this.select(this.selected);
   }
 
-  select(id: TableId): void {
+  select(id: TableId | 'casino'): void {
     this.selected = id;
     for (const [tid, panel] of this.panels) toggleClass(panel.root, 'hidden', tid !== id);
     for (const [tid, tab] of this.tabs) toggleClass(tab, 'active', tid === id);
-    this.panels.get(id)!.update();
+    this.casinoPanel.setHidden(id !== 'casino');
+    toggleClass(this.casinoTab, 'active', id === 'casino');
+    this.updateSelected();
+  }
+
+  private updateSelected(): void {
+    if (this.selected === 'casino') this.casinoPanel.update();
+    else this.panels.get(this.selected)!.update();
   }
 
   toast(text: string, ms = 5000): void {
@@ -98,7 +113,11 @@ export class App {
       setText(tab, `${ts.unlocked ? def.icon : '🔒'} ${def.name}`);
       toggleClass(tab, 'affordable', affordable);
     }
-    this.panels.get(this.selected)!.update();
+    const { chips } = g.state.casino;
+    const canAscend = g.canAscend();
+    setText(this.casinoTab, canAscend ? '🏛 Casino ★' : chips > 0 ? `🏛 Casino (${fmt(chips)})` : '🏛 Casino');
+    toggleClass(this.casinoTab, 'affordable', canAscend);
+    this.updateSelected();
 
     if (g.notice && g.notice.seq !== this.toastSeq) {
       this.toastSeq = g.notice.seq;

@@ -1,0 +1,285 @@
+import type { AchievementProgress, GameState, PlayView, TableId } from './types';
+import type { Outcome } from './economy';
+import { RED_POCKETS } from '../tables/roulette';
+
+export const RARITIES = ['Rare', 'Epic', 'Legendary'] as const;
+
+export interface AchievementDef {
+  id: string;
+  table: TableId;
+  name: string;
+  /** What the player has to do, e.g. "Flip heads". */
+  goal: string;
+  kind: 'grind' | 'streak';
+  /** Grind: a single target. Streak: ascending thresholds, one per rarity tier. */
+  targets: number[];
+  /** Grind: how much this round adds to the count (0 = nothing). Streak: 1 if the round extends the run. */
+  score(view: PlayView, outcome: Outcome): number;
+  perk: { name: string; describe(tier: number): string };
+}
+
+/** Key under which an achievement's perk level appears in a table's `levels`. */
+export function perkKey(id: string): string {
+  return `perk_${id}`;
+}
+
+const pct = (n: number) => `${Math.round(n * 100)}%`;
+const byTier = <T>(values: T[], tier: number): T => values[Math.min(values.length, Math.max(1, tier)) - 1];
+
+export const COIN_HEADS_CHANCE = 0.015;
+export const DOUBLE_HEADER_CHANCE = [0.03, 0.06, 0.1];
+export const CONSOLATION_REFUND = [0.1, 0.2, 0.3];
+export const POLISHED_TRIPLE_BONUS = 1.1;
+export const SWEET_PAIR_MULT = 1.25;
+export const NEAR_MISS_REFUND = [0.1, 0.2, 0.3];
+export const HOT_SEVENTEEN_MULT = 40;
+export const COLOUR_MEMORY_MULT = [2.1, 2.2, 2.3];
+export const MARKED_DECK_MULT = 3;
+export const SECOND_THOUGHTS_CHANCE = 0.15;
+export const GENTLEMAN_PUSH_MULT = [1.1, 1.2, 1.3];
+
+export const ACHIEVEMENTS: AchievementDef[] = [
+  {
+    id: 'headsCollector',
+    table: 'coinflip',
+    name: 'Heads Collector',
+    goal: 'Flip heads',
+    kind: 'grind',
+    targets: [1000],
+    score: (v) => (v.kind === 'coin' && v.heads ? 1 : 0),
+    perk: { name: 'Lucky Penny', describe: () => `+${(COIN_HEADS_CHANCE * 100).toFixed(1)}% heads chance` },
+  },
+  {
+    id: 'hotHand',
+    table: 'coinflip',
+    name: 'Hot Hand',
+    goal: 'Flip heads in a row',
+    kind: 'streak',
+    targets: [6, 10, 15],
+    score: (v) => (v.kind === 'coin' && v.heads ? 1 : 0),
+    perk: {
+      name: 'Double Header',
+      describe: (t) => `${pct(byTier(DOUBLE_HEADER_CHANCE, t))} of wins pay 3× instead of 2×`,
+    },
+  },
+  {
+    id: 'coldComfort',
+    table: 'coinflip',
+    name: 'Cold Comfort',
+    goal: 'Flip tails in a row',
+    kind: 'streak',
+    targets: [4, 6, 8],
+    score: (v) => (v.kind === 'coin' && !v.heads ? 1 : 0),
+    perk: {
+      name: 'Consolation Prize',
+      describe: (t) => `Tails refund ${pct(byTier(CONSOLATION_REFUND, t))} of your bet`,
+    },
+  },
+  {
+    id: 'tripleCrown',
+    table: 'slots',
+    name: 'Triple Crown',
+    goal: 'Land three of a kind',
+    kind: 'grind',
+    targets: [250],
+    score: (v) => (v.kind === 'slots' && v.reels[0] === v.reels[1] && v.reels[1] === v.reels[2] ? 1 : 0),
+    perk: { name: 'Polished Reels', describe: () => `Three of a kind pays +${pct(POLISHED_TRIPLE_BONUS - 1)}` },
+  },
+  {
+    id: 'cherrySeason',
+    table: 'slots',
+    name: 'Cherry Season',
+    goal: 'See cherries on the reels',
+    kind: 'grind',
+    targets: [2500],
+    score: (v) => (v.kind === 'slots' ? v.reels.filter((r) => r === 0).length : 0),
+    perk: { name: 'Sweet Pair', describe: () => `Two cherries pay ${SWEET_PAIR_MULT}× instead of 1×` },
+  },
+  {
+    id: 'hotStreak',
+    table: 'slots',
+    name: 'Hot Streak',
+    goal: 'Get paid at least your stake in a row',
+    kind: 'streak',
+    targets: [5, 8, 12],
+    score: (v, o) => (v.kind === 'slots' && o.payout >= o.bet ? 1 : 0),
+    perk: {
+      name: 'Near Miss',
+      describe: (t) => `A non-cherry pair refunds ${pct(byTier(NEAR_MISS_REFUND, t))} of your bet`,
+    },
+  },
+  {
+    id: 'zeroHero',
+    table: 'roulette',
+    name: 'Zero Hero',
+    goal: 'Watch the ball land on zero',
+    kind: 'grind',
+    targets: [25],
+    score: (v) => (v.kind === 'roulette' && v.pocket === 0 ? 1 : 0),
+    perk: { name: 'La Partage', describe: () => 'Zero returns half your bet on colour and dozen bets' },
+  },
+  {
+    id: 'luckySeventeen',
+    table: 'roulette',
+    name: 'Lucky Seventeen',
+    goal: 'Hit 17',
+    kind: 'grind',
+    targets: [20],
+    score: (v) => (v.kind === 'roulette' && v.pocket === 17 ? 1 : 0),
+    perk: { name: 'Hot Seventeen', describe: () => `Number bets pay ${HOT_SEVENTEEN_MULT}× instead of 36×` },
+  },
+  {
+    id: 'colourRun',
+    table: 'roulette',
+    name: 'Red Run',
+    goal: 'Spin red in a row',
+    kind: 'streak',
+    targets: [5, 8, 11],
+    score: (v) => (v.kind === 'roulette' && RED_POCKETS.has(v.pocket) ? 1 : 0),
+    perk: {
+      name: 'Colour Memory',
+      describe: (t) => `Red bets pay ${byTier(COLOUR_MEMORY_MULT, t).toFixed(1)}× instead of 2×`,
+    },
+  },
+  {
+    id: 'naturalBorn',
+    table: 'blackjack',
+    name: 'Natural Born',
+    goal: 'Be dealt a natural',
+    kind: 'grind',
+    targets: [25],
+    score: (v) => (v.kind === 'blackjack' && v.outcome === 'natural' ? 1 : 0),
+    perk: { name: 'Marked Deck', describe: () => `Naturals pay ${MARKED_DECK_MULT}× instead of 2.5×` },
+  },
+  {
+    id: 'bustOut',
+    table: 'blackjack',
+    name: 'Bust Out',
+    goal: 'Bust',
+    kind: 'grind',
+    targets: [250],
+    score: (v) => (v.kind === 'blackjack' && v.outcome === 'bust' ? 1 : 0),
+    perk: {
+      name: 'Second Thoughts',
+      describe: () => `${pct(SECOND_THOUGHTS_CHANCE)} chance a busting card is re-drawn once`,
+    },
+  },
+  {
+    id: 'winStreak',
+    table: 'blackjack',
+    name: 'Winning Run',
+    goal: 'Win hands in a row',
+    kind: 'streak',
+    targets: [4, 7, 10],
+    score: (v) => (v.kind === 'blackjack' && (v.outcome === 'win' || v.outcome === 'natural') ? 1 : 0),
+    perk: {
+      name: "Gentleman's Agreement",
+      describe: (t) => `Pushes pay ${byTier(GENTLEMAN_PUSH_MULT, t).toFixed(1)}× your bet`,
+    },
+  },
+];
+
+export function achievementsFor(table: TableId): AchievementDef[] {
+  return ACHIEVEMENTS.filter((a) => a.table === table);
+}
+
+export function maxTier(def: AchievementDef): number {
+  return def.targets.length;
+}
+
+export function newProgress(): AchievementProgress {
+  return { count: 0, run: 0, best: 0, tier: 0 };
+}
+
+export function newAchievements(): Record<string, AchievementProgress> {
+  const out: Record<string, AchievementProgress> = {};
+  for (const a of ACHIEVEMENTS) out[a.id] = newProgress();
+  return out;
+}
+
+function tierFor(def: AchievementDef, progress: AchievementProgress): number {
+  const value = def.kind === 'grind' ? progress.count : progress.best;
+  let tier = 0;
+  for (const t of def.targets) if (value >= t) tier++;
+  return tier;
+}
+
+/** Feeds one round into the table's achievements. Returns those that gained a tier. */
+export function observeRound(
+  achievements: Record<string, AchievementProgress>,
+  table: TableId,
+  outcome: Outcome,
+): { def: AchievementDef; tier: number }[] {
+  const view = outcome.view;
+  const gained: { def: AchievementDef; tier: number }[] = [];
+  if (!view) return gained;
+  for (const def of achievementsFor(table)) {
+    const p = (achievements[def.id] ??= newProgress());
+    const score = def.score(view, outcome);
+    if (def.kind === 'grind') {
+      p.count += score;
+    } else {
+      p.run = score > 0 ? p.run + 1 : 0;
+      p.best = Math.max(p.best, p.run);
+    }
+    const tier = tierFor(def, p);
+    if (tier > p.tier) {
+      p.tier = tier;
+      gained.push({ def, tier });
+    }
+  }
+  return gained;
+}
+
+/** The perk levels earned on a table, keyed the way `TableDef.play` reads them. */
+export function perkLevels(achievements: Record<string, AchievementProgress>, table: TableId): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const def of achievementsFor(table)) {
+    const tier = achievements[def.id]?.tier ?? 0;
+    if (tier > 0) out[perkKey(def.id)] = tier;
+  }
+  return out;
+}
+
+export function unlockedCount(achievements: Record<string, AchievementProgress>): number {
+  return ACHIEVEMENTS.filter((a) => (achievements[a.id]?.tier ?? 0) > 0).length;
+}
+
+/** Seeds grind counts from lifetime play stats, so saves from before achievements aren't starting at zero. */
+export function backfillAchievements(state: GameState): Record<string, AchievementProgress> {
+  const out = newAchievements();
+  const s = (id: TableId) => state.tables[id].history.stats;
+  const seed: Record<string, number> = {
+    headsCollector: s('coinflip').coin.heads,
+    tripleCrown: s('slots').slots.triples,
+    cherrySeason: s('slots').slots.symbols[0] ?? 0,
+    zeroHero: s('roulette').roulette.pockets[0] ?? 0,
+    luckySeventeen: s('roulette').roulette.pockets[17] ?? 0,
+    naturalBorn: s('blackjack').blackjack.natural,
+    bustOut: s('blackjack').blackjack.bust,
+  };
+  for (const def of ACHIEVEMENTS) {
+    const p = out[def.id];
+    if (def.kind === 'grind') p.count = seed[def.id] ?? 0;
+    p.tier = tierFor(def, p);
+  }
+  return out;
+}
+
+/** Validates untrusted achievement data: unknown ids are dropped, numbers clamped. */
+export function normalizeAchievements(raw: unknown): Record<string, AchievementProgress> {
+  const out = newAchievements();
+  if (!raw || typeof raw !== 'object') return out;
+  const r = raw as Record<string, any>;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
+  for (const def of ACHIEVEMENTS) {
+    const src = r[def.id];
+    if (!src || typeof src !== 'object') continue;
+    const p = out[def.id];
+    p.count = n(src.count);
+    p.best = n(src.best);
+    p.run = Math.min(n(src.run), p.best);
+    p.tier = tierFor(def, p);
+  }
+  return out;
+}

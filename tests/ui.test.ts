@@ -12,7 +12,7 @@ describe('UI smoke', () => {
     const game = new Game(createInitialState(0), mulberry32(3));
     const app = new App(host, game, { onImport() {}, onReset() {} });
     app.update();
-    expect(host.querySelectorAll('.tab').length).toBe(4);
+    expect(host.querySelectorAll('.tab').length).toBe(5); // 4 tables + casino
     expect(host.querySelector('.money')!.textContent).toBe('100');
 
     (host.querySelector('.btn.play') as HTMLButtonElement).click();

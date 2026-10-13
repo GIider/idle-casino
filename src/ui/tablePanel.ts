@@ -1,7 +1,8 @@
-import type { AutoStrategy, TableId, UpgradeDef } from '../core/types';
+import type { TableId, UpgradeDef } from '../core/types';
 import type { Game } from '../core/game';
 import {
   allUpgrades,
+  autoBetFraction,
   autoPlaysPerSecond,
   luckChance,
   maxBet,
@@ -11,8 +12,11 @@ import {
   prestigeThreshold,
   upgradeCost,
 } from '../core/economy';
-import { flash, h, setDisabled, setText, toggleClass } from './dom';
+import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
+import { Stage } from './stage/stage';
+import { HistoryChart } from './historyChart';
+import { AchievementsCard } from './achievementsPanel';
 
 interface UpgradeRow {
   def: UpgradeDef;
@@ -38,17 +42,21 @@ export class TablePanel {
   private rangeEl: HTMLElement;
   private playBtn: HTMLButtonElement;
   private optionSelect: HTMLSelectElement | null = null;
-  private strategySelect: HTMLSelectElement;
   private autoInfo: HTMLElement;
   private rows: UpgradeRow[] = [];
   private prestigeText: HTMLElement;
   private prestigeBar: HTMLElement;
   private prestigeBtn: HTMLButtonElement;
   private seenSeq = 0;
+  private canvasStage: Stage;
+  private history: HistoryChart;
+  private achievements: AchievementsCard;
 
   constructor(game: Game, id: TableId) {
     this.game = game;
     this.id = id;
+    this.history = new HistoryChart(id);
+    this.achievements = new AchievementsCard(game, id);
     const def = game.def(id);
 
     // Locked view
@@ -66,7 +74,9 @@ export class TablePanel {
     this.statsEl = h('div', { class: 'stats' });
     this.resultEl = h('div', { class: 'result', text: 'Place your bet' });
     this.netEl = h('div', { class: 'net', text: ' ' });
-    this.stage = h('div', { class: 'stage' }, this.resultEl, this.netEl);
+    this.canvasStage = new Stage(def.icon, id);
+    this.resultEl.setAttribute('aria-live', 'polite');
+    this.stage = h('div', { class: 'stage' }, this.canvasStage.canvas, this.resultEl, this.netEl);
 
     this.betInput = h('input', {
       type: 'number',
@@ -109,26 +119,12 @@ export class TablePanel {
     }
     controls.append(this.playBtn);
 
-    this.strategySelect = h('select', {
-      class: 'select',
-      onchange: () => game.setStrategy(id, this.strategySelect.value as AutoStrategy),
-    });
-    for (const [value, name] of [
-      ['min', 'Minimum bet'],
-      ['pct', '5% of bankroll'],
-      ['max', 'Maximum bet'],
-    ] as const) {
-      const opt = h('option', { text: name });
-      opt.value = value;
-      this.strategySelect.append(opt);
-    }
     this.autoInfo = h('div', { class: 'auto-info' });
     const auto = h(
       'div',
       { class: 'card' },
       h('h3', { text: 'Auto-players' }),
       this.autoInfo,
-      h('label', { class: 'field' }, h('span', { text: 'They bet' }), this.strategySelect),
     );
 
     // Upgrades
@@ -183,7 +179,7 @@ export class TablePanel {
         h('div', { class: 'card play-card' }, this.stage, controls),
         auto,
       ),
-      h('div', { class: 'col side' }, upgrades, prestige),
+      h('div', { class: 'col side' }, upgrades, prestige, this.achievements.root, this.history.root),
     );
 
     this.root = h('section', { class: 'panel' }, this.locked, this.body);
@@ -207,7 +203,7 @@ export class TablePanel {
     const hi = maxBet(def, ts.prestige);
     setText(
       this.statsEl,
-      `Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(ts.levels, ts.prestige).toFixed(2)}`,
+      `Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels, game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(ts.levels, ts.prestige, game.bonus).toFixed(2)}`,
     );
 
     if (document.activeElement !== this.betInput && this.betInput.value !== String(ts.bet)) {
@@ -221,13 +217,15 @@ export class TablePanel {
     );
     setDisabled(this.playBtn, money < ts.bet);
     if (this.optionSelect && this.optionSelect.value !== ts.option) this.optionSelect.value = ts.option;
-    if (this.strategySelect.value !== ts.autoStrategy) this.strategySelect.value = ts.autoStrategy;
 
-    const rate = autoPlaysPerSecond(ts.levels);
+    const bonus = game.bonus;
+    const rate = autoPlaysPerSecond(ts.levels, bonus);
+    const frac = autoBetFraction(ts.levels);
+    const betText = frac > 0 ? `${(frac * 100).toFixed(1).replace(/\.0$/, '')}% of bankroll` : 'minimum bet';
     setText(
       this.autoInfo,
       rate > 0
-        ? `${ts.levels.auto ?? 0} players · ${rate.toFixed(1)} plays/sec`
+        ? `${ts.levels.auto ?? 0} players · ${rate.toFixed(1)} plays/sec · bet ${betText} (${fmt(lo)}–${fmt(hi)})`
         : 'Nobody is playing for you yet. Hire an auto-player.',
     );
 
@@ -239,13 +237,13 @@ export class TablePanel {
         setText(row.button, 'Maxed');
         setDisabled(row.button, true);
       } else {
-        const cost = upgradeCost(def, row.def, ts.prestige, level);
+        const cost = upgradeCost(def, row.def, ts.prestige, level, game.bonus);
         setText(row.button, fmt(cost));
         setDisabled(row.button, money < cost);
       }
     }
 
-    const threshold = prestigeThreshold(def, ts.prestige);
+    const threshold = prestigeThreshold(def, ts.prestige, game.bonus);
     const progress = Math.max(0, Math.min(1, ts.profit / threshold));
     setText(
       this.prestigeText,
@@ -255,6 +253,11 @@ export class TablePanel {
     this.prestigeBar.style.width = `${(progress * 100).toFixed(1)}%`;
     setDisabled(this.prestigeBtn, !game.canPrestige(id));
 
+    this.canvasStage.setPlayers(ts.levels.auto ?? 0);
+    this.canvasStage.resume();
+    this.achievements.update();
+    this.history.update(ts.history, ts.plays, ts.lifetimeProfit);
+
     const last = game.last[id];
     if (last && last.seq !== this.seenSeq) {
       this.seenSeq = last.seq;
@@ -263,7 +266,7 @@ export class TablePanel {
       setText(this.netEl, `${fmtSigned(o.net)}${o.capped ? ' (max payout!)' : ''}${last.auto ? ' · auto' : ''}`);
       this.stage.classList.remove('win', 'lose', 'push');
       this.stage.classList.add(o.net > 0 ? 'win' : o.net < 0 ? 'lose' : 'push');
-      flash(this.stage, 'pop');
+      this.canvasStage.show(last, ts.levels);
     }
   }
 }

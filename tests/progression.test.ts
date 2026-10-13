@@ -15,10 +15,13 @@ function runBot(minutes: number, log?: (s: string) => void) {
     g.tick(dt);
     if (step % 10 !== 0) continue;
     const t = step / 600;
+    // Like a human would: click by hand at tables nobody is playing for yet.
+    for (const id of TABLE_IDS) {
+      if (g.table(id).unlocked && (g.table(id).levels.auto ?? 0) === 0) for (let i = 0; i < 6; i++) g.play(id);
+    }
     for (const id of TABLE_IDS) {
       if (!g.table(id).unlocked && g.unlock(id)) {
         unlockedAt[id] = t;
-        g.setStrategy(id, 'min');
       }
       if (g.canPrestige(id) && g.prestige(id)) prestigeAt.push(`${id}@${t.toFixed(1)}m`);
     }
@@ -31,7 +34,7 @@ function runBot(minutes: number, log?: (s: string) => void) {
         for (const u of allUpgrades(TABLES[id])) {
           const lvl = ts.levels[u.id] ?? 0;
           if (lvl >= u.maxLevel) continue;
-          const cost = upgradeCost(TABLES[id], u, ts.prestige, lvl);
+          const cost = upgradeCost(TABLES[id], u, ts.prestige, lvl, g.bonus);
           if (!best || cost < best.cost) best = { id, up: u.id, cost };
         }
       }

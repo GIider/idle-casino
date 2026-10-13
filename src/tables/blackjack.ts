@@ -1,4 +1,7 @@
-import type { Rng, TableDef } from '../core/types';
+import type { PlayView, Rng, TableDef } from '../core/types';
+import { GENTLEMAN_PUSH_MULT, MARKED_DECK_MULT, SECOND_THOUGHTS_CHANCE } from '../core/achievements';
+
+type BlackjackOutcome = 'natural' | 'bust' | 'win' | 'push' | 'lose';
 
 /** Infinite deck: returns 1 for an ace, 2-10 otherwise (face cards count 10). */
 function draw(rng: Rng): number {
@@ -74,9 +77,16 @@ export const blackjack: TableDef = {
 
     const playerNatural = isNatural(player);
     const dealerNatural = isNatural(dealer);
-    if (playerNatural && dealerNatural) return { mult: 1, detail: '🃏 Both natural — push' };
-    if (playerNatural) return { mult: 2.5, detail: '🃏 Blackjack!' };
-    if (dealerNatural) return { mult: 0, detail: '🃏 Dealer blackjack' };
+    const view = (outcome: BlackjackOutcome, insured = false): PlayView => ({
+      kind: 'blackjack',
+      player: [...player],
+      dealer: [...dealer],
+      outcome,
+      insured,
+    });
+    if (playerNatural && dealerNatural) return { mult: 1, detail: '🃏 Both natural — push', view: view('push') };
+    if (playerNatural) return { mult: levels.perk_naturalBorn ? MARKED_DECK_MULT : 2.5, detail: '🃏 Blackjack!', view: view('natural') };
+    if (dealerNatural) return { mult: 0, detail: '🃏 Dealer blackjack', view: view('lose') };
 
     const standAt = (): number => {
       if (strategy >= 2 && upcard >= 2 && upcard <= 6) return 13;
@@ -85,20 +95,30 @@ export const blackjack: TableDef = {
     };
     while (total(player) < standAt()) player.push(draw(rng));
 
-    const p = total(player);
+    let p = total(player);
+    if (p > 21 && levels.perk_bustOut && rng() < SECOND_THOUGHTS_CHANCE) {
+      // Second Thoughts: the busting card is discarded and drawn again.
+      player.pop();
+      player.push(draw(rng));
+      p = total(player);
+    }
     if (p > 21) {
       const saved = rng() < 0.12 * insure;
       return {
         mult: saved ? 0.5 : 0,
         detail: saved ? `🃏 Bust (${p}) — insured` : `🃏 Bust (${p})`,
+        view: view('bust', saved),
       };
     }
 
     while (total(dealer) < 17) dealer.push(draw(rng));
     const d = total(dealer);
     const detail = `🃏 You ${p} · Dealer ${d}`;
-    if (d > 21 || p > d) return { mult: 2, detail };
-    if (p === d) return { mult: 1, detail };
-    return { mult: 0, detail };
+    if (d > 21 || p > d) return { mult: 2, detail, view: view('win') };
+    if (p === d) {
+      const push = levels.perk_winStreak ? GENTLEMAN_PUSH_MULT[levels.perk_winStreak - 1] : 1;
+      return { mult: push, detail, view: view('push') };
+    }
+    return { mult: 0, detail, view: view('lose') };
   },
 };

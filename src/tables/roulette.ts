@@ -1,11 +1,12 @@
 import type { TableDef } from '../core/types';
+import { COLOUR_MEMORY_MULT, HOT_SEVENTEEN_MULT } from '../core/achievements';
 
-const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+export const RED_POCKETS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 const LUCKY_NUMBER = 17;
 
-function colorOf(n: number): string {
+export function colorOf(n: number): string {
   if (n === 0) return 'green';
-  return RED.has(n) ? 'red' : 'black';
+  return RED_POCKETS.has(n) ? 'red' : 'black';
 }
 
 export const roulette: TableDef = {
@@ -46,16 +47,20 @@ export const roulette: TableDef = {
       pocket = Math.floor(rng() * 37);
     }
     const detail = `🎡 ${pocket} ${colorOf(pocket)}`;
+    const view = { kind: 'roulette' as const, pocket, option };
+    // La Partage: zero returns half the stake on the safer bets.
+    const partage = pocket === 0 && option !== 'number' && levels.perk_zeroHero ? 0.5 : 0;
     switch (option) {
       case 'dozen':
-        return { mult: pocket >= 1 && pocket <= 12 ? 3 : 0, detail };
-      case 'number':
-        return {
-          mult: Math.abs(pocket - LUCKY_NUMBER) <= (levels.magnet ?? 0) ? 36 : 0,
-          detail,
-        };
-      default:
-        return { mult: colorOf(pocket) === 'red' ? 2 : 0, detail };
+        return { mult: pocket >= 1 && pocket <= 12 ? 3 : partage, detail, view };
+      case 'number': {
+        const hit = Math.abs(pocket - LUCKY_NUMBER) <= (levels.magnet ?? 0);
+        return { mult: hit ? (levels.perk_luckySeventeen ? HOT_SEVENTEEN_MULT : 36) : 0, detail, view };
+      }
+      default: {
+        const red = levels.perk_colourRun ? COLOUR_MEMORY_MULT[levels.perk_colourRun - 1] : 2;
+        return { mult: colorOf(pocket) === 'red' ? red : partage, detail, view };
+      }
     }
   },
 };

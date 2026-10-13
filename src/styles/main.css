@@ -430,3 +430,84 @@ small {
     animation: none;
   }
 }
+
+/* Canvas stage + history */
+.stage-canvas {
+  display: block;
+  width: 100%;
+  height: 220px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg2);
+  margin-bottom: 8px;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-range {
+  display: flex;
+  gap: 6px;
+}
+
+.history-sub {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.history-range .btn.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.history-canvas {
+  display: block;
+  width: 100%;
+  height: 140px;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+
+.stats-canvas {
+  cursor: default;
+}
+
+.history-info {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-height: 1.2em;
+}
+
+@media (max-width: 800px) {
+  .stage-canvas {
+    height: 180px;
+  }
+}
+
+/* Achievements */
+.achievement {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  opacity: 0.7;
+}
+
+.achievement:first-of-type {
+  border-top: none;
+}
+
+.achievement.earned {
+  opacity: 1;
+}
+
+.achievement.earned .bar-fill {
+  background: linear-gradient(90deg, var(--green), var(--cyan));
+}

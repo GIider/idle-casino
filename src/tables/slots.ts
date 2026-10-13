@@ -1,7 +1,8 @@
 import type { TableDef } from '../core/types';
 import { pickWeighted } from '../core/rng';
+import { NEAR_MISS_REFUND, POLISHED_TRIPLE_BONUS, SWEET_PAIR_MULT } from '../core/achievements';
 
-const SYMBOLS = ['🍒', '🍋', '🔔', '🍀', '7️⃣', '💎'];
+export const SYMBOLS = ['🍒', '🍋', '🔔', '🍀', '7️⃣', '💎'];
 /** Payout multiplier for three of a kind. */
 const TRIPLE_PAYOUT = [5, 8, 15, 30, 80, 200];
 const BASE_WEIGHTS = [40, 30, 15, 10, 4, 1];
@@ -34,10 +35,15 @@ export const slots: TableDef = {
     const reels = [0, 1, 2].map(() => pickWeighted(rng, weights));
     const detail = reels.map((r) => SYMBOLS[r]).join(' ');
     if (reels[0] === reels[1] && reels[1] === reels[2]) {
-      return { mult: TRIPLE_PAYOUT[reels[0]], detail };
+      const polish = levels.perk_tripleCrown ? POLISHED_TRIPLE_BONUS : 1;
+      return { mult: TRIPLE_PAYOUT[reels[0]] * polish, detail, view: { kind: 'slots', reels } };
     }
     const cherries = reels.filter((r) => r === 0).length;
-    if (cherries === 2) return { mult: 1, detail };
-    return { mult: 0, detail };
+    if (cherries === 2) {
+      return { mult: levels.perk_cherrySeason ? SWEET_PAIR_MULT : 1, detail, view: { kind: 'slots', reels } };
+    }
+    const pair = reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2];
+    const nearMiss = pair && levels.perk_hotStreak ? NEAR_MISS_REFUND[levels.perk_hotStreak - 1] : 0;
+    return { mult: nearMiss, detail, view: { kind: 'slots', reels } };
   },
 };
