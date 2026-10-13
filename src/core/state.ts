@@ -5,12 +5,28 @@ import { newBankroll, newHistory, normalizeBankroll, normalizeHistory } from './
 import { backfillAchievements, newAchievements, normalizeAchievements, observeUpgrades } from './achievements';
 import { allUpgrades } from './economy';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
+/** The first table's starting wallet. */
 export const START_MONEY = 100;
+/** A newly unlocked table starts with this many of its own minimum bets. */
+export const STARTER_BETS = 50;
+
+/** What a table's wallet holds when it is first available. */
+export function starterWallet(def: TableDef): number {
+  return def.unlockCost === 0 ? START_MONEY : def.baseMinBet * STARTER_BETS;
+}
+
+/** Wallets summed in minimum-bet units: the one number that is comparable across currencies. */
+export function casinoValue(tables: Record<TableId, TableState>): number {
+  let total = 0;
+  for (const id of TABLE_IDS) total += tables[id].wallet / TABLES[id].baseMinBet;
+  return total;
+}
 
 export function newTableState(def: TableDef): TableState {
   return {
     unlocked: def.unlockCost === 0,
+    wallet: def.unlockCost === 0 ? START_MONEY : 0,
     prestige: 0,
     levels: {},
     bet: def.baseMinBet,
@@ -29,7 +45,7 @@ export function newCasinoState(): CasinoState {
 export function createInitialState(now = Date.now()): GameState {
   const tables = {} as Record<TableId, TableState>;
   for (const id of TABLE_IDS) tables[id] = newTableState(TABLES[id]);
-  return { version: SAVE_VERSION, money: START_MONEY, tables, bankroll: newBankroll(START_MONEY), casino: newCasinoState(), achievements: newAchievements(), created: now, lastSaved: now };
+  return { version: SAVE_VERSION, tables, bankroll: newBankroll(casinoValue(tables)), casino: newCasinoState(), achievements: newAchievements(), created: now, lastSaved: now };
 }
 
 function num(value: unknown, fallback: number, min = 0): number {
@@ -40,10 +56,12 @@ function num(value: unknown, fallback: number, min = 0): number {
 export function normalizeState(raw: unknown, now = Date.now()): GameState {
   if (!raw || typeof raw !== 'object') throw new Error('Not a save file');
   const r = raw as Record<string, any>;
-  if (typeof r.money !== 'number' || !Number.isFinite(r.money)) throw new Error('Save has no bankroll');
+  if (typeof r.version !== 'number' || r.version < SAVE_VERSION) {
+    throw new Error('This save is from an older version of the game and can no longer be loaded');
+  }
+  if (!r.tables || typeof r.tables !== 'object') throw new Error('Save has no tables');
 
   const state = createInitialState(now);
-  state.money = Math.max(0, Math.floor(r.money));
   state.created = num(r.created, now);
   state.lastSaved = num(r.lastSaved, now);
 
@@ -53,6 +71,7 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
     if (!src || typeof src !== 'object') continue;
     const ts = state.tables[id];
     ts.unlocked = def.unlockCost === 0 || src.unlocked === true;
+    ts.wallet = Math.floor(num(src.wallet, ts.wallet));
     ts.prestige = Math.floor(num(src.prestige, 0));
     ts.profit = num(src.profit, 0, -Infinity);
     ts.lifetimeProfit = num(src.lifetimeProfit, 0, -Infinity);
@@ -68,7 +87,7 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
   }
   // Older saves have no contribution data: seed it from each table's lifetime profit.
   const lifetime = Object.fromEntries(TABLE_IDS.map((id) => [id, state.tables[id].lifetimeProfit]));
-  state.bankroll = normalizeBankroll(r.bankroll, state.money, lifetime);
+  state.bankroll = normalizeBankroll(r.bankroll, casinoValue(state.tables), lifetime);
   const c = r.casino;
   if (c && typeof c === 'object') {
     state.casino.chips = Math.floor(num(c.chips, 0));

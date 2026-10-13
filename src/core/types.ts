@@ -4,6 +4,8 @@ export type TableId = 'coinflip' | 'slots' | 'roulette' | 'blackjack';
 
 export interface TableState {
   unlocked: boolean;
+  /** This table's own currency: it is the stake, pays for the table's upgrades and unlocks the next table. */
+  wallet: number;
   prestige: number;
   /** Upgrade levels by upgrade id (includes the common upgrades luck/payout/auto/speed). */
   levels: Record<string, number>;
@@ -74,7 +76,7 @@ export interface PlayStats {
 }
 
 /** Lifetime progress on one achievement. Survives table prestige and casino ascension. */
-/** Bankroll series; `rounds` is a global play counter that never resets, used as the x axis. */
+/** Casino value series; `rounds` is a global play counter that never resets, used as the x axis. */
 export interface BankrollHistory extends Series {
   rounds: number;
   /** Cumulative net winnings from plays at each table, kept across prestige and ascension. */
@@ -106,9 +108,8 @@ export interface CasinoState {
 
 export interface GameState {
   version: number;
-  money: number;
   tables: Record<TableId, TableState>;
-  /** Casino-wide bankroll over time. `points` are [rounds, money]; `marks` are rounds at which the casino was ascended. */
+  /** Casino value over time (wallets summed in min-bet units). `points` are [rounds, value]; `marks` are rounds at which the casino was ascended. */
   bankroll: BankrollHistory;
   casino: CasinoState;
   achievements: Record<string, AchievementProgress>;
@@ -150,11 +151,16 @@ export interface TableDef {
   name: string;
   icon: string;
   blurb: string;
+  /** The table's own currency. */
+  currency: { name: string; icon: string };
+  /** Price to unlock, paid in the previous table's currency (0 = available from the start). */
   unlockCost: number;
   baseMinBet: number;
   baseMaxBet: number;
   /** Maximum profit a single play can pay out. */
   baseMaxPayout: number;
+  /** Built-in winnings bonus (0.1 = +10%): lets a table grow on its own wallet before any upgrades. */
+  baseWinBonus: number;
   upgrades: UpgradeDef[];
   options?: TableOption[];
   play(rng: Rng, levels: Record<string, number>, option: string): PlayResult;

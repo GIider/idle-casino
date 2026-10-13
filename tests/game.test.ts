@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Game } from '../src/core/game';
-import { createInitialState, normalizeState } from '../src/core/state';
+import { SAVE_VERSION, createInitialState, normalizeState } from '../src/core/state';
 import { exportSave, importSave, loadGame, saveGame } from '../src/core/save';
 import { mulberry32 } from '../src/core/rng';
+import { STARTER_BETS } from '../src/core/state';
 import { prestigeThreshold, minBet, upgradeCost, allUpgrades } from '../src/core/economy';
 
 function game() {
@@ -12,9 +13,9 @@ function game() {
 describe('Game', () => {
   it('plays a round and updates bankroll accounting', () => {
     const g = game();
-    const before = g.state.money;
+    const before = g.table('coinflip').wallet;
     const o = g.play('coinflip', 5)!;
-    expect(g.state.money).toBe(before + o.net);
+    expect(g.table('coinflip').wallet).toBe(before + o.net);
     expect(g.table('coinflip').plays).toBe(1);
     expect(g.table('coinflip').profit).toBe(o.net);
   });
@@ -22,44 +23,88 @@ describe('Game', () => {
   it('refuses locked tables and unaffordable bets', () => {
     const g = game();
     expect(g.play('slots')).toBeNull();
-    g.state.money = 0;
+    g.table('coinflip').wallet = 0;
     expect(g.play('coinflip', 5)).toBeNull();
   });
 
   it('buys upgrades with geometric cost and respects max level', () => {
     const g = game();
-    g.state.money = 1e9;
+    g.table('coinflip').wallet = 1e9;
     const def = g.def('coinflip');
     const luck = allUpgrades(def).find((u) => u.id === 'luck')!;
     const c0 = upgradeCost(def, luck, 0, 0);
     expect(g.buyUpgrade('coinflip', 'luck')).toBe(true);
-    expect(g.state.money).toBe(1e9 - c0);
+    expect(g.table('coinflip').wallet).toBe(1e9 - c0);
     for (let i = 0; i < 40; i++) g.buyUpgrade('coinflip', 'luck');
     expect(g.upgradeLevel('coinflip', 'luck')).toBe(luck.maxLevel);
   });
 
-  it('unlocks tables for their price', () => {
+  it('unlocks a table with the previous table\'s currency and gives it a starter wallet', () => {
     const g = game();
+    const cost = g.def('slots').unlockCost;
     expect(g.unlock('slots')).toBe(false);
-    g.state.money = 10000;
-    g.state.money = 2500;
+    g.table('coinflip').wallet = cost - 1;
+    expect(g.canUnlock('slots')).toBe(false);
+    g.table('coinflip').wallet = cost + 7;
     expect(g.unlock('slots')).toBe(true);
-    expect(g.state.money).toBe(0);
+    expect(g.table('coinflip').wallet).toBe(7);
+    expect(g.table('slots').wallet).toBe(g.def('slots').baseMinBet * STARTER_BETS);
+  });
+
+  it('only the previous table can pay for an unlock', () => {
+    const g = game();
+    g.table('coinflip').wallet = 1e12;
+    g.table('slots').wallet = 0;
+    // Roulette is paid in Tokens, and Slots isn't even open yet.
+    expect(g.canUnlock('roulette')).toBe(false);
+    expect(g.unlock('roulette')).toBe(false);
+    g.unlock('slots');
+    g.table('slots').wallet = g.def('roulette').unlockCost;
+    expect(g.unlock('roulette')).toBe(true);
+    expect(g.table('coinflip').wallet).toBeGreaterThan(1e11);
+  });
+
+  it('prestige at one table boosts winnings at the next', () => {
+    const g = game();
+    expect(g.bonusFor('slots').payout).toBe(1);
+    g.table('coinflip').prestige = 5;
+    expect(g.bonusFor('slots').payout).toBeCloseTo(1.2);
+    expect(g.bonusFor('coinflip').payout).toBe(1);
+    expect(g.bonusFor('roulette').payout).toBe(1);
+  });
+
+  it('keeps each table\'s money separate', () => {
+    const g = game();
+    g.table('coinflip').wallet = 1e12;
+    g.unlock('slots');
+    const slotsWallet = g.table('slots').wallet;
+    // Coin Flip's riches can't fund a Slots upgrade or stake.
+    g.table('slots').wallet = 0;
+    expect(g.buyUpgrade('slots', 'luck')).toBe(false);
+    expect(g.play('slots')).toBeNull();
+    expect(g.table('coinflip').wallet).toBe(1e12 - g.def('slots').unlockCost);
+    g.table('slots').wallet = slotsWallet;
+    const before = g.table('coinflip').wallet;
+    g.table('slots').levels.auto = 3;
+    g.tick(3);
+    expect(g.table('slots').plays).toBeGreaterThan(0);
+    expect(g.table('coinflip').wallet).toBe(before);
   });
 
   it('auto-players play on tick', () => {
     const g = game();
-    g.state.money = 10000;
+    g.table('coinflip').wallet = 10000;
     g.state.tables.coinflip.levels.auto = 4;
     g.tick(5);
     expect(g.table('coinflip').plays).toBe(20);
   });
 
-  it('bails out a broke player', () => {
+  it('bails out a broke table without touching the others', () => {
     const g = game();
-    g.state.money = 0;
+    g.table('coinflip').wallet = 0;
     g.tick(0.1);
-    expect(g.state.money).toBeGreaterThan(0);
+    expect(g.table('coinflip').wallet).toBeGreaterThan(0);
+    expect(g.table('slots').wallet).toBe(0);
   });
 
   it('prestige resets upgrades and raises stakes', () => {
@@ -69,23 +114,23 @@ describe('Game', () => {
     ts.levels = { luck: 5, auto: 3 };
     expect(g.prestige('coinflip')).toBe(false);
     ts.profit = prestigeThreshold(def, 0);
-    g.state.money = 12345;
+    g.table('coinflip').wallet = 12345;
     expect(g.prestige('coinflip')).toBe(true);
     expect(ts.prestige).toBe(1);
     expect(ts.levels).toEqual({});
     expect(ts.profit).toBe(0);
-    expect(g.state.money).toBe(12345);
+    expect(g.table('coinflip').wallet).toBe(12345);
     expect(minBet(def, 1)).toBeGreaterThan(minBet(def, 0));
     expect(ts.bet).toBeGreaterThanOrEqual(minBet(def, 1));
   });
 
   it('applies offline progress with a cap', () => {
     const g = game();
-    g.state.money = 1000;
+    g.table('coinflip').wallet = 1000;
     g.state.tables.coinflip.levels.auto = 5;
     const r = g.applyOffline(10 * 3600);
     expect(r.plays).toBe(Math.floor(5 * 1 * 8 * 3600 * 0.5));
-    expect(g.state.money).toBeGreaterThan(0);
+    expect(g.table('coinflip').wallet).toBeGreaterThan(0);
   });
 });
 
@@ -98,23 +143,34 @@ describe('saves', () => {
       removeItem: (k: string) => void mem.delete(k),
     };
     const s = createInitialState(0);
-    s.money = 777;
+    s.tables.coinflip.wallet = 777;
+    s.tables.slots.wallet = 55;
     s.tables.slots.unlocked = true;
     s.tables.slots.levels.loaded = 3;
     expect(saveGame(s, store)).toBe(true);
     const loaded = loadGame(store)!;
-    expect(loaded.money).toBe(777);
+    expect(loaded.tables.coinflip.wallet).toBe(777);
+    expect(loaded.tables.slots.wallet).toBe(55);
     expect(loaded.tables.slots.levels.loaded).toBe(3);
-    expect(importSave(exportSave(s)).money).toBe(777);
+    expect(importSave(exportSave(s)).tables.coinflip.wallet).toBe(777);
   });
 
   it('rejects garbage and sanitizes odd values', () => {
     expect(() => importSave('nope')).toThrow();
     expect(() => normalizeState({ money: 'x' })).toThrow();
-    const s = normalizeState({ money: 5.7, tables: { coinflip: { levels: { luck: -3, auto: 2.9 }, option: 'zz' } } });
-    expect(s.money).toBe(5);
+    const s = normalizeState({
+      version: SAVE_VERSION,
+      tables: { coinflip: { wallet: 5.7, levels: { luck: -3, auto: 2.9 }, option: 'zz' } },
+    });
+    expect(s.tables.coinflip.wallet).toBe(5);
     expect(s.tables.coinflip.levels.luck).toBe(0);
     expect(s.tables.coinflip.levels.auto).toBe(2);
     expect(s.tables.slots.unlocked).toBe(false);
+  });
+
+  it('refuses saves from before per-table wallets', () => {
+    const old = { version: 2, money: 5000, tables: { coinflip: { levels: {} } } };
+    expect(() => normalizeState(old)).toThrow(/older version/);
+    expect(loadGame({ getItem: () => JSON.stringify(old), setItem() {}, removeItem() {} })).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game } from '../src/core/game';
-import { START_MONEY, createInitialState, normalizeState } from '../src/core/state';
+import { SAVE_VERSION, START_MONEY, createInitialState, normalizeState } from '../src/core/state';
 import { mulberry32 } from '../src/core/rng';
 import { TABLES } from '../src/tables';
 import {
@@ -21,21 +21,22 @@ const newGame = () => new Game(createInitialState(0), mulberry32(5));
 describe('auto bet upgrade', () => {
   it('starts at the minimum bet and never reaches 100%', () => {
     const g = newGame();
-    g.state.money = 10000;
+    g.table('coinflip').wallet = 10000;
     const ts = g.table('coinflip');
-    expect(chooseAutoBet(TABLES.coinflip, ts, g.state.money)).toBe(1);
+    expect(chooseAutoBet(TABLES.coinflip, ts)).toBe(1);
     expect(Math.max(...AUTO_BET_FRACTIONS)).toBeLessThan(1);
     ts.levels.autobet = 4;
     expect(autoBetFraction(ts.levels)).toBe(AUTO_BET_FRACTIONS[4]);
     // Clamped to the table's max bet.
-    expect(chooseAutoBet(TABLES.coinflip, ts, 1e6)).toBe(25);
+    ts.wallet = 1e6;
+    expect(chooseAutoBet(TABLES.coinflip, ts)).toBe(25);
     ts.levels.autobet = 999;
     expect(autoBetFraction(ts.levels)).toBe(AUTO_BET_FRACTIONS[AUTO_BET_FRACTIONS.length - 1]);
   });
 
   it('is a buyable common upgrade', () => {
     const g = newGame();
-    g.state.money = 1000;
+    g.table('coinflip').wallet = 1000;
     expect(allUpgrades(TABLES.coinflip).some((u) => u.id === 'autobet')).toBe(true);
     expect(g.buyUpgrade('coinflip', 'autobet')).toBe(true);
     expect(g.upgradeLevel('coinflip', 'autobet')).toBe(1);
@@ -90,7 +91,9 @@ describe('ascension', () => {
     expect(g.canAscend()).toBe(false);
     expect(g.ascend()).toBe(false);
     expect(ascensionReward(ascensionThreshold(0) - 1, 0)).toBe(0);
-    g.state.money = ascensionThreshold(0);
+    g.table('coinflip').wallet = 1e15;
+    expect(g.canAscend()).toBe(false);
+    g.table('blackjack').wallet = ascensionThreshold(0);
     expect(g.ascendReward()).toBe(1);
     expect(ascensionReward(ascensionThreshold(0) * 100, 0)).toBe(7);
   });
@@ -101,9 +104,10 @@ describe('ascension', () => {
     g.state.tables.coinflip.levels.auto = 5;
     g.state.tables.slots.unlocked = true;
     for (let i = 0; i < 5; i++) g.play('coinflip');
-    g.state.money = ascensionThreshold(0) * 10;
+    g.table('blackjack').wallet = ascensionThreshold(0) * 10;
     expect(g.ascend()).toBe(true);
-    expect(g.state.money).toBe(START_MONEY);
+    expect(g.table('coinflip').wallet).toBe(START_MONEY);
+    expect(g.table('blackjack').wallet).toBe(0);
     expect(g.table('coinflip').prestige).toBe(0);
     expect(g.table('coinflip').levels).toEqual({});
     expect(g.table('coinflip').plays).toBe(0);
@@ -124,9 +128,9 @@ describe('ascension', () => {
     expect(g.casinoLevel('payout')).toBe(1);
     expect(payoutMultiplier({}, 0, g.bonus)).toBeCloseTo(1.1);
     g.state.casino.levels.startCash = 2;
-    g.state.money = ascensionThreshold(g.state.casino.ascensions);
+    g.table('blackjack').wallet = ascensionThreshold(g.state.casino.ascensions);
     g.ascend();
-    expect(g.state.money).toBe(START_MONEY + 500);
+    expect(g.table('coinflip').wallet).toBe(START_MONEY + 500);
     expect(casinoBonus(g.state.casino).startCash).toBe(500);
   });
 
@@ -146,8 +150,8 @@ describe('ascension', () => {
     expect(loaded.casino.ascensions).toBe(2);
     expect(loaded.casino.levels.payout).toBe(3);
     expect(loaded.casino.levels.luck).toBe(15);
-    const junk = normalizeState({ money: 5, casino: { chips: 'x', levels: 3 } });
+    const junk = normalizeState({ version: SAVE_VERSION, tables: {}, casino: { chips: 'x', levels: 3 } });
     expect(junk.casino).toEqual({ chips: 0, totalChips: 0, ascensions: 0, levels: {} });
-    expect(normalizeState({ money: 5 }).casino.ascensions).toBe(0);
+    expect(normalizeState({ version: SAVE_VERSION, tables: {} }).casino.ascensions).toBe(0);
   });
 });

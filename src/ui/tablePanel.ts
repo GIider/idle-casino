@@ -10,10 +10,13 @@ import {
   minBet,
   payoutMultiplier,
   prestigeThreshold,
+  CROSS_PRESTIGE_BONUS,
   upgradeCost,
 } from '../core/economy';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
+import { TABLE_IDS, previousTable } from '../tables';
+import { starterWallet } from '../core/state';
 import { Stage } from './stage/stage';
 import { HistoryChart } from './historyChart';
 import { AchievementsCard } from './achievementsPanel';
@@ -32,6 +35,7 @@ export class TablePanel {
 
   private locked: HTMLElement;
   private unlockBtn: HTMLButtonElement;
+  private unlockNote: HTMLElement;
   private body: HTMLElement;
 
   private statsEl: HTMLElement;
@@ -61,6 +65,7 @@ export class TablePanel {
 
     // Locked view
     this.unlockBtn = h('button', { class: 'btn primary', onclick: () => game.unlock(id) });
+    this.unlockNote = h('p', { class: 'unlock-note' });
     this.locked = h(
       'div',
       { class: 'locked' },
@@ -68,6 +73,7 @@ export class TablePanel {
       h('h2', { text: def.name }),
       h('p', { text: def.blurb }),
       this.unlockBtn,
+      this.unlockNote,
     );
 
     // Play area
@@ -189,13 +195,25 @@ export class TablePanel {
     const { game, id } = this;
     const def = game.def(id);
     const ts = game.table(id);
-    const money = game.state.money;
+    const money = ts.wallet;
+    const cur = def.currency;
 
     toggleClass(this.locked, 'hidden', ts.unlocked);
     toggleClass(this.body, 'hidden', !ts.unlocked);
     if (!ts.unlocked) {
-      setText(this.unlockBtn, `Unlock for ${fmt(def.unlockCost)}`);
-      setDisabled(this.unlockBtn, money < def.unlockCost);
+      const prev = previousTable(id);
+      const prevDef = prev ? game.def(prev) : null;
+      const payer = game.unlockPayer(id);
+      setText(this.unlockBtn, `Unlock for ${fmt(def.unlockCost)} ${prevDef?.currency.name ?? ''}`.trim());
+      setDisabled(this.unlockBtn, !game.canUnlock(id));
+      setText(
+        this.unlockNote,
+        prevDef
+          ? payer
+            ? `Paid from your ${prevDef.name} wallet: ${fmt(payer.wallet)} ${prevDef.currency.name} so far. You'll start here with ${fmt(starterWallet(def))} ${cur.name}.`
+            : `Unlock ${prevDef.name} first.`
+          : '',
+      );
       return;
     }
 
@@ -203,7 +221,7 @@ export class TablePanel {
     const hi = maxBet(def, ts.prestige);
     setText(
       this.statsEl,
-      `Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels, game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonus).toFixed(2)}`,
+      `Wallet ${fmt(ts.wallet)} ${cur.icon} ${cur.name} · Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels, game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonusFor(id), def.baseWinBonus).toFixed(2)}`,
     );
 
     if (document.activeElement !== this.betInput && this.betInput.value !== String(ts.bet)) {
@@ -213,7 +231,7 @@ export class TablePanel {
     this.betInput.max = String(hi);
     setText(
       this.rangeEl,
-      `Bet ${fmt(lo)} – ${fmt(hi)} · max payout per play ${fmt(maxPayout(def, ts.prestige))}`,
+      `Bet ${fmt(lo)} – ${fmt(hi)} ${cur.name} · max payout per play ${fmt(maxPayout(def, ts.prestige))}`,
     );
     setDisabled(this.playBtn, money < ts.bet);
     if (this.optionSelect && this.optionSelect.value !== ts.option) this.optionSelect.value = ts.option;
@@ -244,11 +262,13 @@ export class TablePanel {
     }
 
     const threshold = prestigeThreshold(def, ts.prestige, game.bonus);
+    const nextId = TABLE_IDS[TABLE_IDS.indexOf(id) + 1];
+    const feeds = nextId ? ` Each level also gives ${game.def(nextId).name} +${CROSS_PRESTIGE_BONUS * 100}% winnings.` : '';
     const progress = Math.max(0, Math.min(1, ts.profit / threshold));
     setText(
       this.prestigeText,
-      `Earn ${fmt(threshold)} profit at this table to prestige (${fmt(Math.max(0, ts.profit))} so far). ` +
-        `Next level: min bet ${fmt(minBet(def, ts.prestige + 1))}, max payout ${fmt(maxPayout(def, ts.prestige + 1))}, +10% winnings.`,
+      `Earn ${fmt(threshold)} ${cur.name} profit at this table to prestige (${fmt(Math.max(0, ts.profit))} so far). ` +
+        `Next level: min bet ${fmt(minBet(def, ts.prestige + 1))}, max payout ${fmt(maxPayout(def, ts.prestige + 1))}, +10% winnings.${feeds}`,
     );
     this.prestigeBar.style.width = `${(progress * 100).toFixed(1)}%`;
     setDisabled(this.prestigeBtn, !game.canPrestige(id));

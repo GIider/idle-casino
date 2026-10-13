@@ -1,8 +1,9 @@
 import type { GameState, Rng, TableDef, TableId, TableState } from './types';
-import { TABLES, TABLE_IDS } from '../tables';
+import { FINAL_TABLE, TABLES, TABLE_IDS, previousTable } from '../tables';
 import { mulberry32 } from './rng';
 import {
   BAILOUT_BETS,
+  CROSS_PRESTIGE_BONUS,
   MAX_AUTO_PLAYS_PER_TICK,
   OFFLINE_CAP_SECONDS,
   OFFLINE_EFFICIENCY,
@@ -17,7 +18,7 @@ import {
   upgradeCost,
   type Outcome,
 } from './economy';
-import { START_MONEY, newTableState } from './state';
+import { START_MONEY, casinoValue, newTableState, starterWallet } from './state';
 import { observeRound, observeUpgrades, perkLevels, RARITIES, type AchievementDef } from './achievements';
 import { addContribution, markPrestige, recordSample, recordView, sampleContribution } from './history';
 import {
@@ -44,8 +45,8 @@ export interface OfflineReport {
 export class Game {
   state: GameState;
   last: Partial<Record<TableId, LastPlay>> = {};
-  /** Cumulative net winnings this session; the UI derives income/sec from it. */
-  sessionNet = 0;
+  /** Cumulative net winnings per table this session; the UI derives income/sec from it. */
+  sessionNet: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
   notice: { text: string; seq: number } | null = null;
   private seq = 0;
   private acc: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
@@ -57,6 +58,14 @@ export class Game {
   /** Casino-wide shop modifiers currently in effect. */
   get bonus(): CasinoBonus {
     return casinoBonus(this.state.casino);
+  }
+
+  /** Casino bonuses plus the winnings bonus this table earns from the previous table's prestige. */
+  bonusFor(id: TableId): CasinoBonus {
+    const bonus = this.bonus;
+    const prev = previousTable(id);
+    if (!prev) return bonus;
+    return { ...bonus, payout: bonus.payout * (1 + CROSS_PRESTIGE_BONUS * this.state.tables[prev].prestige) };
   }
 
   def(id: TableId): TableDef {
@@ -95,21 +104,21 @@ export class Game {
     const ts = this.state.tables[id];
     if (!ts.unlocked) return null;
     const stake = clampBet(def, ts.prestige, bet ?? ts.bet);
-    if (this.state.money < stake) return null;
+    if (ts.wallet < stake) return null;
 
-    this.state.money -= stake;
-    const outcome = resolvePlay(def, this.levelsFor(id), ts.prestige, ts.option, stake, this.rng, this.bonus);
-    this.state.money += outcome.payout;
+    ts.wallet -= stake;
+    const outcome = resolvePlay(def, this.levelsFor(id), ts.prestige, ts.option, stake, this.rng, this.bonusFor(id));
+    ts.wallet += outcome.payout;
     ts.plays++;
     ts.profit += outcome.net;
     ts.lifetimeProfit += outcome.net;
     recordSample(ts.history, ts.plays, ts.lifetimeProfit);
     recordView(ts.history, outcome.view);
     this.announce(observeRound(this.state.achievements, id, outcome));
-    this.sessionNet += outcome.net;
+    this.sessionNet[id] += outcome.net;
     this.last[id] = { seq: ++this.seq, outcome, auto };
     this.state.bankroll.rounds++;
-    recordSample(this.state.bankroll, this.state.bankroll.rounds, this.state.money);
+    recordSample(this.state.bankroll, this.state.bankroll.rounds, casinoValue(this.state.tables));
     addContribution(this.state.bankroll, id, outcome.net);
     sampleContribution(this.state.bankroll);
     if (!auto) this.bailout();
@@ -133,7 +142,7 @@ export class Game {
       n = Math.min(n, MAX_AUTO_PLAYS_PER_TICK);
       const def = TABLES[id];
       for (let i = 0; i < n; i++) {
-        const bet = chooseAutoBet(def, ts, this.state.money);
+        const bet = chooseAutoBet(def, ts);
         if (bet <= 0) break;
         this.play(id, bet, true);
       }
@@ -141,18 +150,17 @@ export class Game {
     this.bailout();
   }
 
-  /** If the player can't afford any table's minimum bet, the house comps them some chips. */
+  /** If a table's wallet can't cover its minimum bet, the house comps that table some chips. */
   private bailout(): void {
-    let lowest = Infinity;
     for (const id of TABLE_IDS) {
       const ts = this.state.tables[id];
-      if (ts.unlocked) lowest = Math.min(lowest, minBet(TABLES[id], ts.prestige));
-    }
-    if (this.state.money < lowest) {
-      this.state.money = lowest * BAILOUT_BETS;
-      this.say('Busted! The pit boss slides you a few comp chips.');
+      if (!ts.unlocked) continue;
+      const lowest = minBet(TABLES[id], ts.prestige);
+      if (ts.wallet >= lowest) continue;
+      ts.wallet = lowest * BAILOUT_BETS;
+      this.say(`Busted at ${TABLES[id].name}! The pit boss slides you a few comp ${TABLES[id].currency.name}.`);
       const b = this.state.bankroll;
-      recordSample(b, b.rounds, this.state.money, true);
+      recordSample(b, b.rounds, casinoValue(this.state.tables), true);
     }
   }
 
@@ -165,12 +173,27 @@ export class Game {
     if (TABLES[id].options?.some((o) => o.id === option)) this.state.tables[id].option = option;
   }
 
+  /** Wallet of the table whose currency pays for unlocking `id`, or null if that table isn't available yet. */
+  unlockPayer(id: TableId): TableState | null {
+    const prev = previousTable(id);
+    if (!prev) return null;
+    const payer = this.state.tables[prev];
+    return payer.unlocked ? payer : null;
+  }
+
+  canUnlock(id: TableId): boolean {
+    const payer = this.unlockPayer(id);
+    return !this.state.tables[id].unlocked && payer !== null && payer.wallet >= TABLES[id].unlockCost;
+  }
+
+  /** Pays the previous table's wallet and opens the table with a starter wallet of its own currency. */
   unlock(id: TableId): boolean {
+    if (!this.canUnlock(id)) return false;
     const def = TABLES[id];
     const ts = this.state.tables[id];
-    if (ts.unlocked || this.state.money < def.unlockCost) return false;
-    this.state.money -= def.unlockCost;
+    this.unlockPayer(id)!.wallet -= def.unlockCost;
     ts.unlocked = true;
+    ts.wallet = starterWallet(def);
     return true;
   }
 
@@ -186,8 +209,8 @@ export class Game {
     const level = ts.levels[upgradeId] ?? 0;
     if (level >= upg.maxLevel) return false;
     const cost = upgradeCost(def, upg, ts.prestige, level, this.bonus);
-    if (this.state.money < cost) return false;
-    this.state.money -= cost;
+    if (ts.wallet < cost) return false;
+    ts.wallet -= cost;
     ts.levels[upgradeId] = level + 1;
     this.announce(observeUpgrades(this.state.achievements, id, allUpgrades(def), ts.levels));
     return true;
@@ -215,15 +238,15 @@ export class Game {
   }
 
   canAscend(): boolean {
-    return canAscendWith(this.state.money, this.state.casino.ascensions);
+    return canAscendWith(this.state.tables[FINAL_TABLE].wallet, this.state.casino.ascensions);
   }
 
   /** Chips an ascension would grant right now (0 if the threshold isn't met). */
   ascendReward(): number {
-    return ascensionReward(this.state.money, this.state.casino.ascensions);
+    return ascensionReward(this.state.tables[FINAL_TABLE].wallet, this.state.casino.ascensions);
   }
 
-  /** Resets every table (including history) and the bankroll in exchange for casino chips. */
+  /** Resets every table (including history) and every wallet in exchange for casino chips. */
   ascend(): boolean {
     if (!this.canAscend()) return false;
     const reward = this.ascendReward();
@@ -237,8 +260,9 @@ export class Game {
       delete this.last[id];
     }
     markPrestige(this.state.bankroll, this.state.bankroll.rounds);
-    this.state.money = START_MONEY + this.bonus.startCash;
-    recordSample(this.state.bankroll, this.state.bankroll.rounds + 1, this.state.money, true);
+    const first = this.state.tables[TABLE_IDS[0]];
+    first.wallet = START_MONEY + this.bonus.startCash;
+    recordSample(this.state.bankroll, this.state.bankroll.rounds + 1, casinoValue(this.state.tables), true);
     this.state.bankroll.rounds++;
     sampleContribution(this.state.bankroll, true);
     this.say(`Ascended! +${reward} casino chips.`);
@@ -275,12 +299,12 @@ export class Game {
       if (!ts.unlocked) continue;
       const plays = Math.floor(autoPlaysPerSecond(ts.levels, bonus) * effective * efficiency);
       if (plays <= 0) continue;
-      const bet = chooseAutoBet(def, ts, this.state.money);
+      const bet = chooseAutoBet(def, ts);
       if (bet <= 0) continue;
-      const avg = estimateNetPerPlay(def, this.levelsFor(id), ts.prestige, ts.option, bet, mulberry32(1337), 2000, bonus);
+      const avg = estimateNetPerPlay(def, this.levelsFor(id), ts.prestige, ts.option, bet, mulberry32(1337), 2000, this.bonusFor(id));
       const net = Math.round(avg * plays);
-      const applied = Math.max(net, -this.state.money);
-      this.state.money += applied;
+      const applied = Math.max(net, -ts.wallet);
+      ts.wallet += applied;
       ts.profit += applied;
       ts.lifetimeProfit += applied;
       ts.plays += plays;
@@ -292,7 +316,7 @@ export class Game {
     this.bailout();
     if (report.plays > 0) {
       this.state.bankroll.rounds += report.plays;
-      recordSample(this.state.bankroll, this.state.bankroll.rounds, this.state.money, true);
+      recordSample(this.state.bankroll, this.state.bankroll.rounds, casinoValue(this.state.tables), true);
       sampleContribution(this.state.bankroll, true);
     }
     return report;
@@ -305,8 +329,8 @@ export class Game {
     const bonus = this.bonus;
     const rate = autoPlaysPerSecond(ts.levels, bonus);
     if (rate <= 0) return 0;
-    const bet = chooseAutoBet(def, ts, this.state.money);
+    const bet = chooseAutoBet(def, ts);
     if (bet <= 0) return 0;
-    return rate * estimateNetPerPlay(def, this.levelsFor(id), ts.prestige, ts.option, bet, mulberry32(7), 400, bonus);
+    return rate * estimateNetPerPlay(def, this.levelsFor(id), ts.prestige, ts.option, bet, mulberry32(7), 400, this.bonusFor(id));
   }
 }

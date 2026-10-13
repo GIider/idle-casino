@@ -6,10 +6,12 @@ export const coinflip: TableDef = {
   name: 'Coin Flip',
   icon: '🪙',
   blurb: 'Call heads. Double or nothing. The friendliest table in the house.',
+  currency: { name: 'Pennies', icon: '🪙' },
   unlockCost: 0,
   baseMinBet: 1,
   baseMaxBet: 25,
   baseMaxPayout: 250,
+  baseWinBonus: 0,
   upgrades: [
     {
       id: 'edge',

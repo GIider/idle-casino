@@ -14,10 +14,12 @@ export const roulette: TableDef = {
   name: 'Roulette',
   icon: '🎡',
   blurb: 'European wheel with a single zero. Bet safe on red, the first dozen, or go all in on 17.',
-  unlockCost: 25000,
+  currency: { name: 'Plaques', icon: '🔶' },
+  unlockCost: 7500,
   baseMinBet: 25,
   baseMaxBet: 500,
   baseMaxPayout: 20000,
+  baseWinBonus: 0.15,
   options: [
     { id: 'color', name: 'Red (pays 2×)' },
     { id: 'dozen', name: 'First dozen (pays 3×)' },

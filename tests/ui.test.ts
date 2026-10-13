@@ -20,7 +20,7 @@ describe('UI smoke', () => {
     expect(game.table('coinflip').plays).toBe(1);
     expect(host.querySelector('.result')!.textContent).toMatch(/Heads|Tails/);
 
-    game.state.money = 1e6;
+    game.table('coinflip').wallet = 1e6;
     (host.querySelectorAll('.tab')[1] as HTMLButtonElement).click();
     app.update();
     const unlock = host.querySelectorAll('.locked .btn')[1] as HTMLButtonElement;

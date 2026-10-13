@@ -16,7 +16,7 @@ const GAME_COLORS: Record<TableId, string> = {
 };
 const signed = (n: number) => `${n < 0 ? '−' : '+'}${fmt(Math.abs(n))}`;
 
-/** Casino-wide bankroll over time, with a gold line at each ascension. */
+/** Casino value (every wallet in min-bet units) over time, with a gold line at each ascension. */
 export class BankrollChart {
   readonly root: HTMLElement;
   private canvas: HTMLCanvasElement;
@@ -39,7 +39,7 @@ export class BankrollChart {
     this.canvas.setAttribute('aria-label', 'Bankroll history');
     this.info = h('div', { class: 'history-info', text: ' ' });
     this.viewBtns = {
-      bankroll: h('button', { class: 'btn small', text: 'Bankroll', onclick: () => this.setView('bankroll') }),
+      bankroll: h('button', { class: 'btn small', text: 'Casino value', onclick: () => this.setView('bankroll') }),
       games: h('button', { class: 'btn small', text: 'By game', onclick: () => this.setView('games') }),
     };
     this.legend = h(
@@ -126,10 +126,13 @@ export class BankrollChart {
     this.marks = bankroll.marks;
     const contrib = {} as Record<TableId, [number, number][]>;
     for (const id of TABLE_IDS) {
-      const series = bankroll.contrib[id].points.slice();
+      // Each table pays in its own currency, so compare them in that table's minimum bets.
+      const unit = TABLES[id].baseMinBet;
+      const series = bankroll.contrib[id].points.map((p): [number, number] => [p[0], p[1] / unit]);
       const tail = series[series.length - 1];
-      if (!tail || tail[0] < bankroll.rounds) series.push([bankroll.rounds, bankroll.net[id]]);
-      else series[series.length - 1] = [tail[0], bankroll.net[id]];
+      const net = bankroll.net[id] / unit;
+      if (!tail || tail[0] < bankroll.rounds) series.push([bankroll.rounds, net]);
+      else series[series.length - 1] = [tail[0], net];
       contrib[id] = series;
     }
     this.contrib = contrib;
@@ -153,7 +156,7 @@ export class BankrollChart {
     const pts = this.visible();
     if (pts.length === 0) return;
     const end = pts[pts.length - 1];
-    setText(this.info, this.hoverText(pts) ?? `round ${fmt(end[0])} · bankroll ${fmt(end[1])}`);
+    setText(this.info, this.hoverText(pts) ?? `round ${fmt(end[0])} · casino value ${fmt(end[1])} min bets`);
     const s = setupCanvas(this.canvas);
     if (!s) return;
     const { ctx, w, h: ht } = s;
@@ -340,6 +343,6 @@ export class BankrollChart {
     const target = x0 + Math.max(0, Math.min(1, this.hover)) * xs;
     let best = pts[0];
     for (const p of pts) if (Math.abs(p[0] - target) < Math.abs(best[0] - target)) best = p;
-    return `round ${fmt(best[0])} · bankroll ${fmt(best[1])}`;
+    return `round ${fmt(best[0])} · casino value ${fmt(best[1])} min bets`;
   }
 }

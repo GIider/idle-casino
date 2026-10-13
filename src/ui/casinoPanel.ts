@@ -1,4 +1,6 @@
 import type { Game } from '../core/game';
+import { TABLES, FINAL_TABLE } from '../tables';
+import { casinoValue } from '../core/state';
 import { CASINO_UPGRADES, ascensionThreshold, casinoUpgradeCost, type CasinoUpgradeDef } from '../core/casino';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt } from './format';
@@ -32,7 +34,7 @@ export class CasinoPanel {
         if (
           game.canAscend() &&
           window.confirm(
-            `Ascend? Every table, upgrade, prestige level and your bankroll reset (table history too; the bankroll graph is kept). You earn ${reward} casino chip${reward === 1 ? '' : 's'}.`,
+            `Ascend? Every table, upgrade, prestige level and wallet reset (table history too; the casino value graph is kept). You earn ${reward} casino chip${reward === 1 ? '' : 's'}.`,
           )
         ) {
           game.ascend();
@@ -85,16 +87,17 @@ export class CasinoPanel {
     setText(this.chipsEl, `${fmt(casino.chips)} (${fmt(casino.totalChips)} earned · ${casino.ascensions} ascensions)`);
 
     const threshold = ascensionThreshold(casino.ascensions);
-    const money = game.state.money;
+    const money = game.state.tables[FINAL_TABLE].wallet;
+    const currency = TABLES[FINAL_TABLE].currency;
     setText(
       this.ascendText,
       game.canAscend()
-        ? `Ready: ascending now earns ${fmt(game.ascendReward())} chips. Earn more first for +3 chips per 10× above ${fmt(threshold)}.`
-        : `Reach a bankroll of ${fmt(threshold)} to ascend (${fmt(money)} now).`,
+        ? `Ready: ascending now earns ${fmt(game.ascendReward())} chips. Earn more first for +3 chips per 10× above ${fmt(threshold)} ${currency.name}.`
+        : `Reach ${fmt(threshold)} ${currency.name} at ${TABLES[FINAL_TABLE].name} to ascend (${fmt(money)} now).`,
     );
     this.ascendBar.style.width = `${(Math.max(0, Math.min(1, money / threshold)) * 100).toFixed(1)}%`;
     setDisabled(this.ascendBtn, !game.canAscend());
-    this.bankroll.update(game.state.bankroll, money);
+    this.bankroll.update(game.state.bankroll, casinoValue(game.state.tables));
 
     for (const row of this.rows) {
       const level = game.casinoLevel(row.def.id);

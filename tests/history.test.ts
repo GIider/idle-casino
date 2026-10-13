@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_HISTORY_POINTS, compact, newHistory, normalizeHistory, recordSample } from '../src/core/history';
 import { Game } from '../src/core/game';
-import { createInitialState, normalizeState } from '../src/core/state';
+import { casinoValue, createInitialState, normalizeState } from '../src/core/state';
 import { exportSave, importSave } from '../src/core/save';
 import { mulberry32 } from '../src/core/rng';
 import { TABLES, TABLE_IDS } from '../src/tables';
@@ -38,7 +38,7 @@ describe('history series', () => {
 describe('game integration', () => {
   it('records plays, prestige marks and survives export/import', () => {
     const state = createInitialState(0);
-    state.money = 1e9;
+    state.tables.coinflip.wallet = 1e9;
     const g = new Game(state, mulberry32(5));
     for (let i = 0; i < 30; i++) g.play('coinflip');
     const ts = g.table('coinflip');
@@ -93,19 +93,19 @@ describe('bankroll history', () => {
   it('keeps the series across ascension and marks it', () => {
     const game = new Game(createInitialState(0), mulberry32(5));
     for (let i = 0; i < 20; i++) game.play('coinflip');
-    game.state.money = 1e12;
+    game.state.tables.blackjack.wallet = 1e12;
     const before = game.state.bankroll.points.length;
     expect(game.ascend()).toBe(true);
     const b = game.state.bankroll;
     expect(b.marks).toEqual([20]);
     expect(b.points.length).toBeGreaterThanOrEqual(before);
-    expect(b.points[b.points.length - 1][1]).toBe(game.state.money);
+    expect(b.points[b.points.length - 1][1]).toBe(casinoValue(game.state.tables));
   });
 
   it('seeds old saves and rejects junk', () => {
     const raw: any = JSON.parse(JSON.stringify(createInitialState(0)));
     delete raw.bankroll;
-    raw.money = 777;
+    raw.tables.coinflip.wallet = 777;
     expect(normalizeState(raw).bankroll.points).toEqual([[0, 777]]);
     raw.bankroll = { points: [['x', 1], [2, NaN], [-1, 5], [4, 9]], rounds: 'nope' };
     const b = normalizeState(raw).bankroll;
@@ -118,7 +118,8 @@ describe('per-game bankroll contribution', () => {
   it('credits each table with its own net winnings and keeps them across ascension', () => {
     const game = new Game(createInitialState(0), mulberry32(8));
     game.state.tables.slots.unlocked = true;
-    game.state.money = 1e6;
+    game.state.tables.coinflip.wallet = 1e6;
+    game.state.tables.slots.wallet = 1e6;
     let coin = 0;
     let slots = 0;
     for (let i = 0; i < 40; i++) coin += game.play('coinflip', 1)!.net;
@@ -131,7 +132,7 @@ describe('per-game bankroll contribution', () => {
     expect(last('coinflip')).toEqual([80, coin]);
     expect(last('slots')).toEqual([80, slots]);
 
-    game.state.money = 1e12;
+    game.state.tables.blackjack.wallet = 1e12;
     expect(game.ascend()).toBe(true);
     expect(game.state.bankroll.net.coinflip).toBe(coin);
     expect(game.state.tables.coinflip.lifetimeProfit).toBe(0);

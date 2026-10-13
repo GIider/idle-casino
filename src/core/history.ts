@@ -92,10 +92,10 @@ function perTable<T>(make: (id: TableId) => T): Record<TableId, T> {
   return out;
 }
 
-export function newBankroll(money: number): BankrollHistory {
+export function newBankroll(value: number): BankrollHistory {
   return {
     step: 1,
-    points: [[0, money]],
+    points: [[0, value]],
     marks: [],
     rounds: 0,
     net: perTable(() => 0),
@@ -146,19 +146,19 @@ function normalizeContribution(b: BankrollHistory, raw: unknown, seed: Partial<R
   }
 }
 
-/** Validates an untrusted bankroll series; falls back to a single point at the current bankroll. */
+/** Validates an untrusted bankroll series; falls back to a single point at the current casino value. */
 export function normalizeBankroll(
   raw: unknown,
-  money: number,
+  value: number,
   seed: Partial<Record<TableId, number>> = {},
 ): BankrollHistory {
-  const b = normalizeBankrollSeries(raw, money);
+  const b = normalizeBankrollSeries(raw, value);
   normalizeContribution(b, raw, seed);
   return b;
 }
 
-function normalizeBankrollSeries(raw: unknown, money: number): BankrollHistory {
-  const b = newBankroll(money);
+function normalizeBankrollSeries(raw: unknown, value: number): BankrollHistory {
+  const b = newBankroll(value);
   if (!raw || typeof raw !== 'object') return b;
   const r = raw as Partial<BankrollHistory>;
   if (!Array.isArray(r.points)) return b;

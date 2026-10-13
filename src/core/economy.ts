@@ -37,16 +37,18 @@ export const COMMON_UPGRADES: UpgradeDef[] = [
   {
     id: 'autobet',
     name: 'Bigger Stakes',
-    description: 'Auto-players wager a larger share of your bankroll',
+    description: 'Auto-players wager a larger share of the table wallet',
     baseCost: 4,
     growth: 1.7,
     maxLevel: 7,
   },
 ];
 
-/** Share of the bankroll an auto-player bets, by `autobet` level (clamped to the table's min/max bet). */
+/** Share of the table's wallet an auto-player bets, by `autobet` level (clamped to the table's min/max bet). */
 export const AUTO_BET_FRACTIONS = [0, 0.02, 0.05, 0.1, 0.15, 0.25, 0.35, 0.5];
 
+/** Winnings bonus a table gets per prestige level of the table before it in the chain. */
+export const CROSS_PRESTIGE_BONUS = 0.04;
 export const MIN_BET_GROWTH = 3;
 export const MAX_BET_GROWTH = 5;
 export const MAX_PAYOUT_GROWTH = 5;
@@ -103,9 +105,12 @@ export function payoutMultiplier(
   levels: Record<string, number>,
   prestige: number,
   bonus: CasinoBonus = NO_BONUS,
+  baseWinBonus = 0,
 ): number {
   const collection = 1 + COLLECTION_BONUS_PER_TIER * (levels[COLLECTION_PERK_KEY] ?? 0);
-  return (1 + 0.08 * (levels.payout ?? 0)) * (1 + PRESTIGE_PAYOUT_BONUS * prestige) * collection * bonus.payout;
+  return (
+    (1 + baseWinBonus) * (1 + 0.08 * (levels.payout ?? 0)) * (1 + PRESTIGE_PAYOUT_BONUS * prestige) * collection * bonus.payout
+  );
 }
 
 export function autoPlaysPerSecond(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {
@@ -124,13 +129,13 @@ export function clampBet(def: TableDef, prestige: number, bet: number): number {
   return Math.min(hi, Math.max(lo, Math.floor(bet)));
 }
 
-/** The bet an auto-player places, or 0 if the bankroll can't cover the minimum. */
-export function chooseAutoBet(def: TableDef, ts: TableState, money: number): number {
+/** The bet an auto-player places from the table's own wallet, or 0 if the wallet can't cover the minimum. */
+export function chooseAutoBet(def: TableDef, ts: TableState): number {
   const lo = minBet(def, ts.prestige);
   const hi = maxBet(def, ts.prestige);
-  let bet = money * autoBetFraction(ts.levels);
+  let bet = ts.wallet * autoBetFraction(ts.levels);
   bet = Math.floor(Math.min(hi, Math.max(lo, bet)));
-  bet = Math.min(bet, Math.floor(money));
+  bet = Math.min(bet, Math.floor(ts.wallet));
   return bet < lo ? 0 : bet;
 }
 
@@ -164,7 +169,7 @@ export function resolvePlay(
   let payout: number;
   let capped = false;
   if (result.mult > 1) {
-    let profit = (result.mult - 1) * bet * payoutMultiplier(levels, prestige, bonus);
+    let profit = (result.mult - 1) * bet * payoutMultiplier(levels, prestige, bonus, def.baseWinBonus);
     const cap = maxPayout(def, prestige);
     if (profit > cap) {
       profit = cap;

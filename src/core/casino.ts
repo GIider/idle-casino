@@ -14,7 +14,7 @@ export const CASINO_UPGRADES: CasinoUpgradeDef[] = [
   {
     id: 'startCash',
     name: 'Trust Fund',
-    description: 'Start every ascension with +$250 per level',
+    description: 'Start every ascension with +250 Pennies per level',
     baseCost: 1,
     growth: 1.5,
     maxLevel: 20,
@@ -92,7 +92,8 @@ export const NO_BONUS: CasinoBonus = {
   startCash: 0,
 };
 
-export const ASCEND_BASE_THRESHOLD = 1e8;
+/** Wallet needed in the final table's currency to ascend (Markers). */
+export const ASCEND_BASE_THRESHOLD = 5e8;
 export const ASCEND_THRESHOLD_GROWTH = 5;
 
 export function casinoBonus(casino: CasinoState): CasinoBonus {
@@ -113,7 +114,7 @@ export function casinoUpgradeCost(upg: CasinoUpgradeDef, level: number): number 
   return Math.ceil(upg.baseCost * upg.growth ** level);
 }
 
-/** Bankroll needed to ascend; each ascension raises the bar. */
+/** Final-table wallet needed to ascend; each ascension raises the bar. */
 export function ascensionThreshold(ascensions: number): number {
   return ASCEND_BASE_THRESHOLD * ASCEND_THRESHOLD_GROWTH ** ascensions;
 }

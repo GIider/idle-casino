@@ -11,6 +11,22 @@ function rtp(id: keyof typeof TABLES, levels: Record<string, number> = {}, optio
   return ret / n;
 }
 
+describe('self-sustaining tables', () => {
+  it('every table is profitable on its own wallet before any upgrades', () => {
+    for (const id of TABLE_IDS) {
+      const def = TABLES[id];
+      for (const o of def.options ?? [{ id: '' }]) {
+        const bet = def.baseMinBet * 10;
+        const rng = mulberry32(7);
+        let net = 0;
+        const n = 40000;
+        for (let i = 0; i < n; i++) net += resolvePlay(def, {}, 0, o.id, bet, rng).net;
+        expect(net / n / bet, `${id}/${o.id}`).toBeGreaterThan(0.02);
+      }
+    }
+  });
+});
+
 describe('base return to player', () => {
   it('coin flip is a slight player edge', () => {
     expect(rtp('coinflip')).toBeGreaterThan(1.08);

@@ -19,27 +19,41 @@ export class App {
   private selected: TableId | 'casino' = 'coinflip';
   private casinoPanel: CasinoPanel;
   private casinoTab: HTMLButtonElement;
-  private moneyEl: HTMLElement;
+  private wallets = new Map<TableId, { root: HTMLElement; amount: HTMLElement }>();
   private rateEl: HTMLElement;
   private toastEl: HTMLElement;
   private toastSeq = 0;
   private toastTimer = 0;
-  private samples: { t: number; net: number }[] = [];
+  private samples: Record<TableId, { t: number; net: number }[]> = { coinflip: [], slots: [], roulette: [], blackjack: [] };
   private handlers: AppHandlers;
 
   constructor(host: HTMLElement, game: Game, handlers: AppHandlers) {
     this.game = game;
     this.handlers = handlers;
 
-    this.moneyEl = h('div', { class: 'money', text: '0' });
     this.rateEl = h('div', { class: 'rate', text: '' });
     this.toastEl = h('div', { class: 'toast hidden' });
+
+    const walletStrip = h('div', { class: 'wallets' });
+    for (const id of TABLE_IDS) {
+      const def = TABLES[id];
+      const amount = h('span', { class: 'money', text: '0' });
+      const root = h(
+        'button',
+        { class: 'wallet', title: `${def.currency.name} (${def.name})`, onclick: () => this.select(id) },
+        h('span', { class: 'wallet-icon', text: def.currency.icon }),
+        h('span', { class: 'wallet-name', text: def.currency.name }),
+        amount,
+      );
+      this.wallets.set(id, { root, amount });
+      walletStrip.append(root);
+    }
 
     const header = h(
       'header',
       { class: 'top' },
       h('div', { class: 'brand' }, h('span', { class: 'logo', text: '♠ IDLE CASINO ♦' })),
-      h('div', { class: 'bank' }, h('div', { class: 'label', text: 'Bankroll' }), this.moneyEl, this.rateEl),
+      h('div', { class: 'bank' }, walletStrip, this.rateEl),
       h(
         'div',
         { class: 'menu' },
@@ -94,22 +108,34 @@ export class App {
 
   update(): void {
     const g = this.game;
-    setText(this.moneyEl, fmt(g.state.money));
-
     const now = performance.now();
-    this.samples.push({ t: now, net: g.sessionNet });
-    while (this.samples.length > 2 && now - this.samples[0].t > 8000) this.samples.shift();
-    const first = this.samples[0];
-    const span = (now - first.t) / 1000;
-    const perSec = span > 0.5 ? (g.sessionNet - first.net) / span : 0;
-    setText(this.rateEl, `${fmtSigned(Math.round(perSec))} / sec`);
-    toggleClass(this.rateEl, 'neg', perSec < 0);
+    for (const id of TABLE_IDS) {
+      const series = this.samples[id];
+      series.push({ t: now, net: g.sessionNet[id] });
+      while (series.length > 2 && now - series[0].t > 8000) series.shift();
+      const w = this.wallets.get(id)!;
+      const ts = g.table(id);
+      toggleClass(w.root, 'hidden', !ts.unlocked);
+      toggleClass(w.root, 'active', this.selected === id);
+      setText(w.amount, fmt(ts.wallet));
+    }
+    if (this.selected === 'casino') {
+      setText(this.rateEl, '');
+    } else {
+      const series = this.samples[this.selected];
+      const first = series[0];
+      const span = (now - first.t) / 1000;
+      const perSec = span > 0.5 ? (g.sessionNet[this.selected] - first.net) / span : 0;
+      const def = TABLES[this.selected];
+      setText(this.rateEl, `${fmtSigned(Math.round(perSec))} ${def.currency.name} / sec`);
+      toggleClass(this.rateEl, 'neg', perSec < 0);
+    }
 
     for (const id of TABLE_IDS) {
       const tab = this.tabs.get(id)!;
       const ts = g.table(id);
       const def = TABLES[id];
-      const affordable = !ts.unlocked && g.state.money >= def.unlockCost;
+      const affordable = g.canUnlock(id);
       setText(tab, `${ts.unlocked ? def.icon : '🔒'} ${def.name}`);
       toggleClass(tab, 'affordable', affordable);
     }

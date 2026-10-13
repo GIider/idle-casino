@@ -61,15 +61,40 @@ p {
   text-align: center;
 }
 
-.bank .label {
+.wallets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.wallet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 96px;
+  padding: 6px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wallet.active {
+  border-color: var(--gold);
+}
+
+.wallet-name {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.15em;
 }
 
 .money {
-  font-size: 40px;
+  font-size: 22px;
   font-weight: 800;
   color: var(--gold);
   text-shadow: 0 0 12px #ffd84a88;
@@ -156,7 +181,7 @@ p {
     grid-template-columns: 1fr;
   }
   .money {
-    font-size: 32px;
+    font-size: 20px;
   }
 }
 

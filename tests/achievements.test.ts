@@ -51,7 +51,7 @@ describe('achievements', () => {
     g.state.achievements.hotHand.best = 15;
     g.state.achievements.hotHand.tier = 3;
     expect(g.levelsFor('coinflip').perk_hotHand).toBe(3);
-    g.state.money = 1e12;
+    g.table('coinflip').wallet = 1e12;
     g.table('coinflip').profit = 1e12;
     expect(g.prestige('coinflip')).toBe(true);
     expect(g.levelsFor('coinflip').perk_hotHand).toBe(3);
@@ -62,7 +62,7 @@ describe('achievements', () => {
   it('notifies on unlock while playing', () => {
     const g = new Game(createInitialState(0), mulberry32(1));
     g.state.achievements.headsCollector.count = 999;
-    g.state.money = 1e6;
+    g.table('coinflip').wallet = 1e6;
     for (let i = 0; i < 50 && !g.notice?.text.includes('Lucky Penny'); i++) g.play('coinflip', 1);
     expect(g.notice?.text).toContain('Lucky Penny');
   });
@@ -99,7 +99,7 @@ describe('achievements', () => {
 
   it('collection achievement: tier 1 for owning every upgrade, tier 2 for maxing them, permanent', () => {
     const g = new Game(createInitialState(0), mulberry32(2));
-    g.state.money = 1e15;
+    g.table('coinflip').wallet = 1e15;
     const ups = allUpgrades(TABLES.coinflip);
     for (const u of ups.slice(0, -1)) g.buyUpgrade('coinflip', u.id);
     expect(g.state.achievements.collect_coinflip.tier).toBe(0);
