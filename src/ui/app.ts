@@ -55,7 +55,9 @@ export class App {
     const header = h(
       'header',
       { class: 'top' },
-      h('div', { class: 'brand' }, h('span', { class: 'logo', text: '♠ IDLE CASINO ♦' })),
+      h('div', { class: 'brand' }, h('span', { class: 'logo', text: '♠ IDLE CASINO ♦' }),
+        h('span', { class: 'version', text: `v${__APP_VERSION__} · ${__BUILD_DATE__}`, title: 'Version and build date' }),
+      ),
       h(
         'div',
         { class: 'menu' },
