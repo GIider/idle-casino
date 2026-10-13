@@ -18,8 +18,8 @@ import {
   type Outcome,
 } from './economy';
 import { START_MONEY, newTableState } from './state';
-import { observeRound, perkLevels, RARITIES } from './achievements';
-import { markPrestige, recordSample, recordView } from './history';
+import { observeRound, observeUpgrades, perkLevels, RARITIES, type AchievementDef } from './achievements';
+import { addContribution, markPrestige, recordSample, recordView, sampleContribution } from './history';
 import {
   CASINO_UPGRADES,
   ascensionReward,
@@ -72,6 +72,19 @@ export class Game {
     return { ...this.state.tables[id].levels, ...perkLevels(this.state.achievements, id) };
   }
 
+  private announce(gained: { def: AchievementDef; tier: number }[]): void {
+    if (gained.length === 0) return;
+    this.say(
+      gained
+        .map(({ def: a, tier }) =>
+          a.kind === 'grind'
+            ? `🏆 ${a.name}! ${a.perk.name}: ${a.perk.describe(tier)}`
+            : `🏆 ${a.name} — ${RARITIES[tier - 1]}! ${a.perk.name}: ${a.perk.describe(tier)}`,
+        )
+        .join(' · '),
+    );
+  }
+
   private say(text: string): void {
     this.notice = { text, seq: ++this.seq };
   }
@@ -92,20 +105,13 @@ export class Game {
     ts.lifetimeProfit += outcome.net;
     recordSample(ts.history, ts.plays, ts.lifetimeProfit);
     recordView(ts.history, outcome.view);
-    const gained = observeRound(this.state.achievements, id, outcome);
-    if (gained.length > 0) {
-      this.say(
-        gained
-          .map(({ def: a, tier }) =>
-            a.kind === 'streak'
-              ? `🏆 ${a.name} — ${RARITIES[tier - 1]}! ${a.perk.name}: ${a.perk.describe(tier)}`
-              : `🏆 ${a.name}! ${a.perk.name}: ${a.perk.describe(tier)}`,
-          )
-          .join(' · '),
-      );
-    }
+    this.announce(observeRound(this.state.achievements, id, outcome));
     this.sessionNet += outcome.net;
     this.last[id] = { seq: ++this.seq, outcome, auto };
+    this.state.bankroll.rounds++;
+    recordSample(this.state.bankroll, this.state.bankroll.rounds, this.state.money);
+    addContribution(this.state.bankroll, id, outcome.net);
+    sampleContribution(this.state.bankroll);
     if (!auto) this.bailout();
     return outcome;
   }
@@ -145,6 +151,8 @@ export class Game {
     if (this.state.money < lowest) {
       this.state.money = lowest * BAILOUT_BETS;
       this.say('Busted! The pit boss slides you a few comp chips.');
+      const b = this.state.bankroll;
+      recordSample(b, b.rounds, this.state.money, true);
     }
   }
 
@@ -181,6 +189,7 @@ export class Game {
     if (this.state.money < cost) return false;
     this.state.money -= cost;
     ts.levels[upgradeId] = level + 1;
+    this.announce(observeUpgrades(this.state.achievements, id, allUpgrades(def), ts.levels));
     return true;
   }
 
@@ -227,7 +236,11 @@ export class Game {
       this.acc[id] = 0;
       delete this.last[id];
     }
+    markPrestige(this.state.bankroll, this.state.bankroll.rounds);
     this.state.money = START_MONEY + this.bonus.startCash;
+    recordSample(this.state.bankroll, this.state.bankroll.rounds + 1, this.state.money, true);
+    this.state.bankroll.rounds++;
+    sampleContribution(this.state.bankroll, true);
     this.say(`Ascended! +${reward} casino chips.`);
     return true;
   }
@@ -271,11 +284,17 @@ export class Game {
       ts.profit += applied;
       ts.lifetimeProfit += applied;
       ts.plays += plays;
+      addContribution(this.state.bankroll, id, applied);
       recordSample(ts.history, ts.plays, ts.lifetimeProfit, true);
       report.plays += plays;
       report.net += applied;
     }
     this.bailout();
+    if (report.plays > 0) {
+      this.state.bankroll.rounds += report.plays;
+      recordSample(this.state.bankroll, this.state.bankroll.rounds, this.state.money, true);
+      sampleContribution(this.state.bankroll, true);
+    }
     return report;
   }
 

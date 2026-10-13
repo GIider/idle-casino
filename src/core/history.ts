@@ -1,4 +1,4 @@
-import type { History, PlayStats, PlayView } from './types';
+import type { BankrollHistory, History, PlayStats, PlayView, Series, TableId } from './types';
 
 export const MAX_HISTORY_POINTS = 400;
 
@@ -59,7 +59,7 @@ export function recordView(h: History, view: PlayView | undefined): void {
 }
 
 /** Halves the resolution: keeps every other point plus the newest, and doubles the sampling step. */
-export function compact(h: History): void {
+export function compact(h: Series): void {
   const last = h.points[h.points.length - 1];
   const kept = h.points.filter((_, i) => i % 2 === 0);
   if (kept[kept.length - 1] !== last) kept.push(last);
@@ -68,7 +68,7 @@ export function compact(h: History): void {
 }
 
 /** Records the table's lifetime profit after `plays` total plays, sampled every `step` plays. */
-export function recordSample(h: History, plays: number, value: number, force = false): void {
+export function recordSample(h: Series, plays: number, value: number, force = false): void {
   const last = h.points[h.points.length - 1];
   if (last && plays <= last[0]) {
     if (force && plays === last[0]) last[1] = value;
@@ -79,9 +79,106 @@ export function recordSample(h: History, plays: number, value: number, force = f
   if (h.points.length > MAX_HISTORY_POINTS) compact(h);
 }
 
-export function markPrestige(h: History, plays: number): void {
+export function markPrestige(h: Series, plays: number): void {
   h.marks.push(plays);
   if (h.marks.length > 50) h.marks.shift();
+}
+
+const BANKROLL_TABLES: readonly TableId[] = ['coinflip', 'slots', 'roulette', 'blackjack'];
+
+function perTable<T>(make: (id: TableId) => T): Record<TableId, T> {
+  const out = {} as Record<TableId, T>;
+  for (const id of BANKROLL_TABLES) out[id] = make(id);
+  return out;
+}
+
+export function newBankroll(money: number): BankrollHistory {
+  return {
+    step: 1,
+    points: [[0, money]],
+    marks: [],
+    rounds: 0,
+    net: perTable(() => 0),
+    contrib: perTable(() => ({ step: 1, points: [[0, 0]], marks: [] })),
+  };
+}
+
+/** Credits a round's (or an offline stretch's) net winnings to the table that earned them. */
+export function addContribution(b: BankrollHistory, id: TableId, net: number): void {
+  b.net[id] += net;
+}
+
+/** Samples every table's cumulative contribution at the current round so the series stay aligned. */
+export function sampleContribution(b: BankrollHistory, force = false): void {
+  for (const id of BANKROLL_TABLES) recordSample(b.contrib[id], b.rounds, b.net[id], force);
+}
+
+/** Keeps ascending, finite [x, value] pairs; negative values are allowed (a table can lose money overall). */
+function cleanPoints(raw: unknown): [number, number][] {
+  const pts: [number, number][] = [];
+  if (!Array.isArray(raw)) return pts;
+  let prev = -1;
+  for (const p of raw.slice(0, MAX_HISTORY_POINTS * 2)) {
+    if (!Array.isArray(p) || typeof p[0] !== 'number' || typeof p[1] !== 'number') continue;
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1]) || p[0] <= prev || p[0] < 0) continue;
+    pts.push([p[0], p[1]]);
+    prev = p[0];
+  }
+  return pts;
+}
+
+/** Restores the per-table contribution data, or seeds it from lifetime table profits for older saves. */
+function normalizeContribution(b: BankrollHistory, raw: unknown, seed: Partial<Record<TableId, number>>): void {
+  const r = raw && typeof raw === 'object' ? (raw as Record<string, any>) : {};
+  for (const id of BANKROLL_TABLES) {
+    const total = r.net?.[id];
+    const src = r.contrib?.[id];
+    const pts = cleanPoints(src?.points);
+    if (typeof total === 'number' && Number.isFinite(total) && pts.length > 0) {
+      b.net[id] = total;
+      b.contrib[id].points = pts;
+      if (typeof src.step === 'number' && Number.isFinite(src.step) && src.step >= 1) b.contrib[id].step = Math.floor(src.step);
+      while (b.contrib[id].points.length > MAX_HISTORY_POINTS) compact(b.contrib[id]);
+    } else {
+      b.net[id] = seed[id] ?? 0;
+      b.contrib[id].points = [[b.rounds, b.net[id]]];
+    }
+  }
+}
+
+/** Validates an untrusted bankroll series; falls back to a single point at the current bankroll. */
+export function normalizeBankroll(
+  raw: unknown,
+  money: number,
+  seed: Partial<Record<TableId, number>> = {},
+): BankrollHistory {
+  const b = normalizeBankrollSeries(raw, money);
+  normalizeContribution(b, raw, seed);
+  return b;
+}
+
+function normalizeBankrollSeries(raw: unknown, money: number): BankrollHistory {
+  const b = newBankroll(money);
+  if (!raw || typeof raw !== 'object') return b;
+  const r = raw as Partial<BankrollHistory>;
+  if (!Array.isArray(r.points)) return b;
+  const pts: [number, number][] = [];
+  let prev = -1;
+  for (const p of r.points.slice(0, MAX_HISTORY_POINTS * 2)) {
+    if (!Array.isArray(p) || typeof p[0] !== 'number' || typeof p[1] !== 'number') continue;
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1]) || p[0] <= prev || p[0] < 0 || p[1] < 0) continue;
+    pts.push([p[0], p[1]]);
+    prev = p[0];
+  }
+  if (pts.length === 0) return b;
+  b.points = pts;
+  if (typeof r.step === 'number' && Number.isFinite(r.step) && r.step >= 1) b.step = Math.floor(r.step);
+  if (Array.isArray(r.marks)) {
+    b.marks = r.marks.filter((m): m is number => typeof m === 'number' && Number.isFinite(m)).slice(-50);
+  }
+  b.rounds = Math.max(count(r.rounds), pts[pts.length - 1][0]);
+  while (b.points.length > MAX_HISTORY_POINTS) compact(b);
+  return b;
 }
 
 function counts(raw: unknown, length: number): number[] {

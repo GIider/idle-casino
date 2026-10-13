@@ -54,6 +54,10 @@ export const MAX_PAYOUT_GROWTH = 5;
 export const UPGRADE_PRESTIGE_GROWTH = 8;
 export const PRESTIGE_THRESHOLD_GROWTH = 10;
 export const PRESTIGE_PAYOUT_BONUS = 0.1;
+/** Level key (per table) under which the "every upgrade" achievement's tier is passed in `levels`. */
+export const COLLECTION_PERK_KEY = 'perk_collection';
+/** Winnings bonus per tier of the "every upgrade" achievement. */
+export const COLLECTION_BONUS_PER_TIER = 0.05;
 export const AUTO_BASE_RATE = 1;
 export const MAX_AUTO_PLAYS_PER_TICK = 300;
 export const OFFLINE_CAP_SECONDS = 8 * 3600;
@@ -100,7 +104,8 @@ export function payoutMultiplier(
   prestige: number,
   bonus: CasinoBonus = NO_BONUS,
 ): number {
-  return (1 + 0.08 * (levels.payout ?? 0)) * (1 + PRESTIGE_PAYOUT_BONUS * prestige) * bonus.payout;
+  const collection = 1 + COLLECTION_BONUS_PER_TIER * (levels[COLLECTION_PERK_KEY] ?? 0);
+  return (1 + 0.08 * (levels.payout ?? 0)) * (1 + PRESTIGE_PAYOUT_BONUS * prestige) * collection * bonus.payout;
 }
 
 export function autoPlaysPerSecond(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {

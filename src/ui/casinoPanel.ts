@@ -2,6 +2,7 @@ import type { Game } from '../core/game';
 import { CASINO_UPGRADES, ascensionThreshold, casinoUpgradeCost, type CasinoUpgradeDef } from '../core/casino';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt } from './format';
+import { BankrollChart } from './bankrollChart';
 
 interface Row {
   def: CasinoUpgradeDef;
@@ -17,6 +18,7 @@ export class CasinoPanel {
   private ascendBar: HTMLElement;
   private ascendBtn: HTMLButtonElement;
   private rows: Row[] = [];
+  private bankroll = new BankrollChart();
 
   constructor(private game: Game) {
     this.chipsEl = h('div', { class: 'chips', text: '0' });
@@ -30,7 +32,7 @@ export class CasinoPanel {
         if (
           game.canAscend() &&
           window.confirm(
-            `Ascend? Every table, upgrade, prestige level and your bankroll reset (history too). You earn ${reward} casino chip${reward === 1 ? '' : 's'}.`,
+            `Ascend? Every table, upgrade, prestige level and your bankroll reset (table history too; the bankroll graph is kept). You earn ${reward} casino chip${reward === 1 ? '' : 's'}.`,
           )
         ) {
           game.ascend();
@@ -70,6 +72,7 @@ export class CasinoPanel {
             h('div', { class: 'stats' }, h('span', { text: 'Chips: ' }), this.chipsEl),
           ),
           h('div', { class: 'card' }, h('h3', { text: 'Ascension' }), this.ascendText, h('div', { class: 'bar' }, this.ascendBar), this.ascendBtn),
+          this.bankroll.root,
         ),
         h('div', { class: 'col side' }, shop),
       ),
@@ -91,6 +94,7 @@ export class CasinoPanel {
     );
     this.ascendBar.style.width = `${(Math.max(0, Math.min(1, money / threshold)) * 100).toFixed(1)}%`;
     setDisabled(this.ascendBtn, !game.canAscend());
+    this.bankroll.update(game.state.bankroll, money);
 
     for (const row of this.rows) {
       const level = game.casinoLevel(row.def.id);

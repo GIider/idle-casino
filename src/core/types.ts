@@ -17,11 +17,16 @@ export interface TableState {
   history: History;
 }
 
-/** `points` are [playCount, lifetimeProfit]; `marks` are play counts at which the table was prestiged. */
-export interface History {
+/** A bounded, down-sampled series of [x, value] points with vertical event marks at given x positions. */
+export interface Series {
+  /** Minimum x distance between samples; doubles each time the series is compacted. */
   step: number;
   points: [number, number][];
   marks: number[];
+}
+
+/** `points` are [playCount, lifetimeProfit]; `marks` are play counts at which the table was prestiged. */
+export interface History extends Series {
   /** Per-game outcome tallies for the game-specific history views. */
   stats: PlayStats;
 }
@@ -69,6 +74,15 @@ export interface PlayStats {
 }
 
 /** Lifetime progress on one achievement. Survives table prestige and casino ascension. */
+/** Bankroll series; `rounds` is a global play counter that never resets, used as the x axis. */
+export interface BankrollHistory extends Series {
+  rounds: number;
+  /** Cumulative net winnings from plays at each table, kept across prestige and ascension. */
+  net: Record<TableId, number>;
+  /** `net` sampled over `rounds`, one series per table, for the contribution view. */
+  contrib: Record<TableId, Series>;
+}
+
 export interface AchievementProgress {
   /** Grind achievements: running total. */
   count: number;
@@ -94,6 +108,8 @@ export interface GameState {
   version: number;
   money: number;
   tables: Record<TableId, TableState>;
+  /** Casino-wide bankroll over time. `points` are [rounds, money]; `marks` are rounds at which the casino was ascended. */
+  bankroll: BankrollHistory;
   casino: CasinoState;
   achievements: Record<string, AchievementProgress>;
   created: number;

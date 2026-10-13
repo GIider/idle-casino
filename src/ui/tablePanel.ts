@@ -203,7 +203,7 @@ export class TablePanel {
     const hi = maxBet(def, ts.prestige);
     setText(
       this.statsEl,
-      `Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels, game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(ts.levels, ts.prestige, game.bonus).toFixed(2)}`,
+      `Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels, game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonus).toFixed(2)}`,
     );
 
     if (document.activeElement !== this.betInput && this.betInput.value !== String(ts.bet)) {

@@ -1,5 +1,5 @@
 import type { AchievementProgress, GameState, PlayView, TableId } from './types';
-import type { Outcome } from './economy';
+import { COLLECTION_BONUS_PER_TIER, COLLECTION_PERK_KEY, type Outcome } from './economy';
 import { RED_POCKETS } from '../tables/roulette';
 
 export const RARITIES = ['Rare', 'Epic', 'Legendary'] as const;
@@ -10,8 +10,9 @@ export interface AchievementDef {
   name: string;
   /** What the player has to do, e.g. "Flip heads". */
   goal: string;
-  kind: 'grind' | 'streak';
-  /** Grind: a single target. Streak: ascending thresholds, one per rarity tier. */
+  /** `collect` is earned by upgrade purchases, not rounds: tier 1 = every upgrade owned, tier 2 = every upgrade maxed. */
+  kind: 'grind' | 'streak' | 'collect';
+  /** Grind: a single target. Streak: ascending thresholds, one per rarity tier. Collect: one entry per tier. */
   targets: number[];
   /** Grind: how much this round adds to the count (0 = nothing). Streak: 1 if the round extends the run. */
   score(view: PlayView, outcome: Outcome): number;
@@ -20,6 +21,8 @@ export interface AchievementDef {
 
 /** Key under which an achievement's perk level appears in a table's `levels`. */
 export function perkKey(id: string): string {
+  // The collection perk is applied by the shared payout formula, so every table uses one key.
+  if (ACHIEVEMENTS.find((a) => a.id === id)?.kind === 'collect') return COLLECTION_PERK_KEY;
   return `perk_${id}`;
 }
 
@@ -38,7 +41,25 @@ export const MARKED_DECK_MULT = 3;
 export const SECOND_THOUGHTS_CHANCE = 0.15;
 export const GENTLEMAN_PUSH_MULT = [1.1, 1.2, 1.3];
 
+const collection = (table: TableId, name: string): AchievementDef => ({
+  id: `collect_${table}`,
+  table,
+  name,
+  goal: 'Own every upgrade on this table, then max them all',
+  kind: 'collect',
+  targets: [1, 2],
+  score: () => 0,
+  perk: {
+    name: 'Loyalty Bonus',
+    describe: (t) => `+${Math.round(COLLECTION_BONUS_PER_TIER * Math.min(2, Math.max(1, t)) * 100)}% winnings on this table`,
+  },
+});
+
 export const ACHIEVEMENTS: AchievementDef[] = [
+  collection('coinflip', 'Fully Loaded Coin'),
+  collection('slots', 'Fully Loaded Reels'),
+  collection('roulette', 'Fully Loaded Wheel'),
+  collection('blackjack', 'Fully Loaded Shoe'),
   {
     id: 'headsCollector',
     table: 'coinflip',
@@ -198,6 +219,8 @@ export function newAchievements(): Record<string, AchievementProgress> {
 }
 
 function tierFor(def: AchievementDef, progress: AchievementProgress): number {
+  // Collection tiers are only ever earned by `observeUpgrades`; they stick once reached.
+  if (def.kind === 'collect') return progress.tier;
   const value = def.kind === 'grind' ? progress.count : progress.best;
   let tier = 0;
   for (const t of def.targets) if (value >= t) tier++;
@@ -214,6 +237,7 @@ export function observeRound(
   const gained: { def: AchievementDef; tier: number }[] = [];
   if (!view) return gained;
   for (const def of achievementsFor(table)) {
+    if (def.kind === 'collect') continue;
     const p = (achievements[def.id] ??= newProgress());
     const score = def.score(view, outcome);
     if (def.kind === 'grind') {
@@ -223,6 +247,36 @@ export function observeRound(
       p.best = Math.max(p.best, p.run);
     }
     const tier = tierFor(def, p);
+    if (tier > p.tier) {
+      p.tier = tier;
+      gained.push({ def, tier });
+    }
+  }
+  return gained;
+}
+
+/**
+ * Feeds a table's current upgrade levels into its collection achievement. Tiers are permanent: they
+ * survive the upgrades being reset by prestige. `count`/`best` keep the most upgrades ever owned/maxed at once.
+ */
+export function observeUpgrades(
+  achievements: Record<string, AchievementProgress>,
+  table: TableId,
+  upgrades: { id: string; maxLevel: number }[],
+  levels: Record<string, number>,
+): { def: AchievementDef; tier: number }[] {
+  const gained: { def: AchievementDef; tier: number }[] = [];
+  if (upgrades.length === 0) return gained;
+  const owned = upgrades.filter((u) => (levels[u.id] ?? 0) >= 1).length;
+  const maxed = upgrades.filter((u) => (levels[u.id] ?? 0) >= u.maxLevel).length;
+  for (const def of achievementsFor(table)) {
+    if (def.kind !== 'collect') continue;
+    const p = (achievements[def.id] ??= newProgress());
+    p.count = Math.max(p.count, owned);
+    p.best = Math.max(p.best, maxed);
+    let tier = p.tier;
+    if (owned === upgrades.length) tier = Math.max(tier, 1);
+    if (maxed === upgrades.length) tier = Math.max(tier, 2);
     if (tier > p.tier) {
       p.tier = tier;
       gained.push({ def, tier });
@@ -279,7 +333,8 @@ export function normalizeAchievements(raw: unknown): Record<string, AchievementP
     p.count = n(src.count);
     p.best = n(src.best);
     p.run = Math.min(n(src.run), p.best);
-    p.tier = tierFor(def, p);
+    if (def.kind === 'collect') p.tier = Math.min(n(src.tier), maxTier(def));
+    else p.tier = tierFor(def, p);
   }
   return out;
 }

@@ -3,7 +3,7 @@ import { Game } from '../src/core/game';
 import { createInitialState, normalizeState } from '../src/core/state';
 import { exportSave, importSave } from '../src/core/save';
 import { mulberry32 } from '../src/core/rng';
-import { estimateNetPerPlay } from '../src/core/economy';
+import { allUpgrades, estimateNetPerPlay, payoutMultiplier } from '../src/core/economy';
 import { ACHIEVEMENTS, backfillAchievements, normalizeAchievements, observeRound, perkKey, perkLevels } from '../src/core/achievements';
 import { TABLES, TABLE_IDS } from '../src/tables';
 import type { PlayView } from '../src/core/types';
@@ -95,5 +95,44 @@ describe('achievements', () => {
       expect(perked).toBeGreaterThanOrEqual(base - 0.02);
       expect(perked - base).toBeLessThan(0.35);
     }
+  });
+
+  it('collection achievement: tier 1 for owning every upgrade, tier 2 for maxing them, permanent', () => {
+    const g = new Game(createInitialState(0), mulberry32(2));
+    g.state.money = 1e15;
+    const ups = allUpgrades(TABLES.coinflip);
+    for (const u of ups.slice(0, -1)) g.buyUpgrade('coinflip', u.id);
+    expect(g.state.achievements.collect_coinflip.tier).toBe(0);
+    expect(g.state.achievements.collect_coinflip.count).toBe(ups.length - 1);
+    g.buyUpgrade('coinflip', ups[ups.length - 1].id);
+    expect(g.state.achievements.collect_coinflip.tier).toBe(1);
+    expect(g.notice?.text).toContain('Fully Loaded Coin');
+    expect(g.levelsFor('coinflip').perk_collection).toBe(1);
+    // Other tables are unaffected.
+    expect(g.levelsFor('slots').perk_collection).toBeUndefined();
+
+    for (const u of ups) while (g.upgradeLevel('coinflip', u.id) < u.maxLevel) g.buyUpgrade('coinflip', u.id);
+    expect(g.state.achievements.collect_coinflip.tier).toBe(2);
+
+    g.table('coinflip').profit = 1e15;
+    expect(g.prestige('coinflip')).toBe(true);
+    expect(g.table('coinflip').levels).toEqual({});
+    expect(g.state.achievements.collect_coinflip.tier).toBe(2);
+    expect(g.levelsFor('coinflip').perk_collection).toBe(2);
+  });
+
+  it('collection perk adds 5% winnings per tier', () => {
+    expect(payoutMultiplier({ perk_collection: 2 }, 0)).toBeCloseTo(1.1);
+    expect(payoutMultiplier({}, 0)).toBe(1);
+  });
+
+  it('collection tiers backfill from owned upgrades and are sanitized on load', () => {
+    const s = createInitialState(0);
+    for (const u of allUpgrades(TABLES.slots)) s.tables.slots.levels[u.id] = u.maxLevel;
+    const raw: any = JSON.parse(JSON.stringify(s));
+    delete raw.achievements;
+    expect(normalizeState(raw).achievements.collect_slots.tier).toBe(2);
+    const junk = normalizeAchievements({ collect_coinflip: { tier: 99 } });
+    expect(junk.collect_coinflip.tier).toBe(2);
   });
 });

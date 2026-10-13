@@ -1,8 +1,9 @@
 import type { CasinoState, GameState, TableDef, TableId, TableState } from './types';
 import { CASINO_UPGRADES } from './casino';
 import { TABLES, TABLE_IDS } from '../tables';
-import { newHistory, normalizeHistory } from './history';
-import { backfillAchievements, newAchievements, normalizeAchievements } from './achievements';
+import { newBankroll, newHistory, normalizeBankroll, normalizeHistory } from './history';
+import { backfillAchievements, newAchievements, normalizeAchievements, observeUpgrades } from './achievements';
+import { allUpgrades } from './economy';
 
 export const SAVE_VERSION = 2;
 export const START_MONEY = 100;
@@ -28,7 +29,7 @@ export function newCasinoState(): CasinoState {
 export function createInitialState(now = Date.now()): GameState {
   const tables = {} as Record<TableId, TableState>;
   for (const id of TABLE_IDS) tables[id] = newTableState(TABLES[id]);
-  return { version: SAVE_VERSION, money: START_MONEY, tables, casino: newCasinoState(), achievements: newAchievements(), created: now, lastSaved: now };
+  return { version: SAVE_VERSION, money: START_MONEY, tables, bankroll: newBankroll(START_MONEY), casino: newCasinoState(), achievements: newAchievements(), created: now, lastSaved: now };
 }
 
 function num(value: unknown, fallback: number, min = 0): number {
@@ -65,6 +66,9 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
       }
     }
   }
+  // Older saves have no contribution data: seed it from each table's lifetime profit.
+  const lifetime = Object.fromEntries(TABLE_IDS.map((id) => [id, state.tables[id].lifetimeProfit]));
+  state.bankroll = normalizeBankroll(r.bankroll, state.money, lifetime);
   const c = r.casino;
   if (c && typeof c === 'object') {
     state.casino.chips = Math.floor(num(c.chips, 0));
@@ -78,5 +82,7 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
   }
   // Saves from before achievements get their grind counts seeded from lifetime play stats.
   state.achievements = r.achievements ? normalizeAchievements(r.achievements) : backfillAchievements(state);
+  // Upgrades already owned in an older save count toward the collection achievements.
+  for (const id of TABLE_IDS) observeUpgrades(state.achievements, id, allUpgrades(TABLES[id]), state.tables[id].levels);
   return state;
 }

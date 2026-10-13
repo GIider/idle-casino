@@ -1,6 +1,7 @@
 import type { AchievementProgress, TableId } from '../core/types';
 import type { Game } from '../core/game';
 import { RARITIES, achievementsFor, maxTier, type AchievementDef } from '../core/achievements';
+import { allUpgrades } from '../core/economy';
 import { h, setText, toggleClass } from './dom';
 import { fmt } from './format';
 
@@ -19,7 +20,7 @@ export class AchievementsCard {
   private rows: Row[] = [];
   private summary: HTMLElement;
 
-  constructor(private game: Game, table: TableId) {
+  constructor(private game: Game, private table: TableId) {
     this.summary = h('span', { class: 'level' });
     this.root = h('div', { class: 'card achievements' }, h('h3', {}, 'Achievements ', this.summary));
     for (const def of achievementsFor(table)) {
@@ -45,6 +46,10 @@ export class AchievementsCard {
     for (const row of this.rows) {
       const { def } = row;
       const p = this.game.state.achievements[def.id] ?? { count: 0, run: 0, best: 0, tier: 0 };
+      if (def.kind === 'collect') {
+        this.updateCollection(row, p);
+        continue;
+      }
       const top = maxTier(def);
       const done = p.tier >= top;
       const value = def.kind === 'grind' ? p.count : p.best;
@@ -64,6 +69,33 @@ export class AchievementsCard {
       toggleClass(row.root, 'earned', p.tier > 0);
       row.root.title = this.tooltip(def, p);
     }
+  }
+
+  /** Collection achievements: progress is how many of the table's upgrades are owned (tier 1) or maxed (tier 2). */
+  private updateCollection(row: Row, p: AchievementProgress): void {
+    const { def } = row;
+    const levels = this.game.table(this.table).levels;
+    const upgrades = allUpgrades(this.game.def(this.table));
+    const owned = upgrades.filter((u) => (levels[u.id] ?? 0) >= 1).length;
+    const maxed = upgrades.filter((u) => (levels[u.id] ?? 0) >= u.maxLevel).length;
+    const top = maxTier(def);
+    const done = p.tier >= top;
+    const nextTier = Math.min(top, p.tier + 1);
+    const have = p.tier === 0 ? owned : maxed;
+    const rarity = p.tier > 0 ? ` · ${RARITIES[p.tier - 1]}` : '';
+    setText(row.title, `${p.tier > 0 ? '🏆' : '🔒'} ${def.name}${rarity}`);
+    setText(row.progress, done ? 'Complete' : `${have} / ${upgrades.length} ${p.tier === 0 ? 'owned' : 'maxed'}`);
+    row.fill.style.width = `${(done ? 100 : (have / upgrades.length) * 100).toFixed(1)}%`;
+    const goal = p.tier === 0 ? 'Own every upgrade' : 'Max every upgrade';
+    const effect = def.perk.describe(nextTier);
+    setText(row.perk, done ? `${def.perk.name}: ${effect}` : `${goal} → ${def.perk.name}: ${effect}`);
+    toggleClass(row.root, 'earned', p.tier > 0);
+    row.root.title = [
+      `Own at least one level of every upgrade on this table (Rare: ${def.perk.describe(1)}),`,
+      `then max them all (Epic: ${def.perk.describe(2)}).`,
+      'Current: ' + `${owned}/${upgrades.length} owned, ${maxed}/${upgrades.length} maxed.`,
+      'Tiers are permanent and survive prestige and ascension.',
+    ].join('\n');
   }
 
   /** Full explanation shown on hover: the goal, every tier's reward, and how progress is counted. */

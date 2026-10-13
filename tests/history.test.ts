@@ -76,3 +76,92 @@ describe('play views', () => {
     }
   });
 });
+
+describe('bankroll history', () => {
+  it('samples plays, stays bounded and round-trips through export/import', () => {
+    const game = new Game(createInitialState(0), mulberry32(5));
+    for (let i = 0; i < 3000; i++) game.play('coinflip');
+    const b = game.state.bankroll;
+    expect(b.rounds).toBe(3000);
+    expect(b.points.length).toBeLessThanOrEqual(MAX_HISTORY_POINTS);
+    expect(b.points[0]).toEqual([0, 100]);
+    const copy = importSave(exportSave(game.state));
+    expect(copy.bankroll.rounds).toBe(3000);
+    expect(copy.bankroll.points).toEqual(b.points);
+  });
+
+  it('keeps the series across ascension and marks it', () => {
+    const game = new Game(createInitialState(0), mulberry32(5));
+    for (let i = 0; i < 20; i++) game.play('coinflip');
+    game.state.money = 1e12;
+    const before = game.state.bankroll.points.length;
+    expect(game.ascend()).toBe(true);
+    const b = game.state.bankroll;
+    expect(b.marks).toEqual([20]);
+    expect(b.points.length).toBeGreaterThanOrEqual(before);
+    expect(b.points[b.points.length - 1][1]).toBe(game.state.money);
+  });
+
+  it('seeds old saves and rejects junk', () => {
+    const raw: any = JSON.parse(JSON.stringify(createInitialState(0)));
+    delete raw.bankroll;
+    raw.money = 777;
+    expect(normalizeState(raw).bankroll.points).toEqual([[0, 777]]);
+    raw.bankroll = { points: [['x', 1], [2, NaN], [-1, 5], [4, 9]], rounds: 'nope' };
+    const b = normalizeState(raw).bankroll;
+    expect(b.points).toEqual([[4, 9]]);
+    expect(b.rounds).toBe(4);
+  });
+});
+
+describe('per-game bankroll contribution', () => {
+  it('credits each table with its own net winnings and keeps them across ascension', () => {
+    const game = new Game(createInitialState(0), mulberry32(8));
+    game.state.tables.slots.unlocked = true;
+    game.state.money = 1e6;
+    let coin = 0;
+    let slots = 0;
+    for (let i = 0; i < 40; i++) coin += game.play('coinflip', 1)!.net;
+    for (let i = 0; i < 40; i++) slots += game.play('slots', 5)!.net;
+    const b = game.state.bankroll;
+    expect(b.net.coinflip).toBe(coin);
+    expect(b.net.slots).toBe(slots);
+    expect(b.net.roulette).toBe(0);
+    const last = (id: 'coinflip' | 'slots') => b.contrib[id].points[b.contrib[id].points.length - 1];
+    expect(last('coinflip')).toEqual([80, coin]);
+    expect(last('slots')).toEqual([80, slots]);
+
+    game.state.money = 1e12;
+    expect(game.ascend()).toBe(true);
+    expect(game.state.bankroll.net.coinflip).toBe(coin);
+    expect(game.state.tables.coinflip.lifetimeProfit).toBe(0);
+  });
+
+  it('counts offline winnings and round-trips through a save', () => {
+    const game = new Game(createInitialState(0), mulberry32(8));
+    game.state.tables.coinflip.levels.auto = 5;
+    const report = game.applyOffline(3600);
+    expect(game.state.bankroll.net.coinflip).toBe(report.net);
+    const copy = importSave(exportSave(game.state));
+    expect(copy.bankroll.net.coinflip).toBe(report.net);
+    expect(copy.bankroll.contrib.coinflip.points).toEqual(game.state.bankroll.contrib.coinflip.points);
+  });
+
+  it('seeds old saves from table profit and rejects junk', () => {
+    const s = createInitialState(0);
+    s.tables.slots.lifetimeProfit = 1234;
+    s.bankroll.rounds = 50;
+    const raw: any = JSON.parse(JSON.stringify(s));
+    delete raw.bankroll.net;
+    delete raw.bankroll.contrib;
+    const loaded = normalizeState(raw);
+    expect(loaded.bankroll.net.slots).toBe(1234);
+    expect(loaded.bankroll.contrib.slots.points).toEqual([[loaded.bankroll.rounds, 1234]]);
+    raw.bankroll.net = { coinflip: 'x', slots: NaN };
+    raw.bankroll.contrib = { coinflip: { points: [['a', 1]] }, slots: 7 };
+    const junk = normalizeState(raw);
+    expect(junk.bankroll.net.coinflip).toBe(0);
+    expect(junk.bankroll.net.slots).toBe(1234);
+  });
+});
+
