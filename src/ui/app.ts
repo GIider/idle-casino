@@ -3,10 +3,12 @@ import type { Game } from '../core/game';
 import { TABLES, TABLE_IDS } from '../tables';
 import { exportSave } from '../core/save';
 import { h, setText, toggleClass } from './dom';
-import { fmt, fmtSigned } from './format';
+import { fmt } from './format';
 import { TablePanel } from './tablePanel';
 import { CasinoPanel } from './casinoPanel';
 import { cycleQuality } from './quality';
+import { CROSS_PRESTIGE_BONUS } from '../core/economy';
+import { previousTable } from '../tables';
 
 const RECENT_MAX = 12;
 
@@ -25,12 +27,10 @@ export class App {
   private casinoLabel: HTMLElement;
   private casinoIcon!: HTMLElement;
   private casinoName!: HTMLElement;
-  private wallets = new Map<TableId, { root: HTMLElement; amount: HTMLElement }>();
-  private rateEl: HTMLElement;
+  private casinoFill!: HTMLElement;
   private toastEl: HTMLElement;
   private toastSeq = 0;
   private toastTimer = 0;
-  private samples: Record<TableId, { t: number; net: number }[]> = { coinflip: [], slots: [], roulette: [], blackjack: [] };
   private handlers: AppHandlers;
   private recentEl: HTMLElement;
   private activityCard!: HTMLElement;
@@ -42,36 +42,20 @@ export class App {
   private activityMode: 'wins' | 'history' = 'wins';
   private activityBtns!: Record<'wins' | 'history', HTMLButtonElement>;
   private histories = new Map<TableId, HTMLElement>();
-  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; name: HTMLElement }>();
+  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; name: HTMLElement; fill: HTMLElement }>();
+  private chips = new Map<TableId, HTMLElement>();
   private slowAt = 0;
 
   constructor(host: HTMLElement, game: Game, handlers: AppHandlers) {
     this.game = game;
     this.handlers = handlers;
 
-    this.rateEl = h('div', { class: 'rate', text: '' });
     this.toastEl = h('div', { class: 'toast hidden' });
-
-    const walletStrip = h('div', { class: 'wallets' });
-    for (const id of TABLE_IDS) {
-      const def = TABLES[id];
-      const amount = h('span', { class: 'money', text: '0' });
-      const root = h(
-        'button',
-        { class: 'wallet', title: `${def.currency.name} (${def.name})`, onclick: () => this.select(id) },
-        h('span', { class: 'wallet-icon', text: def.currency.icon }),
-        h('span', { class: 'wallet-name', text: def.currency.name }),
-        amount,
-      );
-      this.wallets.set(id, { root, amount });
-      walletStrip.append(root);
-    }
 
     const header = h(
       'header',
       { class: 'top' },
       h('div', { class: 'brand' }, h('span', { class: 'logo', text: '♠ IDLE CASINO ♦' })),
-      h('div', { class: 'bank' }, walletStrip, this.rateEl),
       h(
         'div',
         { class: 'menu' },
@@ -118,9 +102,16 @@ export class App {
       const sub = h('small', { class: 'tile-rate', text: '' });
       const icon = h('span', { class: 'tile-icon', text: def.icon });
       const name = h('strong', { text: def.name });
-      const root = h('button', { class: 'tab tile', title: def.name, onclick: () => this.select(id) }, icon, name, lvl, sub);
-      this.tiles.set(id, { root, sub, lvl, icon, name });
+      const fill = h('div', { class: 'bar-fill' });
+      const bar = h('div', { class: 'bar tile-bar' }, fill);
+      const root = h('button', { class: 'tab tile', title: def.name, onclick: () => this.select(id) }, icon, bar, name, lvl, sub);
+      this.tiles.set(id, { root, sub, lvl, icon, name, fill });
       this.tabs.set(id, root);
+      if (previousTable(id)) {
+        const chip = h('span', { class: 'link-chip', text: '→' });
+        this.chips.set(id, chip);
+        tileRow.append(chip);
+      }
       tileRow.append(root);
     }
     const yourCasino = h('section', { class: 'your-casino' }, tileRow);
@@ -133,11 +124,13 @@ export class App {
       'button',
       { class: 'tab tile', title: 'Casino', onclick: () => this.select('casino') },
       this.casinoIcon,
+      h('div', { class: 'bar tile-bar' }, (this.casinoFill = h('div', { class: 'bar-fill' }))),
       this.casinoName,
       this.casinoLabel,
     );
     tileRow.append(this.casinoTab);
-    main.append(this.casinoPanel.root, yourCasino);
+    main.prepend(yourCasino);
+    main.append(this.casinoPanel.root);
 
     this.activityCard = h(
       'div',
@@ -180,32 +173,13 @@ export class App {
   update(): void {
     const g = this.game;
     const now = performance.now();
-    for (const id of TABLE_IDS) {
-      const series = this.samples[id];
-      series.push({ t: now, net: g.sessionNet[id] });
-      while (series.length > 2 && now - series[0].t > 8000) series.shift();
-      const w = this.wallets.get(id)!;
-      const ts = g.table(id);
-      toggleClass(w.root, 'hidden', !ts.unlocked || this.selected !== id);
-      toggleClass(w.root, 'active', this.selected === id);
-      setText(w.amount, fmt(ts.wallet));
-    }
-    if (this.selected === 'casino') {
-      setText(this.rateEl, '');
-    } else {
-      const series = this.samples[this.selected];
-      const first = series[0];
-      const span = (now - first.t) / 1000;
-      const perSec = span > 0.5 ? (g.sessionNet[this.selected] - first.net) / span : 0;
-      const def = TABLES[this.selected];
-      setText(this.rateEl, `${fmtSigned(Math.round(perSec))} ${def.currency.name} / sec`);
-      toggleClass(this.rateEl, 'neg', perSec < 0);
-    }
-
     if (now - this.slowAt >= 250) {
       this.slowAt = now;
       this.updateRecent(g);
       this.updateTiles(g);
+      const ready = TABLE_IDS.some((id) => g.canPrestige(id));
+      const title = `${ready ? '● ' : ''}Idle Casino`;
+      if (document.title !== title) document.title = title;
     }
     for (const id of TABLE_IDS) {
       const tab = this.tabs.get(id)!;
@@ -216,8 +190,10 @@ export class App {
     const casinoSeen = g.casinoVisible();
     setText(this.casinoIcon, casinoSeen ? '🏛' : '?');
     setText(this.casinoName, casinoSeen ? 'Casino' : '???');
-    setText(this.casinoLabel, !casinoSeen ? '' : canAscend ? 'Ascend ★' : chips > 0 ? `${fmt(chips)} chips` : 'Meta upgrades');
+    this.casinoFill.style.transform = `scaleX(${g.ascensionProgress()})`;
+    setText(this.casinoLabel, !casinoSeen ? `${Math.floor(g.ascensionProgress() * 100)}% to unlock` : canAscend ? 'Ascend ★' : chips > 0 ? `${fmt(chips)} chips` : 'Meta upgrades');
     toggleClass(this.casinoTab, 'affordable', casinoSeen && canAscend);
+    toggleClass(this.casinoTab, 'ready', casinoSeen && canAscend);
     toggleClass(this.casinoTab, 'hidden-feature', !casinoSeen);
     this.casinoTab.disabled = !casinoSeen;
     this.syncActivity();
@@ -249,15 +225,35 @@ export class App {
   }
 
   private updateTiles(g: Game): void {
+    let teased = false;
     for (const id of TABLE_IDS) {
       const t = this.tiles.get(id)!;
       const ts = g.table(id);
+      // Only tease the next undiscovered table; hide the rest.
+      const collapse = !g.tableVisible(id) && teased;
+      if (!g.tableVisible(id)) teased = true;
+      toggleClass(t.root, 'collapsed', collapse);
+      const c = this.chips.get(id);
+      if (c) toggleClass(c, 'collapsed', collapse);
       const cur = TABLES[id].currency.name;
       const seen = g.tableVisible(id);
       toggleClass(t.root, 'active', this.selected === id);
       toggleClass(t.root, 'locked', !ts.unlocked);
       toggleClass(t.root, 'hidden-feature', !seen);
+      toggleClass(t.root, 'ready', seen && g.canPrestige(id));
+      t.fill.style.transform = `scaleX(${g.prestigeProgress(id)})`;
       t.root.disabled = !seen;
+      const chip = this.chips.get(id);
+      if (chip) {
+        const prev = previousTable(id)!;
+        const pp = g.table(prev).prestige;
+        const now = 1 + CROSS_PRESTIGE_BONUS * pp;
+        const next = now + CROSS_PRESTIGE_BONUS;
+        toggleClass(chip, 'hidden', !seen || collapse);
+        toggleClass(chip, 'hot', g.canPrestige(prev));
+        setText(chip, `→ ×${now.toFixed(2)}`);
+        chip.title = `${TABLES[prev].name} prestige boosts ${TABLES[id].name} winnings: ×${now.toFixed(2)} now, ×${next.toFixed(2)} after the next prestige`;
+      }
       setText(t.icon, seen ? TABLES[id].icon : '?');
       setText(t.name, seen ? TABLES[id].name : '???');
       setText(t.lvl, !seen ? '' : ts.unlocked ? `Prestige ${ts.prestige}` : 'Locked');
@@ -266,7 +262,9 @@ export class App {
         !seen
           ? ''
           : ts.unlocked
-            ? `${fmt(Math.round(g.incomeEstimate(id) * 60))} ${cur} / min`
+            ? g.canPrestige(id)
+            ? 'Prestige ready ▲'
+            : `${fmt(Math.round(g.incomeEstimate(id) * 60))} ${cur} / min`
             : `Unlock: ${fmt(TABLES[id].unlockCost)}`,
       );
     }

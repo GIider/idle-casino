@@ -33,6 +33,7 @@ import {
   MANAGER_RESERVE_BETS,
   ascensionReward,
   canAscendWith,
+  ascensionThreshold,
   casinoBonus,
   casinoUpgradeCost,
   managerInterval,
@@ -177,6 +178,14 @@ export class Game {
   ascensionMoney(): number {
     const ts = this.state.tables[FINAL_TABLE];
     return Math.max(ts.wallet, ts.peakWallet);
+  }
+
+  /** Progress (0..1) toward the next ascension; log-scaled since money grows exponentially. */
+  ascensionProgress(): number {
+    const money = this.ascensionMoney();
+    if (money <= 1) return 0;
+    const threshold = ascensionThreshold(this.state.casino.ascensions);
+    return Math.min(1, Math.max(0, Math.log10(money) / Math.log10(threshold)));
   }
 
   private managerInterval(): number {
@@ -347,6 +356,13 @@ export class Game {
       bought++;
     }
     return bought;
+  }
+
+  /** Progress (0..1) of this run's profit toward the next prestige threshold. */
+  prestigeProgress(id: TableId): number {
+    const ts = this.state.tables[id];
+    if (!ts.unlocked) return 0;
+    return Math.min(1, Math.max(0, ts.profit / prestigeThreshold(TABLES[id], ts.prestige, this.bonus)));
   }
 
   canPrestige(id: TableId): boolean {

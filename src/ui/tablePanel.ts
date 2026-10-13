@@ -38,13 +38,19 @@ export class TablePanel {
   private unlockNote: HTMLElement;
   private unlockFill: HTMLElement;
   private unlockLabel: HTMLElement;
-  private statTiles: Record<'wallet' | 'prestige' | 'luck' | 'winnings' | 'streak', HTMLElement>;
+  private statTiles: Record<'prestige' | 'luck' | 'winnings' | 'streak', HTMLElement>;
   private streakTile: HTMLElement;
   private body: HTMLElement;
 
   private statsEl: HTMLElement;
   private tileProfit: HTMLElement;
   private tileIncome: HTMLElement;
+  private moneyEl!: HTMLElement;
+  private winOld!: HTMLElement;
+  /** Winnings multiplier captured when the prestige preview opens, so the comparison holds still. */
+  private frozenWin: number | null = null;
+  private rateEl!: HTMLElement;
+  private samples: { t: number; net: number }[] = [];
   private tilePlays: HTMLElement;
   private stage: HTMLElement;
   private resultEl: HTMLElement;
@@ -95,23 +101,24 @@ export class TablePanel {
     // Play area
     const kv = (_label: string, cls = ''): HTMLElement => h('div', { class: 'kv-value ' + cls });
     this.statTiles = {
-      wallet: kv('Wallet'),
       prestige: kv('Prestige'),
       luck: kv('Luck', 'gain'),
       winnings: kv('Winnings', 'gain'),
       streak: kv('Streak', 'gain'),
     };
     this.streakTile = h('div', { class: 'kv' }, h('small', { text: 'Streak' }), this.statTiles.streak);
-    this.winTile = h('div', { class: 'kv' }, h('small', { text: 'Winnings' }), this.statTiles.winnings);
+    this.winOld = h('small', { class: 'kv-old hidden' });
+    this.winTile = h('div', { class: 'kv' }, h('small', { text: 'Winnings' }), this.statTiles.winnings, this.winOld);
     this.statsEl = h(
       'div',
       { class: 'kv-grid' },
-      h('div', { class: 'kv' }, h('small', { text: 'Wallet' }), this.statTiles.wallet),
       h('div', { class: 'kv' }, h('small', { text: 'Prestige' }), this.statTiles.prestige),
       h('div', { class: 'kv' }, h('small', { text: 'Luck' }), this.statTiles.luck),
       this.winTile,
       this.streakTile,
     );
+    this.moneyEl = h('span', { class: 'money', text: '0' });
+    this.rateEl = h('span', { class: 'rate', text: '' });
     this.tileProfit = h('div', { class: 'tile-value', text: '0' });
     this.tileIncome = h('div', { class: 'tile-value', text: '0' });
     this.tilePlays = h('div', { class: 'tile-value', text: '0' });
@@ -197,6 +204,14 @@ export class TablePanel {
           'div',
           { class: 'card header-card hero' },
           h('div', { class: 'hero-head' }, h('h2', { text: `${def.icon} ${def.name}` }), prestigeWrap),
+          h(
+            'div',
+            { class: 'hero-bank', title: `${def.currency.name} (${def.name})` },
+            h('span', { class: 'wallet-icon', text: def.currency.icon }),
+            h('span', { class: 'wallet-name', text: def.currency.name }),
+            this.moneyEl,
+            this.rateEl,
+          ),
           h('p', { text: def.blurb }),
           bigStats,
           h(
@@ -267,7 +282,16 @@ export class TablePanel {
     }
 
     const levels = game.levelsFor(id);
-    setText(this.statTiles.wallet, `${cur.icon} ${fmt(ts.wallet)}`);
+    setText(this.moneyEl, fmt(ts.wallet));
+    const now = performance.now();
+    if (this.samples.length && now - this.samples[this.samples.length - 1].t > 1000) this.samples = [];
+    this.samples.push({ t: now, net: game.sessionNet[id] });
+    while (this.samples.length > 2 && now - this.samples[0].t > 8000) this.samples.shift();
+    const first = this.samples[0];
+    const span = (now - first.t) / 1000;
+    const perSec = span > 0.5 ? (game.sessionNet[id] - first.net) / span : 0;
+    setText(this.rateEl, `${fmtSigned(Math.round(perSec))} ${cur.name} / sec`);
+    toggleClass(this.rateEl, 'neg', perSec < 0);
     setText(this.statTiles.prestige, `${ts.prestige}`);
     setText(this.statTiles.luck, `${(luckChance(levels, game.bonus) * 100).toFixed(1)}%`);
     const curWin = payoutMultiplier(levels, ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak);
@@ -280,6 +304,10 @@ export class TablePanel {
     setText(this.bigMax, `${cur.icon} ${fmt(pv ? maxPayout(def, ts.prestige + 1, levels) : curMax)}`);
     setText(this.bigMinOld, pv ? `was ${fmt(curMin)}` : ' ');
     setText(this.bigMaxOld, pv ? `was ${fmt(curMax)}` : ' ');
+    if (pv && this.frozenWin === null) this.frozenWin = curWin;
+    if (!pv) this.frozenWin = null;
+    setText(this.winOld, `was ×${(this.frozenWin ?? curWin).toFixed(2)}`);
+    toggleClass(this.winOld, 'hidden', !pv);
     for (const t of this.bigTiles) toggleClass(t, 'preview', pv);
     toggleClass(this.winTile, 'preview', pv);
     toggleClass(this.streakTile, 'hidden', !ts.levels.streak);
