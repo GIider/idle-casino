@@ -176,13 +176,6 @@ export function autoBetFraction(levels: Record<string, number>): number {
   return AUTO_BET_FRACTIONS[level];
 }
 
-export function clampBet(def: TableDef, prestige: number, bet: number): number {
-  const lo = minBet(def, prestige);
-  const hi = maxBet(def, prestige);
-  if (!Number.isFinite(bet)) return lo;
-  return Math.min(hi, Math.max(lo, Math.floor(bet)));
-}
-
 /** The bet a table places from the table's own wallet, or 0 if the wallet can't cover the minimum. */
 export function chooseAutoBet(def: TableDef, ts: TableState): number {
   const lo = minBet(def, ts.prestige);

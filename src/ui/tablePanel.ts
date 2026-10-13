@@ -34,6 +34,8 @@ interface UpgradeRow {
 
 export class TablePanel {
   readonly root: HTMLElement;
+  /** Upgrades/prestige/etc.; hosted by the App in the right-hand column. */
+  readonly side: HTMLElement;
   private id: TableId;
   private game: Game;
 
@@ -43,6 +45,9 @@ export class TablePanel {
   private body: HTMLElement;
 
   private statsEl: HTMLElement;
+  private tileProfit: HTMLElement;
+  private tileIncome: HTMLElement;
+  private tilePlays: HTMLElement;
   private stage: HTMLElement;
   private resultEl: HTMLElement;
   private netEl: HTMLElement;
@@ -53,7 +58,8 @@ export class TablePanel {
   private prestigeBtn: HTMLButtonElement;
   private seenSeq = 0;
   private canvasStage: Stage;
-  private history: HistoryChart;
+  /** Hosted by the App's activity card (History tab). */
+  readonly history: HistoryChart;
   private achievements: AchievementsCard;
 
   constructor(game: Game, id: TableId) {
@@ -78,6 +84,9 @@ export class TablePanel {
 
     // Play area
     this.statsEl = h('div', { class: 'stats' });
+    this.tileProfit = h('div', { class: 'tile-value', text: '0' });
+    this.tileIncome = h('div', { class: 'tile-value', text: '0' });
+    this.tilePlays = h('div', { class: 'tile-value', text: '0' });
     this.resultEl = h('div', { class: 'result', text: 'Place your bet' });
     this.netEl = h('div', { class: 'net', text: ' ' });
     this.canvasStage = new Stage(def.icon, id);
@@ -85,7 +94,6 @@ export class TablePanel {
     this.stage = h('div', { class: 'stage' }, this.canvasStage.canvas, this.resultEl, this.netEl);
 
     this.autoInfo = h('div', { class: 'auto-info' });
-    const auto = h('div', { class: 'card' }, h('h3', { text: 'Auto-play' }), this.autoInfo);
 
     // Upgrades
     const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }));
@@ -113,7 +121,7 @@ export class TablePanel {
     this.prestigeBar = h('div', { class: 'bar-fill' });
     this.prestigeBtn = h('button', {
       class: 'btn prestige',
-      text: 'Prestige table',
+      text: 'Prestige',
       onclick: () => {
         const next = game.table(id).prestige + 1;
         if (
@@ -126,27 +134,49 @@ export class TablePanel {
         }
       },
     });
-    const prestige = h(
-      'div',
-      { class: 'card' },
-      h('h3', { text: 'Prestige' }),
-      this.prestigeText,
-      h('div', { class: 'bar' }, this.prestigeBar),
-      this.prestigeBtn,
-    );
 
     this.body = h(
       'div',
-      { class: 'table-body' },
+      { class: 'table-body fill' },
       h(
         'div',
         { class: 'col main' },
-        h('div', { class: 'card header-card' }, h('h2', { text: `${def.icon} ${def.name}` }), h('p', { text: def.blurb }), this.statsEl),
+        h(
+          'div',
+          { class: 'card header-card hero' },
+          h('div', { class: 'hero-head' }, h('h2', { text: `${def.icon} ${def.name}` }), this.prestigeBtn),
+          h('p', { text: def.blurb }),
+          h(
+            'div',
+            { class: 'stats-grid' },
+            h('div', { class: 'stat-tile' }, h('small', { text: 'Run profit' }), this.tileProfit),
+            h('div', { class: 'stat-tile' }, h('small', { text: 'Income / sec' }), this.tileIncome),
+            h('div', { class: 'stat-tile' }, h('small', { text: 'Plays' }), this.tilePlays),
+          ),
+          this.statsEl,
+          this.autoInfo,
+          h('div', { class: 'bar' }, this.prestigeBar),
+          this.prestigeText,
+        ),
         h('div', { class: 'card play-card' }, this.stage),
-        auto,
       ),
-      h('div', { class: 'col side' }, upgrades, prestige, this.achievements.root, this.history.root),
     );
+    const showSide = (mode: 'upgrades' | 'achievements'): void => {
+      toggleClass(upgrades, 'hidden', mode !== 'upgrades');
+      toggleClass(this.achievements.root, 'hidden', mode !== 'achievements');
+      toggleClass(upBtn, 'active', mode === 'upgrades');
+      toggleClass(achBtn, 'active', mode === 'achievements');
+    };
+    const upBtn = h('button', { class: 'btn small', text: 'Upgrades', onclick: () => showSide('upgrades') });
+    const achBtn = h('button', { class: 'btn small', text: 'Achievements', onclick: () => showSide('achievements') });
+    this.side = h(
+      'div',
+      { class: 'side-panel' },
+      h('div', { class: 'history-range side-tabs' }, upBtn, achBtn),
+      upgrades,
+      this.achievements.root,
+    );
+    showSide('upgrades');
 
     this.root = h('section', { class: 'panel' }, this.locked, this.body);
   }
@@ -160,6 +190,7 @@ export class TablePanel {
 
     toggleClass(this.locked, 'hidden', ts.unlocked);
     toggleClass(this.body, 'hidden', !ts.unlocked);
+    toggleClass(this.side, 'locked-hide', !ts.unlocked);
     if (!ts.unlocked) {
       const prev = previousTable(id);
       const prevDef = prev ? game.def(prev) : null;
@@ -183,6 +214,10 @@ export class TablePanel {
       this.statsEl,
       `Wallet ${fmt(ts.wallet)} ${cur.icon} ${cur.name} · Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(game.levelsFor(id), game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak).toFixed(2)}${ts.levels.streak ? ` · streak ${ts.streak}` : ''}`,
     );
+
+    setText(this.tileProfit, fmtSigned(ts.profit));
+    setText(this.tileIncome, `≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}`);
+    setText(this.tilePlays, fmt(ts.plays));
 
     const bonus = game.bonus;
     const rate = effectivePlaysPerSecond(ts.levels, bonus);
@@ -222,7 +257,7 @@ export class TablePanel {
       `Earn ${fmt(threshold)} ${cur.name} profit at this table to prestige (${fmt(Math.max(0, ts.profit))} so far). ` +
         `Next level: min bet ${fmt(minBet(def, ts.prestige + 1))}, max payout ${fmt(maxPayout(def, ts.prestige + 1))}, +10% winnings; wallet resets to ${fmt(prestigeWallet(def, ts.prestige + 1))} ${cur.name}.${feeds}`,
     );
-    this.prestigeBar.style.width = `${(progress * 100).toFixed(1)}%`;
+    this.prestigeBar.style.transform = `scaleX(${progress})`;
     setDisabled(this.prestigeBtn, !game.canPrestige(id));
 
     this.canvasStage.setPlayers(1 + Math.floor((ts.levels.speed ?? 0) / 4));

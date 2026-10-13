@@ -21,9 +21,9 @@ import {
   upgradeCost,
   type Outcome,
 } from './economy';
-import { START_MONEY, casinoValue, newTableState, prestigeWallet, starterWallet } from './state';
+import { START_MONEY, newTableState, prestigeWallet, starterWallet } from './state';
 import { observeRound, observeUpgrades, perkLevels, RARITIES, type AchievementDef } from './achievements';
-import { addContribution, markPrestige, recordRate, recordSample, recordView, sampleContribution } from './history';
+import { markPrestige, recordRate, recordSample, recordView } from './history';
 import {
   CASINO_UPGRADES,
   MANAGER_RESERVE_BETS,
@@ -128,10 +128,6 @@ export class Game {
     this.announce(observeRound(this.state.achievements, id, outcome));
     this.sessionNet[id] += outcome.net;
     this.last[id] = { seq: ++this.seq, outcome };
-    this.state.bankroll.rounds++;
-    recordSample(this.state.bankroll, this.state.bankroll.rounds, casinoValue(this.state.tables));
-    addContribution(this.state.bankroll, id, outcome.net);
-    sampleContribution(this.state.bankroll);
     return outcome;
   }
 
@@ -235,8 +231,6 @@ export class Game {
       if (ts.wallet >= lowest) continue;
       ts.wallet = lowest * BAILOUT_BETS;
       this.say(`Busted at ${TABLES[id].name}! The pit boss slides you a few comp ${TABLES[id].currency.name}.`);
-      const b = this.state.bankroll;
-      recordSample(b, b.rounds, casinoValue(this.state.tables), true);
     }
   }
 
@@ -299,8 +293,6 @@ export class Game {
     ts.streak = 0;
     ts.wallet = prestigeWallet(TABLES[id], ts.prestige);
     this.acc[id] = 0;
-    const b = this.state.bankroll;
-    recordSample(b, b.rounds, casinoValue(this.state.tables), true);
     return true;
   }
 
@@ -327,12 +319,8 @@ export class Game {
       this.managerClock[id] = 0;
       delete this.last[id];
     }
-    markPrestige(this.state.bankroll, this.state.bankroll.rounds);
     const first = this.state.tables[TABLE_IDS[0]];
     first.wallet = START_MONEY + this.bonus.startCash;
-    recordSample(this.state.bankroll, this.state.bankroll.rounds + 1, casinoValue(this.state.tables), true);
-    this.state.bankroll.rounds++;
-    sampleContribution(this.state.bankroll, true);
     this.say(`Ascended! +${reward} casino chips.`);
     return true;
   }
@@ -393,18 +381,12 @@ export class Game {
       ts.profit += applied;
       ts.lifetimeProfit += applied;
       ts.plays += plays;
-      addContribution(this.state.bankroll, id, applied);
       recordSample(ts.history, ts.plays, ts.lifetimeProfit, true);
       recordRate(ts.history, effective, ts.plays, ts.lifetimeProfit, true);
       report.plays += plays;
       report.net += applied;
     }
     this.bailout();
-    if (report.plays > 0) {
-      this.state.bankroll.rounds += report.plays;
-      recordSample(this.state.bankroll, this.state.bankroll.rounds, casinoValue(this.state.tables), true);
-      sampleContribution(this.state.bankroll, true);
-    }
     return report;
   }
 
@@ -418,8 +400,6 @@ export class Game {
       for (const upg of allUpgrades(def)) ts.levels[upg.id] = upg.maxLevel;
       this.announce(observeUpgrades(this.state.achievements, id, allUpgrades(def), ts.levels));
     }
-    const b = this.state.bankroll;
-    recordSample(b, b.rounds, casinoValue(this.state.tables), true);
   }
 
   /** Estimated net per second at the current settings (for display). */

@@ -1,6 +1,5 @@
 import type { Game } from '../core/game';
 import { TABLES, FINAL_TABLE } from '../tables';
-import { casinoValue } from '../core/state';
 import {
   ASCENSION_WINNINGS_BONUS,
   CASINO_UPGRADES,
@@ -12,7 +11,6 @@ import {
 } from '../core/casino';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt } from './format';
-import { BankrollChart } from './bankrollChart';
 
 interface Row {
   def: CasinoUpgradeDef;
@@ -32,7 +30,6 @@ export class CasinoPanel {
   private managerEl: HTMLElement;
   private autoPrestige: HTMLLabelElement;
   private autoPrestigeBox: HTMLInputElement;
-  private bankroll = new BankrollChart();
 
   constructor(private game: Game) {
     this.chipsEl = h('div', { class: 'chips', text: '0' });
@@ -108,7 +105,6 @@ export class CasinoPanel {
             this.ascendBtn,
           ),
           h('div', { class: 'card' }, h('h3', { text: 'Floor Manager' }), this.managerEl, this.autoPrestige),
-          this.bankroll.root,
         ),
         h('div', { class: 'col side' }, shop),
       ),
@@ -144,9 +140,8 @@ export class CasinoPanel {
         ? `Ready: ascending now earns ${fmt(game.ascendReward())} chips. Earn more first for +3 chips per 10× above ${fmt(threshold)} ${currency.name}.`
         : `Reach ${fmt(threshold)} ${currency.name} at ${TABLES[FINAL_TABLE].name} to ascend (${fmt(money)} now).`,
     );
-    this.ascendBar.style.width = `${(Math.max(0, Math.min(1, money / threshold)) * 100).toFixed(1)}%`;
+    this.ascendBar.style.transform = `scaleX(${Math.max(0, Math.min(1, money / threshold))})`;
     setDisabled(this.ascendBtn, !game.canAscend());
-    this.bankroll.update(game.state.bankroll, casinoValue(game.state.tables));
 
     for (const row of this.rows) {
       const level = game.casinoLevel(row.def.id);

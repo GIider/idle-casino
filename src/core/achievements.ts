@@ -564,10 +564,6 @@ export function perkLevels(achievements: Record<string, AchievementProgress>, ta
   return out;
 }
 
-export function unlockedCount(achievements: Record<string, AchievementProgress>): number {
-  return ACHIEVEMENTS.filter((a) => (achievements[a.id]?.tier ?? 0) > 0).length;
-}
-
 /** Seeds grind counts from lifetime play stats, so saves from before achievements aren't starting at zero. */
 export function backfillAchievements(state: GameState): Record<string, AchievementProgress> {
   const out = newAchievements();

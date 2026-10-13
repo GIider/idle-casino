@@ -1,11 +1,11 @@
 import type { CasinoState, GameState, TableDef, TableId, TableState } from './types';
 import { CASINO_UPGRADES, LEGACY_UPGRADES, casinoUpgradeCost, curveCost } from './casino';
 import { TABLES, TABLE_IDS } from '../tables';
-import { newBankroll, newHistory, normalizeBankroll, normalizeHistory } from './history';
+import { newHistory, normalizeHistory } from './history';
 import { backfillAchievements, newAchievements, normalizeAchievements, observeUpgrades } from './achievements';
 import { allUpgrades, minBet } from './economy';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 const MAX_STREAK_STORED = 1000;
 /** The first table's starting wallet. */
 export const START_MONEY = 100;
@@ -20,13 +20,6 @@ export function starterWallet(def: TableDef): number {
 /** What a table's wallet is reset to when it prestiges: a starter stack at the new, higher minimum bet. */
 export function prestigeWallet(def: TableDef, prestige: number): number {
   return Math.max(starterWallet(def), minBet(def, prestige) * STARTER_BETS);
-}
-
-/** Wallets summed in minimum-bet units: the one number that is comparable across currencies. */
-export function casinoValue(tables: Record<TableId, TableState>): number {
-  let total = 0;
-  for (const id of TABLE_IDS) total += tables[id].wallet / TABLES[id].baseMinBet;
-  return total;
 }
 
 export function newTableState(def: TableDef): TableState {
@@ -50,7 +43,7 @@ export function newCasinoState(): CasinoState {
 export function createInitialState(now = Date.now()): GameState {
   const tables = {} as Record<TableId, TableState>;
   for (const id of TABLE_IDS) tables[id] = newTableState(TABLES[id]);
-  return { version: SAVE_VERSION, tables, bankroll: newBankroll(casinoValue(tables)), casino: newCasinoState(), achievements: newAchievements(), created: now, lastSaved: now };
+  return { version: SAVE_VERSION, tables, casino: newCasinoState(), achievements: newAchievements(), created: now, lastSaved: now };
 }
 
 function num(value: unknown, fallback: number, min = 0): number {
@@ -117,9 +110,6 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
       }
     }
   }
-  // Older saves have no contribution data: seed it from each table's lifetime profit.
-  const lifetime = Object.fromEntries(TABLE_IDS.map((id) => [id, state.tables[id].lifetimeProfit]));
-  state.bankroll = normalizeBankroll(r.bankroll, casinoValue(state.tables), lifetime);
   const c = r.casino;
   if (c && typeof c === 'object') {
     state.casino.chips = Math.floor(num(c.chips, 0));

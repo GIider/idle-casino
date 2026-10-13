@@ -44,10 +44,3 @@ export function setDisabled(el: HTMLButtonElement | HTMLInputElement | HTMLSelec
 export function toggleClass(el: HTMLElement, cls: string, on: boolean): void {
   if (el.classList.contains(cls) !== on) el.classList.toggle(cls, on);
 }
-
-/** Restarts a CSS animation class. */
-export function flash(el: HTMLElement, cls: string): void {
-  el.classList.remove(cls);
-  void el.offsetWidth;
-  el.classList.add(cls);
-}

@@ -62,7 +62,7 @@ export class AchievementsCard {
         row.progress,
         done ? 'Complete' : def.kind === 'grind' ? `${fmt(value)} / ${fmt(next)}` : `best ${value} / ${next}`,
       );
-      row.fill.style.width = `${(done ? 100 : Math.min(1, (value - prev) / (next - prev)) * 100).toFixed(1)}%`;
+      row.fill.style.transform = `scaleX(${done ? 1 : Math.min(1, (value - prev) / (next - prev))})`;
       const effect = p.tier > 0 ? def.perk.describe(p.tier) : def.perk.describe(1);
       const goal = def.kind === 'grind' ? `${def.goal} ${fmt(next)} times` : `${def.goal}: ${next}`;
       setText(row.perk, p.tier > 0 ? `${def.perk.name}: ${effect}` : `${goal} → ${def.perk.name}: ${effect}`);
@@ -85,7 +85,7 @@ export class AchievementsCard {
     const rarity = p.tier > 0 ? ` · ${RARITIES[p.tier - 1]}` : '';
     setText(row.title, `${p.tier > 0 ? '🏆' : '🔒'} ${def.name}${rarity}`);
     setText(row.progress, done ? 'Complete' : `${have} / ${upgrades.length} ${p.tier === 0 ? 'owned' : 'maxed'}`);
-    row.fill.style.width = `${(done ? 100 : (have / upgrades.length) * 100).toFixed(1)}%`;
+    row.fill.style.transform = `scaleX(${done ? 1 : have / upgrades.length})`;
     const goal = p.tier === 0 ? 'Own every upgrade' : 'Max every upgrade';
     const effect = def.perk.describe(nextTier);
     setText(row.perk, done ? `${def.perk.name}: ${effect}` : `${goal} → ${def.perk.name}: ${effect}`);

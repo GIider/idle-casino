@@ -1,15 +1,15 @@
 export const COLORS = {
-  bg: '#150c26',
-  felt: '#1c0f3a',
-  feltLight: '#2a1658',
-  line: '#3a2766',
-  fg: '#f4eaff',
-  muted: '#a898c8',
-  pink: '#ff2e9a',
-  cyan: '#27e8ff',
-  gold: '#ffd84a',
-  green: '#3dff8f',
-  red: '#ff4d6d',
+  bg: '#0a1226',
+  felt: '#122046',
+  feltLight: '#1f3770',
+  line: '#24345c',
+  fg: '#eef2ff',
+  muted: '#8fa0c4',
+  pink: '#e8a317',
+  cyan: '#4fc3ff',
+  gold: '#f5c542',
+  green: '#2fd36b',
+  red: '#ff5470',
 };
 
 export interface Surface {
@@ -30,7 +30,8 @@ export function setupCanvas(canvas: HTMLCanvasElement): Surface | null {
     ctx = null;
   }
   if (!ctx) return null;
-  const dpr = window.devicePixelRatio || 1;
+  const low = document.documentElement.dataset.quality === 'low';
+  const dpr = Math.min(window.devicePixelRatio || 1, low ? 1 : 1.5);
   const bw = Math.round(w * dpr);
   const bh = Math.round(h * dpr);
   if (canvas.width !== bw || canvas.height !== bh) {

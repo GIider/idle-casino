@@ -12,7 +12,7 @@ function game() {
 }
 
 describe('Game', () => {
-  it('plays a round and updates bankroll accounting', () => {
+  it('plays a round and updates wallet and profit', () => {
     const g = game();
     const before = g.table('coinflip').wallet;
     const o = g.play('coinflip')!;

@@ -82,15 +82,6 @@ export interface PlayStats {
 }
 
 /** Lifetime progress on one achievement. Survives table prestige and casino ascension. */
-/** Casino value series; `rounds` is a global play counter that never resets, used as the x axis. */
-export interface BankrollHistory extends Series {
-  rounds: number;
-  /** Cumulative net winnings from plays at each table, kept across prestige and ascension. */
-  net: Record<TableId, number>;
-  /** `net` sampled over `rounds`, one series per table, for the contribution view. */
-  contrib: Record<TableId, Series>;
-}
-
 export interface AchievementProgress {
   /** Grind achievements: running total. */
   count: number;
@@ -119,8 +110,6 @@ export interface CasinoState {
 export interface GameState {
   version: number;
   tables: Record<TableId, TableState>;
-  /** Casino value over time (wallets summed in min-bet units). `points` are [rounds, value]; `marks` are rounds at which the casino was ascended. */
-  bankroll: BankrollHistory;
   casino: CasinoState;
   achievements: Record<string, AchievementProgress>;
   created: number;

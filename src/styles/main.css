@@ -1,15 +1,15 @@
 :root {
-  --bg: #0b0714;
-  --bg2: #150c26;
-  --card: #1a1030;
-  --line: #3a2766;
-  --fg: #f4eaff;
-  --muted: #a898c8;
-  --pink: #ff2e9a;
-  --cyan: #27e8ff;
-  --gold: #ffd84a;
-  --green: #3dff8f;
-  --red: #ff4d6d;
+  --bg: #0a1226;
+  --bg2: #0e1930;
+  --card: #111c38;
+  --line: #24345c;
+  --fg: #eef2ff;
+  --muted: #8fa0c4;
+  --pink: #e8a317;
+  --cyan: #4fc3ff;
+  --gold: #f5c542;
+  --green: #2fd36b;
+  --red: #ff5470;
 }
 
 * {
@@ -19,15 +19,15 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(1200px 600px at 50% -10%, #2a0f4d 0%, var(--bg) 60%) fixed;
+  background: var(--bg);
   color: var(--fg);
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 #app {
-  max-width: 1100px;
+  max-width: 1500px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 0 16px 16px;
 }
 
 .hidden {
@@ -54,7 +54,6 @@ p {
   font-weight: 800;
   letter-spacing: 0.15em;
   color: var(--pink);
-  text-shadow: 0 0 8px var(--pink), 0 0 24px #ff2e9a88;
 }
 
 .bank {
@@ -97,7 +96,6 @@ p {
   font-size: 22px;
   font-weight: 800;
   color: var(--gold);
-  text-shadow: 0 0 12px #ffd84a88;
   font-variant-numeric: tabular-nums;
 }
 
@@ -235,7 +233,7 @@ small {
   justify-content: center;
   gap: 6px;
   border-radius: 10px;
-  background: #0d0720;
+  background: #08101f;
   border: 1px solid var(--line);
   padding: 12px;
   text-align: center;
@@ -268,22 +266,6 @@ small {
 
 .stage.push .net {
   color: var(--muted);
-}
-
-.stage.pop {
-  animation: pop 0.25s ease-out;
-}
-
-@keyframes pop {
-  0% {
-    transform: scale(0.97);
-  }
-  60% {
-    transform: scale(1.02);
-  }
-  100% {
-    transform: scale(1);
-  }
 }
 
 /* Controls */
@@ -320,11 +302,10 @@ small {
 }
 
 .btn.primary {
-  background: linear-gradient(180deg, #ff4fae, #c4157a);
-  border-color: var(--pink);
+  background: linear-gradient(180deg, #38e07f, #1fa653);
+  border-color: var(--green);
   font-size: 18px;
   padding: 14px;
-  text-shadow: 0 1px 0 #0006;
 }
 
 .btn.primary:hover:not(:disabled) {
@@ -388,16 +369,19 @@ small {
 .bar {
   height: 10px;
   border-radius: 6px;
-  background: #0d0720;
+  background: #08101f;
   border: 1px solid var(--line);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  width: 0;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
   background: linear-gradient(90deg, var(--pink), var(--gold));
-  transition: width 0.3s;
+  transition: transform 0.3s;
+  will-change: transform;
 }
 
 /* Toast */
@@ -409,7 +393,6 @@ small {
   max-width: min(90vw, 560px);
   background: #241446;
   border: 1px solid var(--cyan);
-  box-shadow: 0 0 20px #27e8ff55;
   padding: 12px 18px;
   border-radius: 10px;
   text-align: center;
@@ -417,8 +400,7 @@ small {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tab.affordable,
-  .stage.pop {
+  .tab.affordable {
     animation: none;
   }
 }
@@ -516,4 +498,379 @@ small {
 .btn.dev {
   border-color: var(--gold);
   color: var(--gold);
+}
+
+/* ---- Dashboard shell ---- */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+  margin: 0 -16px 16px;
+  padding-inline: 16px;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+.rightcol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.tab small {
+  font-weight: 400;
+}
+
+.tab.active {
+  box-shadow: none;
+  background: #16254a;
+  border-left: 3px solid var(--gold);
+}
+
+.tab.affordable {
+  animation: none;
+}
+
+.side-panel.locked-hide {
+  display: none;
+}
+
+.mainview {
+  min-width: 0;
+}
+
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hero {
+  contain: layout paint;
+}
+
+.stage-canvas {
+  height: 280px;
+  background: linear-gradient(180deg, #1a2a55, #0a1226);
+}
+
+.card,
+.upgrade,
+.achievement {
+  contain: layout paint;
+}
+
+.history-root,
+.achievements {
+  content-visibility: auto;
+  contain-intrinsic-size: 200px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.recent-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.recent-row:first-of-type {
+  border-top: none;
+}
+
+.recent-row .amt {
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .stage-canvas {
+    height: 200px;
+  }
+}
+
+/* Low-end devices: drop decorative effects. */
+:root[data-quality='low'] * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Your casino tiles + hero stat tiles */
+.your-casino {
+  margin-top: 16px;
+}
+
+.your-casino h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 8px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.tile {
+  contain: layout paint;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tile:hover,
+.tile.active {
+  border-color: var(--gold);
+}
+
+.tile.locked {
+  opacity: 0.65;
+}
+
+.tile.affordable {
+  border-color: var(--green);
+  opacity: 1;
+}
+
+.tile-icon {
+  font-size: 34px;
+}
+
+.tile-rate {
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-tile {
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.tile-value {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Single-screen layout (desktop): page never scrolls, columns scroll internally ---- */
+@media (min-width: 721px) {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+  #app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .top {
+    flex: none;
+    margin-bottom: 10px;
+    padding-block: 6px;
+  }
+  .shell {
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    align-items: stretch;
+  }
+  .mainview {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+  }
+  .panel {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .table-body.fill {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .table-body.fill > .col {
+    flex: 1;
+    min-height: 0;
+  }
+  .play-card {
+    flex: 1;
+    min-height: 0;
+  }
+  .stage {
+    flex: 1;
+    min-height: 0;
+  }
+  .stage-canvas {
+    flex: 1 1 0;
+    min-height: 100px;
+    height: auto;
+    width: 100%;
+    margin: 0;
+  }
+  .rightcol {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .side-panel:not(.hidden):not(.locked-hide) {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .your-casino {
+    margin: 0;
+    flex: none;
+  }
+}
+
+.top .brand .logo {
+  font-size: 16px;
+}
+
+.tab.tile {
+  flex: initial;
+  text-align: center;
+  padding: 8px 6px;
+}
+
+.tile-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.tab.tile.active {
+  border: 1px solid var(--gold);
+  border-left-width: 1px;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+.wallet {
+  flex-direction: row;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 12px;
+}
+
+.bank {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stage {
+  padding: 6px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.activity {
+  flex: none;
+}
+
+.activity .card.history {
+  border: none;
+  padding: 0;
+  background: none;
+}
+
+.activity .history h3 {
+  display: none;
+}
+
+.activity .history-canvas {
+  height: 110px;
+}
+
+.hero-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hero-head .btn {
+  padding: 6px 14px;
+}
+
+.side-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  padding-bottom: 4px;
+}
+
+.side-tabs .btn.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.activity .history-range .btn.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Recent wins keeps a fixed footprint regardless of how many rows exist. */
+.activity {
+  height: 320px;
+  overflow: hidden;
+}
+
+.activity > div:nth-child(2) {
+  overflow: hidden;
+}
+
+.side-panel > .card.upgrades > h3,
+.side-panel > .achievements > h3 {
+  display: none;
+}
+
+.activity .history-canvas {
+  height: 130px;
 }

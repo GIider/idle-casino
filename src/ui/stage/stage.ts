@@ -3,6 +3,7 @@ import type { LastPlay } from '../../core/game';
 import { COLORS, prefersReducedMotion, roundRect, setupCanvas } from './canvas';
 import { Fx } from './fx';
 import { createScene, type Scene } from './scenes';
+import { probeFrame } from '../quality';
 
 const MAX_SEATS = 16;
 
@@ -20,6 +21,7 @@ export class Stage {
   private idleIcon: string;
   private seenSeq = -1;
   private dirty = true;
+  private bg: HTMLCanvasElement | null = null;
 
   constructor(icon: string, id: TableId) {
     this.idleIcon = icon;
@@ -97,6 +99,7 @@ export class Stage {
   private frame = (now: number): void => {
     this.raf = 0;
     if (!this.canvas.isConnected) return;
+    probeFrame(now - this.last);
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
     if (!this.render(performance.now(), dt)) {
@@ -114,11 +117,7 @@ export class Stage {
     if (!s) return false;
     const { ctx, w, h } = s;
 
-    const g = ctx.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, Math.max(w, h) * 0.7);
-    g.addColorStop(0, COLORS.feltLight);
-    g.addColorStop(1, COLORS.bg);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(this.background(w, h, this.canvas.width / w), 0, 0, w, h);
 
     if (this.scene) {
       const t = Math.min((now - this.startedAt) / 1000, this.scene.duration);
@@ -149,6 +148,27 @@ export class Stage {
     this.fx.step(dt);
     this.fx.draw(ctx);
     return true;
+  }
+
+  /** Static felt gradient, rendered once per size instead of every frame. */
+  private background(w: number, h: number, scale: number): HTMLCanvasElement {
+    const bw = Math.round(w * scale);
+    const bh = Math.round(h * scale);
+    if (!this.bg || this.bg.width !== bw || this.bg.height !== bh) {
+      const c = document.createElement('canvas');
+      c.width = bw;
+      c.height = bh;
+      const x = c.getContext('2d');
+      if (x) {
+        const g = x.createRadialGradient(bw / 2, bh / 2, 10, bw / 2, bh / 2, Math.max(bw, bh) * 0.7);
+        g.addColorStop(0, COLORS.feltLight);
+        g.addColorStop(1, COLORS.bg);
+        x.fillStyle = g;
+        x.fillRect(0, 0, bw, bh);
+      }
+      this.bg = c;
+    }
+    return this.bg;
   }
 
   private drawSeats(ctx: CanvasRenderingContext2D, w: number, h: number, dt: number): void {

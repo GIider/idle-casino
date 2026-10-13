@@ -3,8 +3,10 @@ import { Game } from './core/game';
 import { clearSave, freshGame, importSave, loadGame, saveGame } from './core/save';
 import { normalizeState } from './core/state';
 import { App } from './ui/app';
+import { applyQuality } from './ui/quality';
 import { fmt, fmtDuration } from './ui/format';
 
+applyQuality();
 const host = document.querySelector<HTMLDivElement>('#app')!;
 const TICK_MS = 100;
 const OFFLINE_THRESHOLD_SECONDS = 30;
