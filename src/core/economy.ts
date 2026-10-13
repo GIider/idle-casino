@@ -125,6 +125,33 @@ export function upgradeCost(
   return Math.ceil(base * bonus.upgradeCost);
 }
 
+/** How many levels one click buys: at most `cap` levels, spending at most `fraction` of the wallet. */
+export interface BuyMode {
+  cap: number;
+  fraction: number;
+}
+
+export const SINGLE_BUY: BuyMode = { cap: 1, fraction: 1 };
+
+/** Most levels (up to `cap` and `maxLevel`) whose summed cost fits in `budget`, plus that total cost. */
+export function bulkPurchase(
+  costAt: (level: number) => number,
+  level: number,
+  maxLevel: number,
+  budget: number,
+  cap: number,
+): { count: number; cost: number } {
+  let count = 0;
+  let cost = 0;
+  while (count < cap && level + count < maxLevel) {
+    const next = costAt(level + count);
+    if (cost + next > budget) break;
+    cost += next;
+    count++;
+  }
+  return { count, cost };
+}
+
 export function prestigeThreshold(def: TableDef, prestige: number, bonus: CasinoBonus = NO_BONUS): number {
   return Math.ceil(def.baseMinBet * 2500 * (PRESTIGE_THRESHOLD_GROWTH_BY_TABLE[def.id] ?? PRESTIGE_THRESHOLD_GROWTH) ** prestige * bonus.prestigeCost);
 }

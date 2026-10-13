@@ -356,8 +356,13 @@ small {
   font-size: 12px;
 }
 
+.buy-modes {
+  margin: 4px 0 8px;
+}
+
 .btn.buy {
   min-width: 96px;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 

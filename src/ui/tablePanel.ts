@@ -12,7 +12,6 @@ import {
   payoutMultiplier,
   prestigeThreshold,
   CROSS_PRESTIGE_BONUS,
-  upgradeCost,
 } from '../core/economy';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
@@ -21,6 +20,7 @@ import { prestigeWallet, starterWallet } from '../core/state';
 import { Stage } from './stage/stage';
 import { HistoryChart } from './historyChart';
 import { AchievementsCard } from './achievementsPanel';
+import { buyLabel, buyMode, buyModeSelector } from './buyMode';
 
 interface UpgradeRow {
   def: UpgradeDef;
@@ -121,10 +121,10 @@ export class TablePanel {
     this.autoInfo = h('div', { class: 'auto-info' });
 
     // Upgrades
-    const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }));
+    const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }), buyModeSelector());
     for (const u of allUpgrades(def)) {
       const level = h('span', { class: 'level' });
-      const button = h('button', { class: 'btn buy', onclick: () => game.buyUpgrade(id, u.id) });
+      const button = h('button', { class: 'btn buy', onclick: () => game.buyUpgrade(id, u.id, buyMode()) });
       const autoBox = h('input', {
         type: 'checkbox',
         onchange: () => game.setAutoBuy(id, u.id, autoBox.checked),
@@ -210,7 +210,6 @@ export class TablePanel {
     const { game, id } = this;
     const def = game.def(id);
     const ts = game.table(id);
-    const money = ts.wallet;
     const cur = def.currency;
 
     toggleClass(this.locked, 'hidden', ts.unlocked);
@@ -282,9 +281,9 @@ export class TablePanel {
         setText(row.button, 'Maxed');
         setDisabled(row.button, true);
       } else {
-        const cost = upgradeCost(def, row.def, ts.prestige, level, game.bonus);
-        setText(row.button, fmt(cost));
-        setDisabled(row.button, money < cost);
+        const q = game.quoteUpgrade(id, row.def.id, buyMode());
+        setText(row.button, buyLabel(q.count, q.cost, q.nextCost, fmt));
+        setDisabled(row.button, q.count <= 0);
       }
     }
 

@@ -20,6 +20,9 @@ import {
   prestigeThreshold,
   resolvePlay,
   upgradeCost,
+  bulkPurchase,
+  SINGLE_BUY,
+  type BuyMode,
   type Outcome,
 } from './economy';
 import { START_MONEY, newTableState, prestigeWallet, starterWallet } from './state';
@@ -282,17 +285,25 @@ export class Game {
     return this.state.tables[id].levels[upgradeId] ?? 0;
   }
 
-  buyUpgrade(id: TableId, upgradeId: string): boolean {
+  /** What `mode` would buy of one table upgrade right now: levels, total cost, and the next single level's cost. */
+  quoteUpgrade(id: TableId, upgradeId: string, mode: BuyMode = SINGLE_BUY): { count: number; cost: number; nextCost: number } {
     const def = TABLES[id];
     const ts = this.state.tables[id];
     const upg = allUpgrades(def).find((u) => u.id === upgradeId);
-    if (!upg || !ts.unlocked) return false;
+    if (!upg || !ts.unlocked) return { count: 0, cost: 0, nextCost: 0 };
     const level = ts.levels[upgradeId] ?? 0;
-    if (level >= upg.maxLevel) return false;
-    const cost = upgradeCost(def, upg, ts.prestige, level, this.bonus);
-    if (ts.wallet < cost) return false;
+    const costAt = (l: number): number => upgradeCost(def, upg, ts.prestige, l, this.bonus);
+    const { count, cost } = bulkPurchase(costAt, level, upg.maxLevel, ts.wallet * mode.fraction, mode.cap);
+    return { count, cost, nextCost: level < upg.maxLevel ? costAt(level) : 0 };
+  }
+
+  buyUpgrade(id: TableId, upgradeId: string, mode: BuyMode = SINGLE_BUY): boolean {
+    const def = TABLES[id];
+    const ts = this.state.tables[id];
+    const { count, cost } = this.quoteUpgrade(id, upgradeId, mode);
+    if (count <= 0) return false;
     ts.wallet -= cost;
-    ts.levels[upgradeId] = level + 1;
+    ts.levels[upgradeId] = (ts.levels[upgradeId] ?? 0) + count;
     this.announce(observeUpgrades(this.state.achievements, id, allUpgrades(def), ts.levels));
     return true;
   }
@@ -354,17 +365,29 @@ export class Game {
     return this.freeCasinoShop ? 0 : casinoUpgradeCost(upg, level);
   }
 
-  buyCasinoUpgrade(upgradeId: string): boolean {
+  /** What `mode` would buy of one casino upgrade right now (`locked` when its requirement is unmet). */
+  quoteCasinoUpgrade(
+    upgradeId: string,
+    mode: BuyMode = SINGLE_BUY,
+  ): { count: number; cost: number; nextCost: number; locked: boolean } {
     const upg = CASINO_UPGRADES.find((u) => u.id === upgradeId);
-    if (!upg) return false;
+    if (!upg) return { count: 0, cost: 0, nextCost: 0, locked: false };
     const casino = this.state.casino;
     const level = casino.levels[upgradeId] ?? 0;
-    if (level >= upg.maxLevel) return false;
-    if (upg.requires && (casino.levels[upg.requires.id] ?? 0) < upg.requires.level) return false;
-    const cost = this.casinoUpgradeCostFor(upg, level);
-    if (casino.chips < cost) return false;
+    const locked = !!upg.requires && (casino.levels[upg.requires.id] ?? 0) < upg.requires.level;
+    const costAt = (l: number): number => this.casinoUpgradeCostFor(upg, l);
+    const nextCost = level < upg.maxLevel ? costAt(level) : 0;
+    if (locked) return { count: 0, cost: 0, nextCost, locked };
+    const { count, cost } = bulkPurchase(costAt, level, upg.maxLevel, casino.chips * mode.fraction, mode.cap);
+    return { count, cost, nextCost, locked };
+  }
+
+  buyCasinoUpgrade(upgradeId: string, mode: BuyMode = SINGLE_BUY): boolean {
+    const { count, cost } = this.quoteCasinoUpgrade(upgradeId, mode);
+    if (count <= 0) return false;
+    const casino = this.state.casino;
     casino.chips -= cost;
-    casino.levels[upgradeId] = level + 1;
+    casino.levels[upgradeId] = (casino.levels[upgradeId] ?? 0) + count;
     return true;
   }
 

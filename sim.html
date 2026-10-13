@@ -5,39 +5,99 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Idle Casino – Bot Simulator</title>
     <style>
-      :root { color-scheme: dark; --bg:#14110f; --panel:#1f1a17; --fg:#eee6dc; --muted:#a39889; --line:#3a312b; --ok:#6fcf7f; --bad:#e8675a; }
-      body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,sans-serif; }
-      h1 { font-size:18px; margin:0 0 12px; }
-      .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:12px; }
-      .controls { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; }
-      label { display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }
-      input[type=number] { width:64px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:2px 4px; }
-      button { background:#c9a227; color:#1b1408; border:0; border-radius:6px; padding:6px 14px; font-weight:600; cursor:pointer; }
+      :root { color-scheme: dark; --bg:#14110f; --panel:#1f1a17; --fg:#eee6dc; --muted:#a39889; --line:#3a312b; --ok:#6fcf7f; --bad:#e8675a; --accent:#c9a227; }
+      * { box-sizing: border-box; }
+      body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,sans-serif; max-width:1400px; margin-inline:auto; }
+      h1 { font-size:18px; margin:0 0 4px; }
+      h2 { font-size:15px; margin:0 0 2px; }
+      p.hint { margin:0 0 8px; color:var(--muted); font-size:12px; }
+      .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:12px; }
+      .bar { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; }
+      .chip { display:inline-flex; gap:6px; align-items:center; padding:3px 9px; border:1px solid var(--line); border-radius:999px; cursor:pointer; user-select:none; font-size:13px; }
+      .chip.off { opacity:.4; }
+      .chip i { width:10px; height:10px; border-radius:50%; display:inline-block; }
+      input[type=number], select { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:3px 6px; font:inherit; }
+      input[type=number] { width:64px; }
+      button { background:var(--accent); color:#1b1408; border:0; border-radius:6px; padding:6px 14px; font-weight:600; cursor:pointer; font:inherit; font-weight:600; }
+      button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:400; padding:4px 10px; }
       button:disabled { opacity:.5; cursor:default; }
-      canvas { width:100%; height:300px; display:block; }
-      table { border-collapse:collapse; width:100%; }
-      th, td { text-align:right; padding:3px 8px; border-bottom:1px solid var(--line); }
-      th:first-child, td:first-child { text-align:left; }
-      .ok { color:var(--ok); } .bad { color:var(--bad); } .muted { color:var(--muted); }
-      .legend { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:6px; font-size:12px; }
+      .progress { flex:1 1 180px; height:8px; background:var(--bg); border-radius:4px; overflow:hidden; min-width:120px; }
+      .progress div { height:100%; width:0; background:var(--accent); transition:width .15s; }
+      .chartwrap { position:relative; }
+      canvas { width:100%; height:300px; display:block; cursor:crosshair; }
+      .legend { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:6px; font-size:12px; color:var(--muted); }
       .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; }
-      .row2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:12px; }
+      table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+      th, td { text-align:right; padding:3px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+      th:first-child, td:first-child { text-align:left; }
+      thead th { position:sticky; top:0; background:var(--panel); font-weight:600; font-size:12px; color:var(--muted); }
+      .scroll { overflow:auto; max-height:560px; }
+      .ok { color:var(--ok); } .bad { color:var(--bad); } .muted { color:var(--muted); }
+      .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:12px; }
+      .tip { position:absolute; pointer-events:none; background:#0d0b0a; border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:12px; line-height:1.35; z-index:5; white-space:nowrap; display:none; box-shadow:0 4px 14px #0008; }
+      .tip b { display:block; margin-bottom:2px; }
+      .tip i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+      .tag { font-size:11px; color:var(--muted); padding:0 4px; border:1px solid var(--line); border-radius:4px; margin-left:4px; }
+      td.t1 { background:#6fcf7f1f; } td.t2 { background:#e6b4221f; } td.t3 { background:#e8675a1f; }
+      .empty { color:var(--muted); padding:30px 0; text-align:center; }
+      tr.group td { background:var(--bg); color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
     </style>
   </head>
   <body>
     <h1>Idle Casino – bot simulator</h1>
+    <p class="hint">Each bot plays the real game headlessly. Pick bots, press Run, hover any chart for exact values.</p>
+
     <div class="panel">
-      <div class="controls" id="controls"></div>
+      <div class="bar" id="chips"></div>
+      <div class="bar" style="margin-top:10px">
+        <label>Seeds <input type="number" id="seeds" value="5" min="1" max="20" /></label>
+        <label>Minutes <input type="number" id="cap" value="120" min="10" max="600" step="10" /></label>
+        <button id="run">Run</button>
+        <div class="progress"><div id="bar"></div></div>
+        <span class="muted" id="status">Not run yet</span>
+        <button class="ghost" id="export" disabled>Export JSON</button>
+      </div>
     </div>
-    <div class="panel"><strong>Progress toward ascension</strong> <span class="muted">(log10 of final-table money ÷ threshold; 0 = ascendable; median over seeds, band = min–max)</span>
-      <canvas id="progress"></canvas><div class="legend" id="legend"></div></div>
-    <div class="row2">
-      <div class="panel"><strong>Time to first ascension</strong><div id="summary"></div></div>
-      <div class="panel"><strong>Selected bot: wallets (log10) per table</strong> <select id="botPick"></select>
-        <canvas id="wallets"></canvas><div class="legend" id="walletLegend"></div></div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Time to first ascension</h2>
+        <p class="hint">Minutes of play. Green = within target (greedy / optimal-ish ≤ 60, others ≤ 90).</p>
+        <div id="summary"><div class="empty">Run the simulation to see results.</div></div>
+      </div>
+      <div class="panel">
+        <div class="bar"><h2 style="margin:0">Progress toward ascension</h2>
+          <label class="muted"><input type="checkbox" id="bands" /> min–max bands</label></div>
+        <p class="hint">log10(best final-table wallet ÷ threshold); 0 means ascendable, so each line stops there. Line = median over seeds.</p>
+        <div class="chartwrap"><canvas id="progress"></canvas><div class="tip" id="tip-progress"></div></div>
+        <div class="legend" id="legend"></div>
+      </div>
     </div>
-    <div class="panel"><strong>Events</strong> <span class="muted">(selected bot, first seed: ▲ unlock, | prestige, ★ ascend, · achievement)</span>
-      <canvas id="events" style="height:150px"></canvas></div>
+
+    <div class="panel">
+      <div class="bar"><h2 style="margin:0">Single bot, first seed</h2><select id="botPick"></select></div>
+      <div class="grid" style="margin-top:8px">
+        <div>
+          <p class="hint">Wallet per table (log10 of currency). Hover for amounts and prestige levels.</p>
+          <div class="chartwrap"><canvas id="wallets"></canvas><div class="tip" id="tip-wallets"></div></div>
+          <div class="legend" id="walletLegend"></div>
+        </div>
+        <div>
+          <p class="hint">Events per table: ▲ unlock, │ prestige, ▪ achievement tier, ★ ascension reached. Hover for details.</p>
+          <div class="chartwrap"><canvas id="events"></canvas><div class="tip" id="tip-events"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="bar"><h2 style="margin:0">Achievement unlock times</h2>
+        <label>Table <select id="achTable"></select></label>
+        <label>Tier <select id="achTier"><option value="0">All tiers</option><option value="1">Rare (T1)</option><option value="2">Epic (T2)</option><option value="3">Legendary (T3)</option></select></label>
+        <label>Sort <select id="achSort"><option value="time">Fastest first</option><option value="name">Name</option></select></label>
+      </div>
+      <p class="hint">Median minutes to reach each tier, per bot (T1 / T2 / T3). “–” = not reached within the run in at least half the seeds. Hover a cell for min–max and how many seeds got there.</p>
+      <div class="scroll" id="ach"><div class="empty">Run the simulation to see results.</div></div>
+    </div>
     <script type="module" src="/src/sim/main.ts"></script>
   </body>
 </html>

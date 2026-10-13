@@ -11,11 +11,11 @@ export interface SimResponse {
   result: RunResult;
 }
 
-/** Runs one bot/seed per message so the page stays responsive and can spread runs over several workers. */
+/** Runs one bot/seed per message (past the ascension threshold, so achievement timing is measured to the cap). */
 self.onmessage = (e: MessageEvent<SimRequest>) => {
   const { bot, seed, options } = e.data;
   const policy = BOTS.find((b) => b.id === bot);
   if (!policy) return;
-  const result = runBot(policy, { ...options, seed, ignoreAscension: false });
+  const result = runBot(policy, { ...options, seed, ignoreAscension: true });
   (self as unknown as Worker).postMessage({ bot, seed, result } satisfies SimResponse);
 };

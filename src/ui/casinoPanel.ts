@@ -11,6 +11,7 @@ import {
 } from '../core/casino';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt } from './format';
+import { buyLabel, buyMode, buyModeSelector } from './buyMode';
 
 interface Row {
   def: CasinoUpgradeDef;
@@ -64,10 +65,10 @@ export class CasinoPanel {
       ' Auto-prestige tables as soon as they can',
     );
 
-    const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }));
+    const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }), buyModeSelector());
     for (const def of CASINO_UPGRADES) {
       const level = h('span', { class: 'level' });
-      const button = h('button', { class: 'btn buy', onclick: () => game.buyCasinoUpgrade(def.id) });
+      const button = h('button', { class: 'btn buy', onclick: () => game.buyCasinoUpgrade(def.id, buyMode()) });
       shop.append(
         h(
           'div',
@@ -150,12 +151,11 @@ export class CasinoPanel {
         setText(row.button, 'Maxed');
         setDisabled(row.button, true);
       } else {
-        const cost = game.casinoUpgradeCostFor(row.def, level);
+        const q = game.quoteCasinoUpgrade(row.def.id, buyMode());
         const req = row.def.requires;
-        const locked = req !== undefined && game.casinoLevel(req.id) < req.level;
         const reqName = req ? CASINO_UPGRADES.find((u) => u.id === req.id)?.name : '';
-        setText(row.button, locked ? `Needs ${reqName}` : `${fmt(cost)} chips`);
-        setDisabled(row.button, locked || casino.chips < cost);
+        setText(row.button, q.locked ? `Needs ${reqName}` : buyLabel(q.count, q.cost, q.nextCost, fmt, 'chips'));
+        setDisabled(row.button, q.count <= 0);
       }
     }
   }
