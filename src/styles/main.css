@@ -203,8 +203,6 @@ p {
 .header-card p,
 .stats,
 .range,
-.auto-info,
-.prestige-text,
 small {
   color: var(--muted);
   font-size: 13px;
@@ -920,3 +918,15 @@ small {
 .combo.pair .combo-tag { color: var(--cyan); }
 .combo.triple { border-color: var(--gold); }
 .combo.triple .combo-tag { color: var(--gold); font-weight: 800; }
+
+.big-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.stat-tile.big { padding: 12px 14px; transition: box-shadow .15s, border-color .15s; }
+.stat-tile.big .big-value { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
+.big-old { font-size: 12px; color: var(--muted); min-height: 16px; text-decoration: line-through; }
+.stat-tile.preview, .kv.preview { border-color: var(--gold); box-shadow: 0 0 14px rgba(255, 200, 80, .45); }
+.stat-tile.preview .big-value, .kv.preview .kv-value { color: var(--gold); }
+.kv.preview { border-left-color: var(--gold); }
+.prestige-wrap { display: inline-block; }
+.bar-wrap { position: relative; }
+.bar-wrap .bar { height: 18px; }
+.bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px #000; pointer-events: none; }

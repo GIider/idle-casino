@@ -2,21 +2,15 @@ import type { TableId, UpgradeDef } from '../core/types';
 import type { Game } from '../core/game';
 import {
   allUpgrades,
-  autoBetFraction,
-  chooseAutoBet,
-  effectivePlaysPerSecond,
   luckChance,
-  maxBet,
   maxPayout,
   minBet,
   payoutMultiplier,
   prestigeThreshold,
-  CROSS_PRESTIGE_BONUS,
 } from '../core/economy';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
-import { TABLE_IDS, previousTable } from '../tables';
-import { prestigeWallet, starterWallet } from '../core/state';
+import { previousTable } from '../tables';
 import { Stage } from './stage/stage';
 import { HistoryChart } from './historyChart';
 import { AchievementsCard } from './achievementsPanel';
@@ -55,9 +49,16 @@ export class TablePanel {
   private stage: HTMLElement;
   private resultEl: HTMLElement;
   private netEl: HTMLElement;
-  private autoInfo: HTMLElement;
+  private bigMin: HTMLElement;
+  private bigMinOld: HTMLElement;
+  private bigMax: HTMLElement;
+  private bigMaxOld: HTMLElement;
+  private bigTiles: HTMLElement[] = [];
+  private winTile: HTMLElement;
+  private previewing = false;
   private rows: UpgradeRow[] = [];
-  private prestigeText: HTMLElement;
+  private barLabel: HTMLElement;
+  private barWrap: HTMLElement;
   private prestigeBar: HTMLElement;
   private prestigeBtn: HTMLButtonElement;
   private seenSeq = 0;
@@ -100,13 +101,14 @@ export class TablePanel {
       streak: kv('Streak', 'gain'),
     };
     this.streakTile = h('div', { class: 'kv' }, h('small', { text: 'Streak' }), this.statTiles.streak);
+    this.winTile = h('div', { class: 'kv' }, h('small', { text: 'Winnings' }), this.statTiles.winnings);
     this.statsEl = h(
       'div',
       { class: 'kv-grid' },
       h('div', { class: 'kv' }, h('small', { text: 'Wallet' }), this.statTiles.wallet),
       h('div', { class: 'kv' }, h('small', { text: 'Prestige' }), this.statTiles.prestige),
       h('div', { class: 'kv' }, h('small', { text: 'Luck' }), this.statTiles.luck),
-      h('div', { class: 'kv' }, h('small', { text: 'Winnings' }), this.statTiles.winnings),
+      this.winTile,
       this.streakTile,
     );
     this.tileProfit = h('div', { class: 'tile-value', text: '0' });
@@ -118,7 +120,14 @@ export class TablePanel {
     this.resultEl.setAttribute('aria-live', 'polite');
     this.stage = h('div', { class: 'stage' }, this.canvasStage.canvas, this.resultEl, this.netEl);
 
-    this.autoInfo = h('div', { class: 'auto-info' });
+    this.bigMin = h('div', { class: 'big-value' });
+    this.bigMinOld = h('div', { class: 'big-old' });
+    this.bigMax = h('div', { class: 'big-value' });
+    this.bigMaxOld = h('div', { class: 'big-old' });
+    const bigMinTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Min bet' }), this.bigMin, this.bigMinOld);
+    const bigMaxTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Max payout' }), this.bigMax, this.bigMaxOld);
+    this.bigTiles = [bigMinTile, bigMaxTile];
+    const bigStats = h('div', { class: 'big-stats' }, bigMinTile, bigMaxTile);
 
     // Upgrades
     const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }), buyModeSelector());
@@ -142,7 +151,7 @@ export class TablePanel {
     }
 
     // Prestige
-    this.prestigeText = h('div', { class: 'prestige-text' });
+    this.barLabel = h('div', { class: 'bar-label' });
     this.prestigeBar = h('div', { class: 'bar-fill' });
     this.prestigeBtn = h('button', {
       class: 'btn prestige',
@@ -160,6 +169,17 @@ export class TablePanel {
       },
     });
 
+    const prestigeWrap = h('span', { class: 'prestige-wrap' }, this.prestigeBtn);
+    const setPreview = (on: boolean): void => {
+      this.previewing = on;
+      this.update();
+    };
+    prestigeWrap.addEventListener('mouseenter', () => setPreview(true));
+    prestigeWrap.addEventListener('mouseleave', () => setPreview(false));
+    this.prestigeBtn.addEventListener('focus', () => setPreview(true));
+    this.prestigeBtn.addEventListener('blur', () => setPreview(false));
+    this.barWrap = h('div', { class: 'bar-wrap' }, h('div', { class: 'bar' }, this.prestigeBar), this.barLabel);
+
     this.body = h(
       'div',
       { class: 'table-body fill' },
@@ -169,8 +189,9 @@ export class TablePanel {
         h(
           'div',
           { class: 'card header-card hero' },
-          h('div', { class: 'hero-head' }, h('h2', { text: `${def.icon} ${def.name}` }), this.prestigeBtn),
+          h('div', { class: 'hero-head' }, h('h2', { text: `${def.icon} ${def.name}` }), prestigeWrap),
           h('p', { text: def.blurb }),
+          bigStats,
           h(
             'div',
             { class: 'stats-grid' },
@@ -179,9 +200,7 @@ export class TablePanel {
             h('div', { class: 'stat-tile' }, h('small', { text: 'Plays' }), this.tilePlays),
           ),
           this.statsEl,
-          this.autoInfo,
-          h('div', { class: 'bar' }, this.prestigeBar),
-          this.prestigeText,
+          this.barWrap,
         ),
         h('div', { class: 'card play-card' }, this.stage),
       ),
@@ -232,42 +251,36 @@ export class TablePanel {
         this.unlockNote,
         prevDef
           ? payer
-            ? `✦ Start with ${fmt(starterWallet(def))} ${cur.name}`
+            ? ''
             : `▸ Unlock ${prevDef.name} first`
           : '',
       );
       toggleClass(this.unlockNote, 'goal', !!prevDef && !payer);
-      toggleClass(this.unlockNote, 'gain', !!prevDef && !!payer);
-      return;
+        return;
     }
 
-    const lo = minBet(def, ts.prestige);
-    const hi = maxBet(def, ts.prestige);
     const levels = game.levelsFor(id);
     setText(this.statTiles.wallet, `${cur.icon} ${fmt(ts.wallet)}`);
     setText(this.statTiles.prestige, `${ts.prestige}`);
     setText(this.statTiles.luck, `${(luckChance(levels, game.bonus) * 100).toFixed(1)}%`);
-    setText(
-      this.statTiles.winnings,
-      `×${payoutMultiplier(levels, ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak).toFixed(2)}`,
-    );
+    const curWin = payoutMultiplier(levels, ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak);
+    const curMin = minBet(def, ts.prestige);
+    const curMax = maxPayout(def, ts.prestige, levels);
+    const pv = this.previewing;
+    const nextWin = payoutMultiplier({}, ts.prestige + 1, game.bonusFor(id), def.baseWinBonus, 0);
+    setText(this.statTiles.winnings, `×${(pv ? nextWin : curWin).toFixed(2)}`);
+    setText(this.bigMin, `${cur.icon} ${fmt(pv ? minBet(def, ts.prestige + 1) : curMin)}`);
+    setText(this.bigMax, `${cur.icon} ${fmt(pv ? maxPayout(def, ts.prestige + 1, levels) : curMax)}`);
+    setText(this.bigMinOld, pv ? `was ${fmt(curMin)}` : ' ');
+    setText(this.bigMaxOld, pv ? `was ${fmt(curMax)}` : ' ');
+    for (const t of this.bigTiles) toggleClass(t, 'preview', pv);
+    toggleClass(this.winTile, 'preview', pv);
     toggleClass(this.streakTile, 'hidden', !ts.levels.streak);
     setText(this.statTiles.streak, `${ts.streak}`);
 
     setText(this.tileProfit, fmtSigned(ts.profit));
     setText(this.tileIncome, `≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}`);
     setText(this.tilePlays, fmt(ts.plays));
-
-    const bonus = game.bonus;
-    const rate = effectivePlaysPerSecond(ts.levels, bonus);
-    const frac = autoBetFraction(ts.levels);
-    const bet = chooseAutoBet(def, ts);
-    const betText = frac > 0 ? `${(frac * 100).toFixed(1).replace(/\.0$/, '')}% of wallet` : 'minimum bet';
-    setText(
-      this.autoInfo,
-      `${rate.toFixed(1)} plays/sec · bet ${fmt(bet || lo)} ${cur.name} (${betText}, limits ${fmt(lo)}–${fmt(hi)}) · ` +
-        `max payout per play ${fmt(maxPayout(def, ts.prestige, game.levelsFor(id)))} · ≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}/sec`,
-    );
 
     const toggles = game.casinoLevel('policy') >= 1;
     for (const row of this.rows) {
@@ -288,14 +301,9 @@ export class TablePanel {
     }
 
     const threshold = prestigeThreshold(def, ts.prestige, game.bonus);
-    const nextId = TABLE_IDS[TABLE_IDS.indexOf(id) + 1];
-    const feeds = nextId ? ` Each level also gives ${game.def(nextId).name} +${CROSS_PRESTIGE_BONUS * 100}% winnings.` : '';
     const progress = Math.max(0, Math.min(1, ts.profit / threshold));
-    setText(
-      this.prestigeText,
-      `▸ Earn ${fmt(threshold)} ${cur.name} profit to prestige (${fmt(Math.max(0, ts.profit))} so far). ` +
-        `✦ Next level: min bet ${fmt(minBet(def, ts.prestige + 1))}, max payout ${fmt(maxPayout(def, ts.prestige + 1))}, +10% winnings; wallet resets to ${fmt(prestigeWallet(def, ts.prestige + 1))} ${cur.name}.${feeds}`,
-    );
+    setText(this.barLabel, game.canPrestige(id) ? 'Ready to prestige!' : `${Math.floor(progress * 100)}%`);
+    this.barWrap.title = `${fmt(Math.max(0, ts.profit))} / ${fmt(threshold)} ${cur.name} profit to prestige`;
     this.prestigeBar.style.transform = `scaleX(${progress})`;
     setDisabled(this.prestigeBtn, !game.canPrestige(id));
 
