@@ -23,6 +23,8 @@ export class App {
   private casinoPanel: CasinoPanel;
   private casinoTab: HTMLButtonElement;
   private casinoLabel: HTMLElement;
+  private casinoIcon!: HTMLElement;
+  private casinoName!: HTMLElement;
   private wallets = new Map<TableId, { root: HTMLElement; amount: HTMLElement }>();
   private rateEl: HTMLElement;
   private toastEl: HTMLElement;
@@ -31,6 +33,7 @@ export class App {
   private samples: Record<TableId, { t: number; net: number }[]> = { coinflip: [], slots: [], roulette: [], blackjack: [] };
   private handlers: AppHandlers;
   private recentEl: HTMLElement;
+  private activityCard!: HTMLElement;
   private recent: { id: TableId; net: number; at: number }[] = [];
   private recentKey = '\0';
   private lastSeq: Partial<Record<TableId, number>> = {};
@@ -39,7 +42,7 @@ export class App {
   private activityMode: 'wins' | 'history' = 'wins';
   private activityBtns!: Record<'wins' | 'history', HTMLButtonElement>;
   private histories = new Map<TableId, HTMLElement>();
-  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement }>();
+  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; name: HTMLElement }>();
   private slowAt = 0;
 
   constructor(host: HTMLElement, game: Game, handlers: AppHandlers) {
@@ -113,15 +116,10 @@ export class App {
       const def = TABLES[id];
       const lvl = h('small', { text: '' });
       const sub = h('small', { class: 'tile-rate', text: '' });
-      const root = h(
-        'button',
-        { class: 'tab tile', title: def.name, onclick: () => this.select(id) },
-        h('span', { class: 'tile-icon', text: def.icon }),
-        h('strong', { text: def.name }),
-        lvl,
-        sub,
-      );
-      this.tiles.set(id, { root, sub, lvl });
+      const icon = h('span', { class: 'tile-icon', text: def.icon });
+      const name = h('strong', { text: def.name });
+      const root = h('button', { class: 'tab tile', title: def.name, onclick: () => this.select(id) }, icon, name, lvl, sub);
+      this.tiles.set(id, { root, sub, lvl, icon, name });
       this.tabs.set(id, root);
       tileRow.append(root);
     }
@@ -129,30 +127,33 @@ export class App {
 
     this.casinoPanel = new CasinoPanel(game);
     this.casinoLabel = h('small', { text: '' });
+    this.casinoIcon = h('span', { class: 'tile-icon', text: '🏛' });
+    this.casinoName = h('strong', { text: 'Casino' });
     this.casinoTab = h(
       'button',
       { class: 'tab tile', title: 'Casino', onclick: () => this.select('casino') },
-      h('span', { class: 'tile-icon', text: '🏛' }),
-      h('strong', { text: 'Casino' }),
+      this.casinoIcon,
+      this.casinoName,
       this.casinoLabel,
     );
     tileRow.append(this.casinoTab);
     main.append(this.casinoPanel.root, yourCasino);
 
-    side.append(
-      h(
-        'div',
-        { class: 'card activity' },
-        h('div', { class: 'history-range' }, this.activityBtns.wins, this.activityBtns.history),
-        this.recentEl,
-        ...this.histories.values(),
-      ),
+    this.activityCard = h(
+      'div',
+      { class: 'card activity' },
+      h('div', { class: 'history-range' }, this.activityBtns.wins, this.activityBtns.history),
+      this.recentEl,
+      ...this.histories.values(),
     );
+    side.append(this.activityCard);
     host.replaceChildren(header, h('div', { class: 'shell' }, main, side), this.toastEl);
     this.select(this.selected);
   }
 
   select(id: TableId | 'casino'): void {
+    const g = this.game;
+    if (id === 'casino' ? !g.casinoVisible() : !g.tableVisible(id)) id = 'coinflip';
     this.selected = id;
     for (const [tid, panel] of this.panels) toggleClass(panel.root, 'hidden', tid !== id);
     for (const [tid, el] of this.sides) toggleClass(el, 'hidden', tid !== id);
@@ -208,13 +209,19 @@ export class App {
     }
     for (const id of TABLE_IDS) {
       const tab = this.tabs.get(id)!;
-      const affordable = g.canUnlock(id);
-      toggleClass(tab, 'affordable', affordable);
+      toggleClass(tab, 'affordable', g.tableVisible(id) && g.canUnlock(id));
     }
     const { chips } = g.state.casino;
     const canAscend = g.canAscend();
-    setText(this.casinoLabel, canAscend ? 'Ascend ★' : chips > 0 ? `${fmt(chips)} chips` : 'Meta upgrades');
-    toggleClass(this.casinoTab, 'affordable', canAscend);
+    const casinoSeen = g.casinoVisible();
+    setText(this.casinoIcon, casinoSeen ? '🏛' : '?');
+    setText(this.casinoName, casinoSeen ? 'Casino' : '???');
+    setText(this.casinoLabel, !casinoSeen ? '' : canAscend ? 'Ascend ★' : chips > 0 ? `${fmt(chips)} chips` : 'Meta upgrades');
+    toggleClass(this.casinoTab, 'affordable', casinoSeen && canAscend);
+    toggleClass(this.casinoTab, 'hidden-feature', !casinoSeen);
+    this.casinoTab.disabled = !casinoSeen;
+    this.syncActivity();
+    if (this.selected === 'casino' ? !casinoSeen : !g.tableVisible(this.selected)) this.select('coinflip');
     this.updateSelected();
 
     if (g.notice && g.notice.seq !== this.toastSeq) {
@@ -230,6 +237,9 @@ export class App {
   }
 
   private syncActivity(): void {
+    // Nothing to show on a table's unlock screen.
+    const onLockedTable = this.selected !== 'casino' && !this.game.table(this.selected).unlocked;
+    toggleClass(this.activityCard, 'hidden', onLockedTable);
     const history = this.activityMode === 'history' && this.selected !== 'casino';
     toggleClass(this.recentEl, 'hidden', history);
     for (const [id, el] of this.histories) toggleClass(el, 'hidden', !history || id !== this.selected);
@@ -243,13 +253,21 @@ export class App {
       const t = this.tiles.get(id)!;
       const ts = g.table(id);
       const cur = TABLES[id].currency.name;
+      const seen = g.tableVisible(id);
       toggleClass(t.root, 'active', this.selected === id);
       toggleClass(t.root, 'locked', !ts.unlocked);
-      toggleClass(t.root, 'affordable', g.canUnlock(id));
-      setText(t.lvl, ts.unlocked ? `Prestige ${ts.prestige}` : 'Locked');
+      toggleClass(t.root, 'hidden-feature', !seen);
+      t.root.disabled = !seen;
+      setText(t.icon, seen ? TABLES[id].icon : '?');
+      setText(t.name, seen ? TABLES[id].name : '???');
+      setText(t.lvl, !seen ? '' : ts.unlocked ? `Prestige ${ts.prestige}` : 'Locked');
       setText(
         t.sub,
-        ts.unlocked ? `${fmt(Math.round(g.incomeEstimate(id) * 60))} ${cur} / min` : `Unlock: ${fmt(TABLES[id].unlockCost)}`,
+        !seen
+          ? ''
+          : ts.unlocked
+            ? `${fmt(Math.round(g.incomeEstimate(id) * 60))} ${cur} / min`
+            : `Unlock: ${fmt(TABLES[id].unlockCost)}`,
       );
     }
   }

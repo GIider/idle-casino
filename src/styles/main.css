@@ -663,6 +663,13 @@ small {
   opacity: 0.65;
 }
 
+.tile.hidden-feature,
+.tile.hidden-feature:hover {
+  opacity: 0.45;
+  cursor: default;
+  border-color: var(--line);
+}
+
 .tile.affordable {
   border-color: var(--green);
   opacity: 1;

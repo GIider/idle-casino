@@ -265,6 +265,18 @@ export class Game {
     return payer.unlocked ? payer : null;
   }
 
+  /** Whether the player may see `id`: it is unlocked, or it is the next table to unlock. Later tables stay a mystery. */
+  tableVisible(id: TableId): boolean {
+    const prev = previousTable(id);
+    return this.state.tables[id].unlocked || prev === null || this.state.tables[prev].unlocked;
+  }
+
+  /** Whether the casino (ascension and shop) has been reached: ascension is available (by peak wallet) or the player has ascended. */
+  casinoVisible(): boolean {
+    const c = this.state.casino;
+    return this.canAscend() || c.ascensions > 0 || c.totalChips > 0;
+  }
+
   canUnlock(id: TableId): boolean {
     const payer = this.unlockPayer(id);
     return !this.state.tables[id].unlocked && payer !== null && payer.wallet >= TABLES[id].unlockCost;
