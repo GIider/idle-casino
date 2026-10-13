@@ -3,11 +3,11 @@ import { TABLES, TABLE_IDS } from '../src/tables';
 import { mulberry32 } from '../src/core/rng';
 import { resolvePlay } from '../src/core/economy';
 
-function rtp(id: keyof typeof TABLES, levels: Record<string, number> = {}, option = '', n = 200000) {
+function rtp(id: keyof typeof TABLES, levels: Record<string, number> = {}, n = 200000) {
   const def = TABLES[id];
   const rng = mulberry32(42);
   let ret = 0;
-  for (let i = 0; i < n; i++) ret += def.play(rng, levels, option || (def.options?.[0].id ?? '')).mult;
+  for (let i = 0; i < n; i++) ret += def.play(rng, levels).mult;
   return ret / n;
 }
 
@@ -15,14 +15,12 @@ describe('self-sustaining tables', () => {
   it('every table is profitable on its own wallet before any upgrades', () => {
     for (const id of TABLE_IDS) {
       const def = TABLES[id];
-      for (const o of def.options ?? [{ id: '' }]) {
-        const bet = def.baseMinBet * 10;
-        const rng = mulberry32(7);
-        let net = 0;
-        const n = 40000;
-        for (let i = 0; i < n; i++) net += resolvePlay(def, {}, 0, o.id, bet, rng).net;
-        expect(net / n / bet, `${id}/${o.id}`).toBeGreaterThan(0.02);
-      }
+      const bet = def.baseMinBet * 10;
+      const rng = mulberry32(7);
+      let net = 0;
+      const n = 40000;
+      for (let i = 0; i < n; i++) net += resolvePlay(def, {}, 0, bet, rng).net;
+      expect(net / n / bet, id).toBeGreaterThan(0.02);
     }
   });
 });
@@ -38,10 +36,10 @@ describe('base return to player', () => {
     expect(r).toBeLessThan(0.97);
   });
   it('roulette bets have a house edge', () => {
-    for (const opt of ['color', 'dozen', 'number']) {
-      const r = rtp('roulette', {}, opt);
-      expect(r).toBeGreaterThan(0.9);
-      expect(r).toBeLessThan(1.0);
+    for (const levels of [{} as Record<string, number>, { bet_dozen: 1 }, { bet_number: 1 }, { bet_dozen: 1, bet_number: 1 }]) {
+      const r = rtp('roulette', levels);
+      expect(r, JSON.stringify(levels)).toBeGreaterThan(0.9);
+      expect(r, JSON.stringify(levels)).toBeLessThan(1.0);
     }
   });
   it('blackjack has a house edge', () => {
@@ -67,7 +65,7 @@ describe('resolvePlay', () => {
       const def = TABLES[id];
       const rng = mulberry32(7);
       for (let i = 0; i < 5000; i++) {
-        const o = resolvePlay(def, { luck: 10, payout: 20 }, 0, def.options?.[0].id ?? '', def.baseMaxBet, rng);
+        const o = resolvePlay(def, { luck: 10, payout: 20 }, 0, def.baseMaxBet, rng);
         expect(o.payout).toBeGreaterThanOrEqual(0);
         expect(o.payout - o.bet).toBeLessThanOrEqual(def.baseMaxPayout);
       }

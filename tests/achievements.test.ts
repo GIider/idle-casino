@@ -65,7 +65,7 @@ describe('achievements', () => {
     const g = new Game(createInitialState(0), mulberry32(1));
     g.state.achievements.headsCollector.count = ACHIEVEMENTS.find((a) => a.id === 'headsCollector')!.targets[0] - 1;
     g.table('coinflip').wallet = 1e6;
-    for (let i = 0; i < 50 && !g.notice?.text.includes('Lucky Penny'); i++) g.play('coinflip', 1);
+    for (let i = 0; i < 50 && !g.notice?.text.includes('Lucky Penny'); i++) g.play('coinflip');
     expect(g.notice?.text).toContain('Lucky Penny');
   });
 
@@ -88,12 +88,11 @@ describe('achievements', () => {
     expect(new Set(ACHIEVEMENTS.map((a) => a.id)).size).toBe(ACHIEVEMENTS.length);
     for (const id of TABLE_IDS) {
       const def = TABLES[id];
-      const option = def.options?.[0].id ?? '';
       const maxed: Record<string, number> = {};
       for (const a of ACHIEVEMENTS.filter((x) => x.table === id)) maxed[perkKey(a.id)] = a.targets.length;
       const bet = def.baseMinBet * 10;
-      const base = estimateNetPerPlay(def, {}, 0, option, bet, mulberry32(5), 20000) / bet;
-      const perked = estimateNetPerPlay(def, maxed, 0, option, bet, mulberry32(5), 20000) / bet;
+      const base = estimateNetPerPlay(def, {}, 0, bet, mulberry32(5), 20000) / bet;
+      const perked = estimateNetPerPlay(def, maxed, 0, bet, mulberry32(5), 20000) / bet;
       expect(perked).toBeGreaterThanOrEqual(base - 0.02);
       expect(perked - base).toBeLessThan(0.35);
     }

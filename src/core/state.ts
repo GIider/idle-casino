@@ -3,7 +3,7 @@ import { CASINO_UPGRADES } from './casino';
 import { TABLES, TABLE_IDS } from '../tables';
 import { newBankroll, newHistory, normalizeBankroll, normalizeHistory } from './history';
 import { backfillAchievements, newAchievements, normalizeAchievements, observeUpgrades } from './achievements';
-import { allUpgrades } from './economy';
+import { allUpgrades, minBet } from './economy';
 
 export const SAVE_VERSION = 3;
 /** The first table's starting wallet. */
@@ -14,6 +14,11 @@ export const STARTER_BETS = 50;
 /** What a table's wallet holds when it is first available. */
 export function starterWallet(def: TableDef): number {
   return def.unlockCost === 0 ? START_MONEY : def.baseMinBet * STARTER_BETS;
+}
+
+/** What a table's wallet is reset to when it prestiges: a starter stack at the new, higher minimum bet. */
+export function prestigeWallet(def: TableDef, prestige: number): number {
+  return Math.max(starterWallet(def), minBet(def, prestige) * STARTER_BETS);
 }
 
 /** Wallets summed in minimum-bet units: the one number that is comparable across currencies. */
@@ -29,8 +34,6 @@ export function newTableState(def: TableDef): TableState {
     wallet: def.unlockCost === 0 ? START_MONEY : 0,
     prestige: 0,
     levels: {},
-    bet: def.baseMinBet,
-    option: def.options?.[0].id ?? '',
     profit: 0,
     lifetimeProfit: 0,
     plays: 0,
@@ -77,11 +80,11 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
     ts.lifetimeProfit = num(src.lifetimeProfit, 0, -Infinity);
     ts.plays = Math.floor(num(src.plays, 0));
     ts.history = normalizeHistory(src.history, ts.plays, ts.lifetimeProfit);
-    ts.bet = Math.floor(num(src.bet, ts.bet, 1));
-    if (def.options?.some((o) => o.id === src.option)) ts.option = src.option;
     if (src.levels && typeof src.levels === 'object') {
-      for (const [key, value] of Object.entries(src.levels)) {
-        ts.levels[key] = Math.floor(num(value, 0));
+      // Only current upgrades survive (e.g. the retired `auto` level is dropped), clamped to their max.
+      for (const upg of allUpgrades(def)) {
+        const level = Math.floor(num(src.levels[upg.id], 0));
+        if (level > 0) ts.levels[upg.id] = Math.min(upg.maxLevel, level);
       }
     }
   }

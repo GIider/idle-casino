@@ -60,6 +60,9 @@ export class App {
         h('button', { class: 'btn small', text: 'Export', onclick: () => this.doExport() }),
         h('button', { class: 'btn small', text: 'Import', onclick: () => this.doImport() }),
         h('button', { class: 'btn small danger', text: 'Reset', onclick: () => this.doReset() }),
+        ...(new URLSearchParams(window.location.search).get('cardcounting') === '1'
+          ? [h('button', { class: 'btn small dev', text: '🛠 Unlock everything', onclick: () => game.devUnlockAll() })]
+          : []),
       ),
     );
 

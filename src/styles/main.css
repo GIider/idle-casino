@@ -287,46 +287,6 @@ small {
 }
 
 /* Controls */
-.controls {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.bet-row {
-  display: flex;
-  gap: 6px;
-}
-
-.bet-input,
-.select {
-  background: #0d0720;
-  color: var(--fg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 15px;
-  min-width: 0;
-}
-
-.bet-input {
-  flex: 1;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.field {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.field .select {
-  flex: 1;
-}
-
 .btn {
   background: var(--bg2);
   color: var(--fg);
@@ -359,7 +319,6 @@ small {
   box-shadow: 0 0 10px #ff4d6d44;
 }
 
-.btn.play,
 .btn.primary {
   background: linear-gradient(180deg, #ff4fae, #c4157a);
   border-color: var(--pink);
@@ -368,7 +327,6 @@ small {
   text-shadow: 0 1px 0 #0006;
 }
 
-.btn.play:hover:not(:disabled),
 .btn.primary:hover:not(:disabled) {
   box-shadow: 0 0 18px #ff2e9a99;
 }
@@ -544,4 +502,9 @@ small {
 
 .achievement.earned .bar-fill {
   background: linear-gradient(90deg, var(--green), var(--cyan));
+}
+
+.btn.dev {
+  border-color: var(--gold);
+  color: var(--gold);
 }

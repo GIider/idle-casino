@@ -56,22 +56,20 @@ export class Stage {
     const now = performance.now();
     const running = this.scene !== null && (now - this.startedAt) / 1000 < this.scene.duration;
 
-    if (play.auto) {
-      const seat = Math.floor(Math.random() * Math.max(1, this.seats));
-      if (this.seats > 0) this.pulses[seat] = 1;
-      if (running) {
-        // Don't restart the scene for every auto-play; toss a chip instead.
-        const w = this.canvas.clientWidth || 300;
-        const h = this.canvas.clientHeight || 160;
-        const sx = this.seats > 0 ? w * (0.1 + (0.8 * (seat + 0.5)) / this.seats) : w / 2;
-        this.fx.chip(sx, h * 0.92, o.net > 0 ? COLORS.gold : o.net < 0 ? COLORS.red : COLORS.muted);
-        this.request();
-        return;
-      }
+    const seat = Math.floor(Math.random() * Math.max(1, this.seats));
+    if (this.seats > 0) this.pulses[seat] = 1;
+    if (running) {
+      // Don't restart the scene for every play; toss a chip instead.
+      const w = this.canvas.clientWidth || 300;
+      const h = this.canvas.clientHeight || 160;
+      const sx = this.seats > 0 ? w * (0.1 + (0.8 * (seat + 0.5)) / this.seats) : w / 2;
+      this.fx.chip(sx, h * 0.92, o.net > 0 ? COLORS.gold : o.net < 0 ? COLORS.red : COLORS.muted);
+      this.request();
+      return;
     }
 
     if (o.view) {
-      this.scene = createScene(o.view, { levels, net: o.net, seed: play.seq, speed: play.auto ? 0.6 : 1 });
+      this.scene = createScene(o.view, { levels, net: o.net, seed: play.seq, speed: 0.6 });
       this.startedAt = now;
       if (prefersReducedMotion()) this.startedAt = now - this.scene.duration * 1000;
     }

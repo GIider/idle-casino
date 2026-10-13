@@ -57,8 +57,7 @@ describe('play views', () => {
     for (const id of TABLE_IDS) {
       const def = TABLES[id];
       for (let i = 0; i < 300; i++) {
-        const opt = def.options?.[i % def.options.length].id ?? '';
-        const r = def.play(rng, {}, opt);
+        const r = def.play(rng, {});
         expect(r.view).toBeDefined();
         const v = r.view!;
         if (v.kind === 'coin') expect(r.detail.includes('Heads')).toBe(v.heads);
@@ -122,8 +121,8 @@ describe('per-game bankroll contribution', () => {
     game.state.tables.slots.wallet = 1e6;
     let coin = 0;
     let slots = 0;
-    for (let i = 0; i < 40; i++) coin += game.play('coinflip', 1)!.net;
-    for (let i = 0; i < 40; i++) slots += game.play('slots', 5)!.net;
+    for (let i = 0; i < 40; i++) coin += game.play('coinflip')!.net;
+    for (let i = 0; i < 40; i++) slots += game.play('slots')!.net;
     const b = game.state.bankroll;
     expect(b.net.coinflip).toBe(coin);
     expect(b.net.slots).toBe(slots);
@@ -140,7 +139,7 @@ describe('per-game bankroll contribution', () => {
 
   it('counts offline winnings and round-trips through a save', () => {
     const game = new Game(createInitialState(0), mulberry32(8));
-    game.state.tables.coinflip.levels.auto = 5;
+    game.state.tables.coinflip.levels.speed = 8;
     const report = game.applyOffline(3600);
     expect(game.state.bankroll.net.coinflip).toBe(report.net);
     const copy = importSave(exportSave(game.state));
@@ -166,3 +165,19 @@ describe('per-game bankroll contribution', () => {
   });
 });
 
+
+describe('income series', () => {
+  it('samples currency per second over time and survives export/import', () => {
+    const state = createInitialState(0);
+    state.tables.coinflip.wallet = 1e6;
+    const g = new Game(state, mulberry32(5));
+    for (let i = 0; i < 300; i++) g.tick(0.1);
+    const ts = g.table('coinflip');
+    const pts = ts.history.rate.points;
+    expect(pts.length).toBeGreaterThan(3);
+    expect(ts.history.clock).toBeCloseTo(30, 5);
+    // 1 play/sec at a 1-coin bet: income per second can't exceed the payout cap per play.
+    for (const [, v] of pts) expect(Math.abs(v)).toBeLessThanOrEqual(250);
+    expect(importSave(exportSave(g.state)).tables.coinflip.history.rate).toEqual(ts.history.rate);
+  });
+});

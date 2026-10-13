@@ -7,10 +7,8 @@ export interface TableState {
   /** This table's own currency: it is the stake, pays for the table's upgrades and unlocks the next table. */
   wallet: number;
   prestige: number;
-  /** Upgrade levels by upgrade id (includes the common upgrades luck/payout/auto/speed). */
+  /** Upgrade levels by upgrade id (includes the common upgrades luck/payout/speed/autobet). */
   levels: Record<string, number>;
-  bet: number;
-  option: string;
   /** Net profit since the last prestige of this table. */
   profit: number;
   lifetimeProfit: number;
@@ -29,6 +27,12 @@ export interface Series {
 
 /** `points` are [playCount, lifetimeProfit]; `marks` are play counts at which the table was prestiged. */
 export interface History extends Series {
+  /** Income series for the table chart: [playCount, net currency per second over the last sample window]. */
+  rate: Series;
+  /** Seconds this table has spent playing (live ticks plus offline time), the denominator for `rate`. */
+  clock: number;
+  /** [clock, lifetimeProfit] at the previous `rate` sample. */
+  rateFrom: [number, number];
   /** Per-game outcome tallies for the game-specific history views. */
   stats: PlayStats;
 }
@@ -128,7 +132,7 @@ export interface PlayResult {
 export type PlayView =
   | { kind: 'coin'; heads: boolean }
   | { kind: 'slots'; reels: number[] }
-  | { kind: 'roulette'; pocket: number; option: string }
+  | { kind: 'roulette'; pocket: number; bets: string[] }
   | { kind: 'blackjack'; player: number[]; dealer: number[]; outcome: 'natural' | 'bust' | 'win' | 'push' | 'lose'; insured: boolean };
 
 export interface UpgradeDef {
@@ -139,11 +143,6 @@ export interface UpgradeDef {
   baseCost: number;
   growth: number;
   maxLevel: number;
-}
-
-export interface TableOption {
-  id: string;
-  name: string;
 }
 
 export interface TableDef {
@@ -162,6 +161,5 @@ export interface TableDef {
   /** Built-in winnings bonus (0.1 = +10%): lets a table grow on its own wallet before any upgrades. */
   baseWinBonus: number;
   upgrades: UpgradeDef[];
-  options?: TableOption[];
-  play(rng: Rng, levels: Record<string, number>, option: string): PlayResult;
+  play(rng: Rng, levels: Record<string, number>): PlayResult;
 }

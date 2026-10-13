@@ -65,7 +65,7 @@ describe('game-specific history stats', () => {
     const h = newHistory();
     recordView(h, { kind: 'slots', reels: [1, 1, 1] });
     recordView(h, { kind: 'slots', reels: [0, 0, 3] });
-    recordView(h, { kind: 'roulette', pocket: 17, option: 'red' });
+    recordView(h, { kind: 'roulette', pocket: 17, bets: ['color'] });
     recordView(h, { kind: 'blackjack', player: [], dealer: [], outcome: 'bust', insured: false });
     expect(h.stats.slots).toMatchObject({ rounds: 2, triples: 1, pairs: 1 });
     expect(h.stats.slots.symbols[1]).toBe(3);
@@ -101,7 +101,7 @@ describe('ascension', () => {
   it('resets tables and money but keeps chips, shop levels and raises the bar', () => {
     const g = newGame();
     g.state.tables.coinflip.prestige = 3;
-    g.state.tables.coinflip.levels.auto = 5;
+    g.state.tables.coinflip.levels.speed = 5;
     g.state.tables.slots.unlocked = true;
     for (let i = 0; i < 5; i++) g.play('coinflip');
     g.table('blackjack').wallet = ascensionThreshold(0) * 10;

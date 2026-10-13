@@ -15,7 +15,9 @@ describe('UI smoke', () => {
     expect(host.querySelectorAll('.tab').length).toBe(5); // 4 tables + casino
     expect(host.querySelector('.money')!.textContent).toBe('100');
 
-    (host.querySelector('.btn.play') as HTMLButtonElement).click();
+    expect(host.querySelector('.btn.play')).toBeNull();
+    expect(host.textContent).not.toContain('Unlock everything');
+    game.tick(1);
     app.update();
     expect(game.table('coinflip').plays).toBe(1);
     expect(host.querySelector('.result')!.textContent).toMatch(/Heads|Tails/);
@@ -31,5 +33,21 @@ describe('UI smoke', () => {
     game.tick(1);
     app.update();
     expect(host.textContent).toContain('Slots');
+  });
+});
+
+describe('dev button', () => {
+  it('only shows with ?cardcounting=1 and unlocks everything', () => {
+    window.history.pushState({}, '', '/?cardcounting=1');
+    const host = document.createElement('div');
+    document.body.append(host);
+    const game = new Game(createInitialState(0), mulberry32(3));
+    const app = new App(host, game, { onImport() {}, onReset() {} });
+    const btn = Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.includes('Unlock everything'))!;
+    expect(btn).toBeDefined();
+    btn.click();
+    app.update();
+    expect(game.table('blackjack').unlocked).toBe(true);
+    window.history.pushState({}, '', '/');
   });
 });

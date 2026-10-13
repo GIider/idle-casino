@@ -148,7 +148,7 @@ function rouletteScene(view: Extract<PlayView, { kind: 'roulette' }>, c: SceneCt
   const duration = 2.6 * c.speed;
   const slice = (Math.PI * 2) / WHEEL.length;
   const target = WHEEL.indexOf(view.pocket);
-  const magnet = view.option === 'number' ? (c.levels.magnet ?? 0) : 0;
+  const magnet = view.bets.includes('number') ? (c.levels.magnet ?? 0) : 0;
   return {
     duration,
     draw(ctx, t, w, h) {

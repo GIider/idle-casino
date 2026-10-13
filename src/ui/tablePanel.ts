@@ -3,6 +3,7 @@ import type { Game } from '../core/game';
 import {
   allUpgrades,
   autoBetFraction,
+  chooseAutoBet,
   autoPlaysPerSecond,
   luckChance,
   maxBet,
@@ -16,7 +17,7 @@ import {
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
 import { TABLE_IDS, previousTable } from '../tables';
-import { starterWallet } from '../core/state';
+import { prestigeWallet, starterWallet } from '../core/state';
 import { Stage } from './stage/stage';
 import { HistoryChart } from './historyChart';
 import { AchievementsCard } from './achievementsPanel';
@@ -42,10 +43,6 @@ export class TablePanel {
   private stage: HTMLElement;
   private resultEl: HTMLElement;
   private netEl: HTMLElement;
-  private betInput: HTMLInputElement;
-  private rangeEl: HTMLElement;
-  private playBtn: HTMLButtonElement;
-  private optionSelect: HTMLSelectElement | null = null;
   private autoInfo: HTMLElement;
   private rows: UpgradeRow[] = [];
   private prestigeText: HTMLElement;
@@ -84,54 +81,8 @@ export class TablePanel {
     this.resultEl.setAttribute('aria-live', 'polite');
     this.stage = h('div', { class: 'stage' }, this.canvasStage.canvas, this.resultEl, this.netEl);
 
-    this.betInput = h('input', {
-      type: 'number',
-      min: '1',
-      step: '1',
-      class: 'bet-input',
-      onchange: () => game.setBet(id, Number(this.betInput.value)),
-    });
-    const betBtn = (label: string, fn: () => void, title?: string) =>
-      h('button', { class: 'btn small', text: label, title, onclick: fn });
-    const ts = () => game.table(id);
-    this.rangeEl = h('div', { class: 'range' });
-    this.playBtn = h('button', {
-      class: 'btn play',
-      text: 'Play',
-      onclick: () => game.play(id),
-    });
-    const betRow = h(
-      'div',
-      { class: 'bet-row' },
-      betBtn('Min', () => game.setBet(id, minBet(def, ts().prestige))),
-      betBtn('½', () => game.setBet(id, ts().bet / 2)),
-      this.betInput,
-      betBtn('2×', () => game.setBet(id, ts().bet * 2)),
-      betBtn('Max', () => game.setBet(id, maxBet(def, ts().prestige))),
-    );
-
-    const controls = h('div', { class: 'controls' }, betRow, this.rangeEl);
-    if (def.options) {
-      this.optionSelect = h(
-        'select',
-        { class: 'select', onchange: () => game.setOption(id, this.optionSelect!.value) },
-        ...def.options.map((o) => {
-          const opt = h('option', { text: o.name });
-          opt.value = o.id;
-          return opt;
-        }),
-      );
-      controls.append(h('label', { class: 'field' }, h('span', { text: 'Bet on' }), this.optionSelect));
-    }
-    controls.append(this.playBtn);
-
     this.autoInfo = h('div', { class: 'auto-info' });
-    const auto = h(
-      'div',
-      { class: 'card' },
-      h('h3', { text: 'Auto-players' }),
-      this.autoInfo,
-    );
+    const auto = h('div', { class: 'card' }, h('h3', { text: 'Auto-play' }), this.autoInfo);
 
     // Upgrades
     const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }));
@@ -159,7 +110,7 @@ export class TablePanel {
         if (
           game.canPrestige(id) &&
           window.confirm(
-            `Prestige ${def.name}? Its upgrades and auto-players reset, but its minimum bet and maximum payout rise (level ${next}).`,
+            `Prestige ${def.name}? Its upgrades and wallet reset, but its minimum bet and maximum payout rise (level ${next}).`,
           )
         ) {
           game.prestige(id);
@@ -182,7 +133,7 @@ export class TablePanel {
         'div',
         { class: 'col main' },
         h('div', { class: 'card header-card' }, h('h2', { text: `${def.icon} ${def.name}` }), h('p', { text: def.blurb }), this.statsEl),
-        h('div', { class: 'card play-card' }, this.stage, controls),
+        h('div', { class: 'card play-card' }, this.stage),
         auto,
       ),
       h('div', { class: 'col side' }, upgrades, prestige, this.achievements.root, this.history.root),
@@ -224,27 +175,15 @@ export class TablePanel {
       `Wallet ${fmt(ts.wallet)} ${cur.icon} ${cur.name} · Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels, game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonusFor(id), def.baseWinBonus).toFixed(2)}`,
     );
 
-    if (document.activeElement !== this.betInput && this.betInput.value !== String(ts.bet)) {
-      this.betInput.value = String(ts.bet);
-    }
-    this.betInput.min = String(lo);
-    this.betInput.max = String(hi);
-    setText(
-      this.rangeEl,
-      `Bet ${fmt(lo)} – ${fmt(hi)} ${cur.name} · max payout per play ${fmt(maxPayout(def, ts.prestige))}`,
-    );
-    setDisabled(this.playBtn, money < ts.bet);
-    if (this.optionSelect && this.optionSelect.value !== ts.option) this.optionSelect.value = ts.option;
-
     const bonus = game.bonus;
     const rate = autoPlaysPerSecond(ts.levels, bonus);
     const frac = autoBetFraction(ts.levels);
-    const betText = frac > 0 ? `${(frac * 100).toFixed(1).replace(/\.0$/, '')}% of bankroll` : 'minimum bet';
+    const bet = chooseAutoBet(def, ts);
+    const betText = frac > 0 ? `${(frac * 100).toFixed(1).replace(/\.0$/, '')}% of wallet` : 'minimum bet';
     setText(
       this.autoInfo,
-      rate > 0
-        ? `${ts.levels.auto ?? 0} players · ${rate.toFixed(1)} plays/sec · bet ${betText} (${fmt(lo)}–${fmt(hi)})`
-        : 'Nobody is playing for you yet. Hire an auto-player.',
+      `${rate.toFixed(1)} plays/sec · bet ${fmt(bet || lo)} ${cur.name} (${betText}, limits ${fmt(lo)}–${fmt(hi)}) · ` +
+        `max payout per play ${fmt(maxPayout(def, ts.prestige))} · ≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}/sec`,
     );
 
     for (const row of this.rows) {
@@ -268,22 +207,22 @@ export class TablePanel {
     setText(
       this.prestigeText,
       `Earn ${fmt(threshold)} ${cur.name} profit at this table to prestige (${fmt(Math.max(0, ts.profit))} so far). ` +
-        `Next level: min bet ${fmt(minBet(def, ts.prestige + 1))}, max payout ${fmt(maxPayout(def, ts.prestige + 1))}, +10% winnings.${feeds}`,
+        `Next level: min bet ${fmt(minBet(def, ts.prestige + 1))}, max payout ${fmt(maxPayout(def, ts.prestige + 1))}, +10% winnings; wallet resets to ${fmt(prestigeWallet(def, ts.prestige + 1))} ${cur.name}.${feeds}`,
     );
     this.prestigeBar.style.width = `${(progress * 100).toFixed(1)}%`;
     setDisabled(this.prestigeBtn, !game.canPrestige(id));
 
-    this.canvasStage.setPlayers(ts.levels.auto ?? 0);
+    this.canvasStage.setPlayers(1 + Math.floor((ts.levels.speed ?? 0) / 4));
     this.canvasStage.resume();
     this.achievements.update();
-    this.history.update(ts.history, ts.plays, ts.lifetimeProfit);
+    this.history.update(ts.history, ts.plays);
 
     const last = game.last[id];
     if (last && last.seq !== this.seenSeq) {
       this.seenSeq = last.seq;
       const o = last.outcome;
       setText(this.resultEl, o.detail);
-      setText(this.netEl, `${fmtSigned(o.net)}${o.capped ? ' (max payout!)' : ''}${last.auto ? ' · auto' : ''}`);
+      setText(this.netEl, `${fmtSigned(o.net)}${o.capped ? ' (max payout!)' : ''}`);
       this.stage.classList.remove('win', 'lose', 'push');
       this.stage.classList.add(o.net > 0 ? 'win' : o.net < 0 ? 'lose' : 'push');
       this.canvasStage.show(last, ts.levels);

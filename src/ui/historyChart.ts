@@ -5,7 +5,7 @@ import { h, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
 import { RANGES, visiblePoints, type Range } from './chartRange';
 
-/** Profit/loss over time for one table, from the sampled `History` series. */
+/** Net income (currency/sec) over a table's plays, from the sampled `History.rate` series. */
 export class HistoryChart {
   readonly root: HTMLElement;
   private canvas: HTMLCanvasElement;
@@ -26,7 +26,7 @@ export class HistoryChart {
   constructor(id: TableId) {
     this.gameView = new GameHistoryView(id);
     this.tabs = {
-      profit: h('button', { class: 'btn small', text: 'Profit', onclick: () => this.setMode('profit') }),
+      profit: h('button', { class: 'btn small', text: 'Income', onclick: () => this.setMode('profit') }),
       game: h('button', { class: 'btn small', text: VIEW_LABELS[id], onclick: () => this.setMode('game') }),
     };
     this.canvas = h('canvas', { class: 'history-canvas' });
@@ -36,7 +36,7 @@ export class HistoryChart {
       this.btns[r.id] = h('button', { class: 'btn small', text: r.label, onclick: () => this.setRange(r.id) });
     }
     this.canvas.setAttribute('role', 'img');
-    this.canvas.setAttribute('aria-label', 'Profit and loss history');
+    this.canvas.setAttribute('aria-label', 'Income per second history');
     const move = (e: PointerEvent) => {
       const rect = this.canvas.getBoundingClientRect();
       this.hover = rect.width > 0 ? (e.clientX - rect.left) / rect.width : null;
@@ -88,22 +88,20 @@ export class HistoryChart {
     for (const m of ['profit', 'game'] as const) toggleClass(this.tabs[m], 'active', this.mode === m);
   }
 
-  update(history: History, plays: number, lifetimeProfit: number): void {
+  update(history: History, plays: number): void {
     this.history = history;
     if (this.mode === 'game') {
       this.gameView.update(history.stats);
       return;
     }
-    const key = `${plays}|${lifetimeProfit}|${history.points.length}|${this.range}|${this.canvas.clientWidth}`;
+    const series = history.rate.points;
+    const last = series[series.length - 1];
+    const key = `${last?.[0]}|${last?.[1]}|${series.length}|${plays}|${this.range}|${this.canvas.clientWidth}`;
     if (key === this.key) return;
     this.key = key;
-    const pts = history.points.slice();
-    const last = pts[pts.length - 1];
-    if (!last || last[0] < plays) pts.push([plays, lifetimeProfit]);
-    else if (last[0] === plays) pts[pts.length - 1] = [plays, lifetimeProfit];
-    this.data = pts;
+    this.data = series.slice();
     this.marks = history.marks;
-    this.step = history.step;
+    this.step = history.rate.step;
     this.draw();
   }
 
@@ -118,7 +116,7 @@ export class HistoryChart {
     const first = pts[0];
     const end = pts[pts.length - 1];
     const net = end[1];
-    setText(this.info, this.hoverText(pts) ?? `${fmt(end[0])} plays · lifetime ${fmtSigned(net)}`);
+    setText(this.info, this.hoverText(pts) ?? `${fmt(end[0])} plays · ${fmtSigned(net)}/sec`);
     if (!s) return;
     const { ctx, w, h: ht } = s;
     ctx.clearRect(0, 0, w, ht);
@@ -201,6 +199,6 @@ export class HistoryChart {
     const target = x0 + Math.max(0, Math.min(1, this.hover)) * xs;
     let best = pts[0];
     for (const p of pts) if (Math.abs(p[0] - target) < Math.abs(best[0] - target)) best = p;
-    return `play ${fmt(best[0])} · ${fmtSigned(best[1])}`;
+    return `play ${fmt(best[0])} · ${fmtSigned(best[1])}/sec`;
   }
 }

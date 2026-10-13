@@ -1,6 +1,8 @@
 import type { BankrollHistory, History, PlayStats, PlayView, Series, TableId } from './types';
 
 export const MAX_HISTORY_POINTS = 400;
+/** Income is averaged over at least this many seconds of play per chart sample. */
+export const RATE_WINDOW_SECONDS = 5;
 
 export const SLOT_SYMBOLS = 6;
 export const POCKETS = 37;
@@ -17,7 +19,15 @@ export function newStats(): PlayStats {
 }
 
 export function newHistory(): History {
-  return { step: 1, points: [[0, 0]], marks: [], stats: newStats() };
+  return {
+    step: 1,
+    points: [[0, 0]],
+    marks: [],
+    rate: { step: 1, points: [[0, 0]], marks: [] },
+    clock: 0,
+    rateFrom: [0, 0],
+    stats: newStats(),
+  };
 }
 
 /** Tallies one round's structured view into the per-game stats. */
@@ -77,6 +87,15 @@ export function recordSample(h: Series, plays: number, value: number, force = fa
   if (!force && last && plays - last[0] < h.step) return;
   h.points.push([plays, value]);
   if (h.points.length > MAX_HISTORY_POINTS) compact(h);
+}
+
+/** Adds `seconds` of play time and, once a window has elapsed, samples net currency/sec at x = `plays`. */
+export function recordRate(h: History, seconds: number, plays: number, lifetimeProfit: number, force = false): void {
+  h.clock += seconds;
+  const elapsed = h.clock - h.rateFrom[0];
+  if (elapsed <= 0 || (!force && elapsed < RATE_WINDOW_SECONDS)) return;
+  recordSample(h.rate, plays, (lifetimeProfit - h.rateFrom[1]) / elapsed, true);
+  h.rateFrom = [h.clock, lifetimeProfit];
 }
 
 export function markPrestige(h: Series, plays: number): void {
@@ -236,6 +255,23 @@ export function normalizeHistory(raw: unknown, plays: number, lifetimeProfit: nu
   const h = newHistory();
   const r = raw as Partial<History> | null;
   h.stats = normalizeStats(r && typeof r === 'object' ? r.stats : null);
+  let hasRate = false;
+  if (r && typeof r === 'object') {
+    h.clock = typeof r.clock === 'number' && Number.isFinite(r.clock) ? Math.max(0, r.clock) : 0;
+    const rate = (r as Partial<History>).rate;
+    const pts = cleanPoints(rate?.points);
+    if (rate && pts.length > 0) {
+      hasRate = true;
+      h.rate.points = pts;
+      if (typeof rate.step === 'number' && Number.isFinite(rate.step) && rate.step >= 1) h.rate.step = Math.floor(rate.step);
+      while (h.rate.points.length > MAX_HISTORY_POINTS) compact(h.rate);
+    }
+  }
+  if (!hasRate && plays > 0) h.rate.points = [[plays, 0]];
+  const from = r?.rateFrom;
+  const fromOk =
+    Array.isArray(from) && from.every((v) => typeof v === 'number' && Number.isFinite(v)) && from[0] >= 0 && from[0] <= h.clock;
+  h.rateFrom = fromOk ? [from![0], from![1]] : [h.clock, lifetimeProfit];
   if (r && typeof r === 'object' && Array.isArray(r.points)) {
     const pts: [number, number][] = [];
     let prev = -1;

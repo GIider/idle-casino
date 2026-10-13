@@ -19,32 +19,24 @@ export const COMMON_UPGRADES: UpgradeDef[] = [
     maxLevel: 20,
   },
   {
-    id: 'auto',
-    name: 'Hire Auto-Player',
-    description: 'Another player sits down and plays on their own',
-    baseCost: 20,
-    growth: 1.45,
-    maxLevel: 25,
-  },
-  {
     id: 'speed',
-    name: 'Caffeine Drip',
-    description: 'Auto-players act 25% faster',
-    baseCost: 40,
-    growth: 1.9,
-    maxLevel: 12,
+    name: 'Faster Dealer',
+    description: '+0.5 plays per second per level',
+    baseCost: 20,
+    growth: 1.4,
+    maxLevel: 20,
   },
   {
     id: 'autobet',
-    name: 'Bigger Stakes',
-    description: 'Auto-players wager a larger share of the table wallet',
+    name: 'Bigger Bets',
+    description: 'Wager a larger share of the table wallet on every play',
     baseCost: 4,
     growth: 1.7,
     maxLevel: 7,
   },
 ];
 
-/** Share of the table's wallet an auto-player bets, by `autobet` level (clamped to the table's min/max bet). */
+/** Share of the table's wallet the table bets, by `autobet` level (clamped to the table's min/max bet). */
 export const AUTO_BET_FRACTIONS = [0, 0.02, 0.05, 0.1, 0.15, 0.25, 0.35, 0.5];
 
 /** Winnings bonus a table gets per prestige level of the table before it in the chain. */
@@ -61,6 +53,8 @@ export const COLLECTION_PERK_KEY = 'perk_collection';
 /** Winnings bonus per tier of the "every upgrade" achievement. */
 export const COLLECTION_BONUS_PER_TIER = 0.05;
 export const AUTO_BASE_RATE = 1;
+/** Extra plays/sec (as a multiple of the base rate) per `speed` level. */
+export const SPEED_PER_LEVEL = 0.5;
 export const MAX_AUTO_PLAYS_PER_TICK = 300;
 export const OFFLINE_CAP_SECONDS = 8 * 3600;
 export const OFFLINE_EFFICIENCY = 0.5;
@@ -113,8 +107,9 @@ export function payoutMultiplier(
   );
 }
 
+/** Plays per second a table runs on its own; every unlocked table plays from the start. */
 export function autoPlaysPerSecond(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {
-  return (levels.auto ?? 0) * AUTO_BASE_RATE * 1.25 ** (levels.speed ?? 0) * bonus.speed;
+  return AUTO_BASE_RATE * (1 + SPEED_PER_LEVEL * (levels.speed ?? 0)) * bonus.speed;
 }
 
 export function autoBetFraction(levels: Record<string, number>): number {
@@ -129,7 +124,7 @@ export function clampBet(def: TableDef, prestige: number, bet: number): number {
   return Math.min(hi, Math.max(lo, Math.floor(bet)));
 }
 
-/** The bet an auto-player places from the table's own wallet, or 0 if the wallet can't cover the minimum. */
+/** The bet a table places from the table's own wallet, or 0 if the wallet can't cover the minimum. */
 export function chooseAutoBet(def: TableDef, ts: TableState): number {
   const lo = minBet(def, ts.prestige);
   const hi = maxBet(def, ts.prestige);
@@ -154,15 +149,14 @@ export function resolvePlay(
   def: TableDef,
   levels: Record<string, number>,
   prestige: number,
-  option: string,
   bet: number,
   rng: Rng,
   bonus: CasinoBonus = NO_BONUS,
 ): Outcome {
-  let result = def.play(rng, levels, option);
+  let result = def.play(rng, levels);
   let rerolled = false;
   if (result.mult < 1 && rng() < luckChance(levels, bonus)) {
-    result = def.play(rng, levels, option);
+    result = def.play(rng, levels);
     rerolled = true;
   }
 
@@ -196,7 +190,6 @@ export function estimateNetPerPlay(
   def: TableDef,
   levels: Record<string, number>,
   prestige: number,
-  option: string,
   bet: number,
   rng: Rng,
   samples = 2000,
@@ -204,7 +197,7 @@ export function estimateNetPerPlay(
 ): number {
   let sum = 0;
   for (let i = 0; i < samples; i++) {
-    sum += resolvePlay(def, levels, prestige, option, bet, rng, bonus).net;
+    sum += resolvePlay(def, levels, prestige, bet, rng, bonus).net;
   }
   return sum / samples;
 }

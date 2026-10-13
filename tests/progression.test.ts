@@ -24,10 +24,6 @@ function runBot(minutes: number, opts: BotOptions = {}, log?: (s: string) => voi
     g.tick(dt);
     if (step % 10 !== 0) continue;
     const t = step / 600;
-    // Like a human would: click by hand at tables nobody is playing for yet.
-    for (const id of TABLE_IDS) {
-      if (g.table(id).unlocked && (g.table(id).levels.auto ?? 0) === 0) for (let i = 0; i < 6; i++) g.play(id);
-    }
     for (const id of TABLE_IDS) {
       if (unlock && !g.table(id).unlocked && g.unlock(id)) unlockedAt[id] = t;
       if (g.canPrestige(id) && g.prestige(id)) prestigeAt.push(`${id}@${t.toFixed(1)}m`);
