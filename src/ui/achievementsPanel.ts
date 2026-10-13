@@ -1,4 +1,4 @@
-import type { TableId } from '../core/types';
+import type { AchievementProgress, TableId } from '../core/types';
 import type { Game } from '../core/game';
 import { RARITIES, achievementsFor, maxTier, type AchievementDef } from '../core/achievements';
 import { h, setText, toggleClass } from './dom';
@@ -62,6 +62,28 @@ export class AchievementsCard {
       const goal = def.kind === 'grind' ? `${def.goal} ${fmt(next)} times` : `${def.goal}: ${next}`;
       setText(row.perk, p.tier > 0 ? `${def.perk.name}: ${effect}` : `${goal} → ${def.perk.name}: ${effect}`);
       toggleClass(row.root, 'earned', p.tier > 0);
+      row.root.title = this.tooltip(def, p);
     }
+  }
+
+  /** Full explanation shown on hover: the goal, every tier's reward, and how progress is counted. */
+  private tooltip(def: AchievementDef, p: AchievementProgress): string {
+    const lines: string[] = [];
+    if (def.kind === 'grind') {
+      lines.push(`${def.goal} ${fmt(def.targets[0])} times in total.`);
+      lines.push(`Progress: ${fmt(p.count)} so far.`);
+      lines.push(`Reward — ${def.perk.name}: ${def.perk.describe(1)}.`);
+    } else {
+      lines.push(`${def.goal}. Only your longest run counts, and a miss resets the current run.`);
+      lines.push(`Longest run: ${p.best} · current run: ${p.run}.`);
+      def.targets.forEach((target, i) => {
+        const mark = p.tier > i ? '✓' : '•';
+        lines.push(`${mark} ${RARITIES[i]} (${target}): ${def.perk.name} — ${def.perk.describe(i + 1)}`);
+      });
+      lines.push('Each tier upgrades the same perk.');
+    }
+    lines.push('Auto-players count; offline progress does not.');
+    lines.push('The perk is permanent and survives prestige and ascension.');
+    return lines.join('\n');
   }
 }
