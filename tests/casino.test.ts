@@ -127,7 +127,7 @@ describe('ascension', () => {
     expect(g.state.casino.chips).toBeLessThan(100);
     expect(g.casinoLevel('payout')).toBe(1);
     expect(payoutMultiplier({}, 0, g.bonus)).toBeCloseTo(1.1);
-    g.state.casino.levels.startCash = 2;
+    g.state.casino.levels.seed = 2;
     g.table('blackjack').wallet = ascensionThreshold(g.state.casino.ascensions);
     g.ascend();
     expect(g.table('coinflip').wallet).toBe(START_MONEY + 500);
@@ -138,18 +138,37 @@ describe('ascension', () => {
     const g = newGame();
     const upg = allUpgrades(TABLES.coinflip)[0];
     const base = upgradeCost(TABLES.coinflip, upg, 0, 0);
-    g.state.casino.levels.upgradeDiscount = 5;
+    g.state.casino.levels.seed = 5;
     expect(upgradeCost(TABLES.coinflip, upg, 0, 0, g.bonus)).toBeLessThan(base);
+  });
+
+  it('gated upgrades need their prerequisite', () => {
+    const g = newGame();
+    g.state.casino.chips = 100;
+    expect(g.buyCasinoUpgrade('overtime')).toBe(false);
+    expect(g.buyCasinoUpgrade('manager')).toBe(true);
+    expect(g.buyCasinoUpgrade('overtime')).toBe(true);
+  });
+
+  it('migrates pre-rebalance shop levels and refunds removed items', () => {
+    const raw = JSON.parse(JSON.stringify(newGame().state));
+    raw.casino = { chips: 2, totalChips: 50, ascensions: 1, levels: { manager: 4, luck: 2, payout: 3, startCash: 1 }, autoPrestige: true, autoOff: [] };
+    const s = normalizeState(raw);
+    const lv = s.casino.levels;
+    expect([lv.manager, lv.overtime, lv.policy, lv.concierge, lv.payout]).toEqual([1, 2, 1, 1, 3]);
+    // luck 2 = 3 + 6 chips, startCash 1 = 1 chip, plus the 2 on hand
+    expect(s.casino.chips).toBe(2 + 9 + 1);
+    expect(normalizeState(JSON.parse(JSON.stringify(s))).casino.chips).toBe(s.casino.chips);
   });
 
   it('round-trips and sanitizes casino state in saves', () => {
     const g = newGame();
-    g.state.casino = { chips: 7, totalChips: 12, ascensions: 2, levels: { payout: 3, luck: 9999 }, autoPrestige: false, autoOff: [] };
+    g.state.casino = { chips: 7, totalChips: 12, ascensions: 2, levels: { payout: 3, offline: 9999 }, autoPrestige: false, autoOff: [] };
     const loaded = importSave(exportSave(g.state));
-    expect(loaded.casino.chips).toBe(7);
+    expect(loaded.casino.chips).toBeGreaterThan(7); // levels past the new cap are refunded
     expect(loaded.casino.ascensions).toBe(2);
     expect(loaded.casino.levels.payout).toBe(3);
-    expect(loaded.casino.levels.luck).toBe(15);
+    expect(loaded.casino.levels.offline).toBe(10);
     const junk = normalizeState({ version: SAVE_VERSION, tables: {}, casino: { chips: 'x', levels: 3 } });
     expect(junk.casino).toEqual({ chips: 0, totalChips: 0, ascensions: 0, levels: {}, autoPrestige: false, autoOff: [] });
     expect(normalizeState({ version: SAVE_VERSION, tables: {} }).casino.ascensions).toBe(0);

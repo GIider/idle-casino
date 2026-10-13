@@ -26,9 +26,7 @@ import { observeRound, observeUpgrades, perkLevels, RARITIES, type AchievementDe
 import { addContribution, markPrestige, recordRate, recordSample, recordView, sampleContribution } from './history';
 import {
   CASINO_UPGRADES,
-  MANAGER_PRESTIGE_LEVEL,
   MANAGER_RESERVE_BETS,
-  MANAGER_TOGGLE_LEVEL,
   ascensionReward,
   canAscendWith,
   casinoBonus,
@@ -159,6 +157,10 @@ export class Game {
     this.bailout();
   }
 
+  private managerInterval(): number {
+    return managerInterval(this.casinoLevel('manager'), this.casinoLevel('overtime'));
+  }
+
   /** Whether the Floor Manager may buy this upgrade (it is on unless switched off at manager level 3+). */
   autoBuyEnabled(id: TableId, upgradeId: string): boolean {
     return !this.state.casino.autoOff.includes(`${id}:${upgradeId}`);
@@ -166,7 +168,7 @@ export class Game {
 
   /** Switches the Floor Manager's buying of one upgrade on or off. */
   setAutoBuy(id: TableId, upgradeId: string, on: boolean): void {
-    if (this.casinoLevel('manager') < MANAGER_TOGGLE_LEVEL) return;
+    if (this.casinoLevel('policy') < 1) return;
     const off = this.state.casino.autoOff;
     const key = `${id}:${upgradeId}`;
     const at = off.indexOf(key);
@@ -175,7 +177,7 @@ export class Game {
   }
 
   setAutoPrestige(on: boolean): void {
-    if (this.casinoLevel('manager') < MANAGER_PRESTIGE_LEVEL) return;
+    if (this.casinoLevel('concierge') < 1) return;
     this.state.casino.autoPrestige = on;
   }
 
@@ -196,14 +198,14 @@ export class Game {
     return best !== null && this.buyUpgrade(id, best.id);
   }
 
-  /** One manager pass at a table: buy an upgrade, otherwise (level 4, if enabled) prestige. */
+  /** One manager pass at a table: buy an upgrade, otherwise (Concierge, if enabled) prestige. */
   private managerStep(id: TableId): boolean {
     if (this.autoBuy(id)) return true;
-    return this.casinoLevel('manager') >= MANAGER_PRESTIGE_LEVEL && this.state.casino.autoPrestige && this.prestige(id);
+    return this.casinoLevel('concierge') >= 1 && this.state.casino.autoPrestige && this.prestige(id);
   }
 
   private runManager(dt: number): void {
-    const interval = managerInterval(this.casinoLevel('manager'));
+    const interval = this.managerInterval();
     if (interval <= 0) return;
     for (const id of TABLE_IDS) {
       if (!this.state.tables[id].unlocked) continue;
@@ -338,6 +340,7 @@ export class Game {
     const casino = this.state.casino;
     const level = casino.levels[upgradeId] ?? 0;
     if (level >= upg.maxLevel) return false;
+    if (upg.requires && (casino.levels[upg.requires.id] ?? 0) < upg.requires.level) return false;
     const cost = casinoUpgradeCost(upg, level);
     if (casino.chips < cost) return false;
     casino.chips -= cost;
@@ -347,7 +350,7 @@ export class Game {
 
   /** Offline, the manager gets the purchases it would have made (bounded, at the table's current wallet). */
   private offlineManager(id: TableId, seconds: number): void {
-    const interval = managerInterval(this.casinoLevel('manager'));
+    const interval = this.managerInterval();
     if (interval <= 0) return;
     const steps = Math.min(100, Math.floor(seconds / interval));
     for (let i = 0; i < steps; i++) {

@@ -8,25 +8,45 @@ export interface CasinoUpgradeDef {
   baseCost: number;
   growth: number;
   maxLevel: number;
+  /** Another shop upgrade that must be owned (at this level) before this one can be bought. */
+  requires?: { id: string; level: number };
 }
 
 export const CASINO_UPGRADES: CasinoUpgradeDef[] = [
   {
     id: 'manager',
     name: 'Floor Manager',
-    description:
-      'Buys table upgrades for you: every 10s (Lv1), 5s (Lv2), 2s with per-upgrade switches (Lv3), plus auto-prestige (Lv4)',
+    description: 'Buys the cheapest affordable table upgrade for you every 10s',
     baseCost: 1,
-    growth: 2.5,
-    maxLevel: 4,
+    growth: 1,
+    maxLevel: 1,
   },
   {
-    id: 'startCash',
-    name: 'Trust Fund',
-    description: 'Start every ascension with +250 Pennies per level',
-    baseCost: 1,
-    growth: 1.5,
-    maxLevel: 20,
+    id: 'overtime',
+    name: 'Overtime Shifts',
+    description: 'The Floor Manager buys every 5s (Lv1), then every 2s (Lv2)',
+    baseCost: 3,
+    growth: 2.3,
+    maxLevel: 2,
+    requires: { id: 'manager', level: 1 },
+  },
+  {
+    id: 'policy',
+    name: 'Purchasing Policy',
+    description: 'Per-upgrade switches on every table: choose what the Floor Manager may buy',
+    baseCost: 5,
+    growth: 1,
+    maxLevel: 1,
+    requires: { id: 'manager', level: 1 },
+  },
+  {
+    id: 'concierge',
+    name: 'Concierge',
+    description: 'The Floor Manager prestiges a table as soon as it can (switchable)',
+    baseCost: 12,
+    growth: 1,
+    maxLevel: 1,
+    requires: { id: 'manager', level: 1 },
   },
   {
     id: 'payout',
@@ -34,38 +54,14 @@ export const CASINO_UPGRADES: CasinoUpgradeDef[] = [
     description: '+10% winnings on every table, per level',
     baseCost: 2,
     growth: 1.7,
-    maxLevel: 20,
-  },
-  {
-    id: 'luck',
-    name: 'Rabbit\'s Foot',
-    description: '+1% chance per level to re-roll a losing round on every table',
-    baseCost: 3,
-    growth: 1.7,
-    maxLevel: 15,
-  },
-  {
-    id: 'speed',
-    name: 'Espresso Machine',
-    description: 'Auto-players everywhere act 10% faster, per level',
-    baseCost: 2,
-    growth: 1.6,
-    maxLevel: 15,
-  },
-  {
-    id: 'upgradeDiscount',
-    name: 'Contractor Discount',
-    description: 'Table upgrades are 4% cheaper, per level',
-    baseCost: 4,
-    growth: 1.8,
     maxLevel: 10,
   },
   {
-    id: 'prestigeDiscount',
-    name: 'VIP Fast Track',
-    description: 'Table prestige needs 5% less profit, per level',
-    baseCost: 5,
-    growth: 1.9,
+    id: 'seed',
+    name: 'Seed Capital',
+    description: 'Start every ascension with +250 Pennies, and table upgrades are 3% cheaper, per level',
+    baseCost: 2,
+    growth: 1.6,
     maxLevel: 10,
   },
   {
@@ -93,21 +89,19 @@ export interface CasinoBonus {
 /** Winnings multiplier every ascension adds permanently (compounding), on top of any shop purchases. */
 export const ASCENSION_WINNINGS_BONUS = 1.5;
 
-/** Seconds between Floor Manager purchases by shop level (index 0 = level 1). */
-export const MANAGER_INTERVALS = [10, 5, 2, 2];
+/** Seconds between Floor Manager purchases by Overtime Shifts level (index 0 = no overtime). */
+export const MANAGER_INTERVALS = [10, 5, 2];
 /** The manager only buys if the wallet still covers this many minimum bets afterwards. */
 export const MANAGER_RESERVE_BETS = 20;
-export const MANAGER_TOGGLE_LEVEL = 3;
-export const MANAGER_PRESTIGE_LEVEL = 4;
 
 export function ascensionMultiplier(ascensions: number): number {
   return ASCENSION_WINNINGS_BONUS ** Math.max(0, ascensions);
 }
 
-/** Seconds between auto-purchases at this manager level, or 0 if there is no manager. */
-export function managerInterval(level: number): number {
-  if (level <= 0) return 0;
-  return MANAGER_INTERVALS[Math.min(level, MANAGER_INTERVALS.length) - 1];
+/** Seconds between auto-purchases, or 0 if there is no manager. */
+export function managerInterval(managerLevel: number, overtimeLevel = 0): number {
+  if (managerLevel <= 0) return 0;
+  return MANAGER_INTERVALS[Math.min(Math.max(0, overtimeLevel), MANAGER_INTERVALS.length - 1)];
 }
 
 export const NO_BONUS: CasinoBonus = {
@@ -129,13 +123,13 @@ export function casinoBonus(casino: CasinoState): CasinoBonus {
   const lv = (id: string) => casino.levels[id] ?? 0;
   return {
     payout: (1 + 0.1 * lv('payout')) * ascensionMultiplier(casino.ascensions),
-    luck: 0.01 * lv('luck'),
-    speed: 1 + 0.1 * lv('speed'),
-    upgradeCost: 1 - 0.04 * lv('upgradeDiscount'),
-    prestigeCost: 1 - 0.05 * lv('prestigeDiscount'),
+    luck: 0,
+    speed: 1,
+    upgradeCost: 1 - 0.03 * lv('seed'),
+    prestigeCost: 1,
     offlineEfficiency: 0.05 * lv('offline'),
     offlineHours: lv('offline'),
-    startCash: 250 * lv('startCash'),
+    startCash: 250 * lv('seed'),
   };
 }
 
@@ -157,4 +151,20 @@ export function ascensionReward(money: number, ascensions: number): number {
   const threshold = ascensionThreshold(ascensions);
   if (money < threshold) return 0;
   return 1 + Math.floor(3 * Math.log10(money / threshold));
+}
+
+/** Shop items removed in the rebalance, with their old cost curves, so old saves can be refunded. */
+export const LEGACY_UPGRADES: Record<string, { baseCost: number; growth: number }> = {
+  luck: { baseCost: 3, growth: 1.7 },
+  speed: { baseCost: 2, growth: 1.6 },
+  upgradeDiscount: { baseCost: 4, growth: 1.8 },
+  prestigeDiscount: { baseCost: 5, growth: 1.9 },
+  startCash: { baseCost: 1, growth: 1.5 },
+};
+
+/** Chips spent on levels `from` (inclusive) up to `to` (exclusive) of a cost curve. */
+export function curveCost(curve: { baseCost: number; growth: number }, from: number, to: number): number {
+  let total = 0;
+  for (let l = from; l < to; l++) total += Math.ceil(curve.baseCost * curve.growth ** l);
+  return total;
 }

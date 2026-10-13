@@ -25,6 +25,8 @@ describe('Floor Manager', () => {
     const ts = g.table('coinflip');
     ts.wallet = 1e6;
     expect(managerInterval(1)).toBe(10);
+    expect(managerInterval(1, 1)).toBe(5);
+    expect(managerInterval(1, 2)).toBe(2);
     g.tick(9);
     expect(Object.keys(ts.levels)).toHaveLength(0);
     g.tick(1.5);
@@ -41,30 +43,31 @@ describe('Floor Manager', () => {
     expect(poor.autoBuy('coinflip')).toBe(false);
   });
 
-  it('honors per-upgrade switches only from level 3', () => {
+  it('honors per-upgrade switches only with Purchasing Policy', () => {
     const g = newGame();
     g.table('coinflip').wallet = 1e6;
-    g.state.casino.levels.manager = 2;
+    g.state.casino.levels.manager = 1;
     g.setAutoBuy('coinflip', 'luck', false);
     expect(g.autoBuyEnabled('coinflip', 'luck')).toBe(true);
-    g.state.casino.levels.manager = 3;
+    g.state.casino.levels.policy = 1;
     for (const u of allUpgrades(TABLES.coinflip)) g.setAutoBuy('coinflip', u.id, u.id === 'speed');
     g.autoBuy('coinflip');
     expect(g.table('coinflip').levels).toEqual({ speed: 1 });
   });
 
-  it('auto-prestiges only at level 4 when enabled', () => {
+  it('auto-prestiges only with Concierge when enabled', () => {
     const g = newGame();
     const ts = g.table('coinflip');
     for (const u of allUpgrades(TABLES.coinflip)) ts.levels[u.id] = u.maxLevel;
     ts.wallet = 1e9;
     ts.profit = 1e12;
-    g.state.casino.levels.manager = 3;
+    g.state.casino.levels.manager = 1;
     g.setAutoPrestige(true);
     expect(g.state.casino.autoPrestige).toBe(false);
     g.tick(5);
     expect(ts.prestige).toBe(0);
-    g.state.casino.levels.manager = 4;
+    g.state.casino.levels.concierge = 1;
+    g.state.casino.levels.overtime = 2;
     g.setAutoPrestige(true);
     g.tick(3);
     expect(ts.prestige).toBe(1);

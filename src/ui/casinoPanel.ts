@@ -4,7 +4,6 @@ import { casinoValue } from '../core/state';
 import {
   ASCENSION_WINNINGS_BONUS,
   CASINO_UPGRADES,
-  MANAGER_PRESTIGE_LEVEL,
   MANAGER_RESERVE_BETS,
   ascensionMultiplier,
   ascensionThreshold,
@@ -127,14 +126,14 @@ export class CasinoPanel {
       `Ascension bonus: winnings ×${fmt(ascensionMultiplier(casino.ascensions), 2)} on every table (×${fmt(ascensionMultiplier(casino.ascensions + 1), 2)} after the next ascension).`,
     );
     const manager = game.casinoLevel('manager');
-    const interval = managerInterval(manager);
+    const interval = managerInterval(manager, game.casinoLevel('overtime'));
     setText(
       this.managerEl,
       interval > 0
         ? `Buys the cheapest affordable upgrade at every table every ${interval}s, keeping ${MANAGER_RESERVE_BETS} minimum bets in reserve.`
         : 'Buy the Floor Manager in the shop below to have upgrades purchased for you.',
     );
-    toggleClass(this.autoPrestige, 'hidden', manager < MANAGER_PRESTIGE_LEVEL);
+    toggleClass(this.autoPrestige, 'hidden', game.casinoLevel('concierge') < 1);
     if (this.autoPrestigeBox.checked !== casino.autoPrestige) this.autoPrestigeBox.checked = casino.autoPrestige;
 
     const threshold = ascensionThreshold(casino.ascensions);
@@ -158,8 +157,11 @@ export class CasinoPanel {
         setDisabled(row.button, true);
       } else {
         const cost = casinoUpgradeCost(row.def, level);
-        setText(row.button, `${fmt(cost)} chips`);
-        setDisabled(row.button, casino.chips < cost);
+        const req = row.def.requires;
+        const locked = req !== undefined && game.casinoLevel(req.id) < req.level;
+        const reqName = req ? CASINO_UPGRADES.find((u) => u.id === req.id)?.name : '';
+        setText(row.button, locked ? `Needs ${reqName}` : `${fmt(cost)} chips`);
+        setDisabled(row.button, locked || casino.chips < cost);
       }
     }
   }

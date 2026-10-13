@@ -1,5 +1,5 @@
 import type { CasinoState, GameState, TableDef, TableId, TableState } from './types';
-import { CASINO_UPGRADES } from './casino';
+import { CASINO_UPGRADES, LEGACY_UPGRADES, casinoUpgradeCost, curveCost } from './casino';
 import { TABLES, TABLE_IDS } from '../tables';
 import { newBankroll, newHistory, normalizeBankroll, normalizeHistory } from './history';
 import { backfillAchievements, newAchievements, normalizeAchievements, observeUpgrades } from './achievements';
@@ -58,6 +58,32 @@ function num(value: unknown, fallback: number, min = 0): number {
 }
 
 /** Validates untrusted save data and fills in anything missing. Throws on garbage. */
+/**
+ * Maps shop levels from before the shop rebalance onto the current items and returns the chips refunded
+ * for removed items or levels beyond a new cap. `levels` holds the already-clamped current levels.
+ */
+function migrateShop(raw: Record<string, unknown>, levels: Record<string, number>): number {
+  // Old caps were at most 20 levels; clamping keeps corrupt saves from overflowing the refund.
+  const old = (id: string) => Math.min(20, Math.max(0, Math.floor(num(raw[id], 0))));
+  let refund = 0;
+  // The old Floor Manager track (Lv1..4) became separate upgrades.
+  const manager = old('manager');
+  if (manager > 1) {
+    levels.manager = 1;
+    levels.overtime = Math.max(levels.overtime ?? 0, Math.min(manager - 1, 2));
+    if (manager >= 3) levels.policy = 1;
+    if (manager >= 4) levels.concierge = 1;
+  }
+  for (const [id, curve] of Object.entries(LEGACY_UPGRADES)) refund += curveCost(curve, 0, old(id));
+  // Levels beyond the new caps are refunded at the (unchanged) cost curve.
+  for (const id of ['payout', 'offline']) {
+    const upg = CASINO_UPGRADES.find((u) => u.id === id)!;
+    const extra = old(id);
+    for (let l = upg.maxLevel; l < extra; l++) refund += casinoUpgradeCost(upg, l);
+  }
+  return refund;
+}
+
 export function normalizeState(raw: unknown, now = Date.now()): GameState {
   if (!raw || typeof raw !== 'object') throw new Error('Not a save file');
   const r = raw as Record<string, any>;
@@ -103,6 +129,7 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
       for (const upg of CASINO_UPGRADES) {
         state.casino.levels[upg.id] = Math.min(upg.maxLevel, Math.floor(num(c.levels[upg.id], 0)));
       }
+      state.casino.chips += migrateShop(c.levels, state.casino.levels);
     }
     state.casino.autoPrestige = c.autoPrestige === true;
     if (Array.isArray(c.autoOff)) {

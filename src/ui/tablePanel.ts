@@ -14,7 +14,6 @@ import {
   CROSS_PRESTIGE_BONUS,
   upgradeCost,
 } from '../core/economy';
-import { MANAGER_TOGGLE_LEVEL } from '../core/casino';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
 import { TABLE_IDS, previousTable } from '../tables';
@@ -28,7 +27,7 @@ interface UpgradeRow {
   root: HTMLElement;
   level: HTMLElement;
   button: HTMLButtonElement;
-  /** Floor Manager switch (manager level 3+): whether the manager may buy this upgrade. */
+  /** Floor Manager switch (Purchasing Policy): whether the manager may buy this upgrade. */
   auto: HTMLLabelElement;
   autoBox: HTMLInputElement;
 }
@@ -196,7 +195,7 @@ export class TablePanel {
         `max payout per play ${fmt(maxPayout(def, ts.prestige))} · ≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}/sec`,
     );
 
-    const toggles = game.casinoLevel('manager') >= MANAGER_TOGGLE_LEVEL;
+    const toggles = game.casinoLevel('policy') >= 1;
     for (const row of this.rows) {
       toggleClass(row.auto, 'hidden', !toggles);
       const enabled = game.autoBuyEnabled(id, row.def.id);
