@@ -11,6 +11,18 @@ import type { Outcome } from '../src/core/economy';
 
 const newGame = () => new Game(createInitialState(0), mulberry32(3));
 
+describe('Bulk Orders', () => {
+  it('gates Buy cheapest behind the shop upgrade', () => {
+    const g = newGame();
+    g.table('coinflip').wallet = 1e6;
+    expect(g.canBuyCheapest('coinflip')).toBe(false);
+    expect(g.buyCheapest('coinflip')).toBe(0);
+    g.state.casino.levels.bulkbuy = 1;
+    expect(g.canBuyCheapest('coinflip')).toBe(true);
+    expect(g.buyCheapest('coinflip')).toBeGreaterThan(0);
+  });
+});
+
 describe('Floor Manager', () => {
   it('does nothing without the shop upgrade', () => {
     const g = newGame();

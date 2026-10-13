@@ -345,11 +345,12 @@ export class Game {
 
   /** Whether any upgrade at the table is currently affordable. */
   canBuyCheapest(id: TableId): boolean {
-    return this.state.tables[id].unlocked && this.cheapestUpgrade(id) !== null;
+    return this.casinoLevel('bulkbuy') >= 1 && this.state.tables[id].unlocked && this.cheapestUpgrade(id) !== null;
   }
 
   /** Repeatedly buys the cheapest affordable upgrade level until the wallet can't cover another. */
   buyCheapest(id: TableId): number {
+    if (this.casinoLevel('bulkbuy') < 1) return 0;
     let bought = 0;
     for (let next = this.cheapestUpgrade(id); next && bought < 10000; next = this.cheapestUpgrade(id)) {
       if (!this.buyUpgrade(id, next)) break;

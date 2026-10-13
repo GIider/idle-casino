@@ -317,6 +317,7 @@ export class TablePanel {
     setText(this.tileIncome, `≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}`);
     setText(this.tilePlays, fmt(ts.plays));
 
+    toggleClass(this.cheapestBtn, 'hidden', game.casinoLevel('bulkbuy') < 1);
     setDisabled(this.cheapestBtn, !game.canBuyCheapest(id));
     const toggles = game.casinoLevel('policy') >= 1;
     for (const row of this.rows) {

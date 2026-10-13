@@ -49,6 +49,14 @@ export const CASINO_UPGRADES: CasinoUpgradeDef[] = [
     requires: { id: 'manager', level: 1 },
   },
   {
+    id: 'bulkbuy',
+    name: 'Bulk Orders',
+    description: 'Adds a "Buy cheapest" button to every table: keeps buying the cheapest affordable upgrade until the wallet runs out',
+    baseCost: 1,
+    growth: 1,
+    maxLevel: 1,
+  },
+  {
     id: 'payout',
     name: 'House Edge Trimmed',
     description: '+10% winnings on every table, per level',
