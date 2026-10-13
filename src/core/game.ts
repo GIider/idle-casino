@@ -5,12 +5,16 @@ import {
   BAILOUT_BETS,
   CROSS_PRESTIGE_BONUS,
   MAX_AUTO_PLAYS_PER_TICK,
+  MAX_BONUS_PLAYS,
   OFFLINE_CAP_SECONDS,
   OFFLINE_EFFICIENCY,
   allUpgrades,
   autoPlaysPerSecond,
   chooseAutoBet,
+  dealerChance,
+  effectivePlaysPerSecond,
   estimateNetPerPlay,
+  nextStreak,
   minBet,
   prestigeThreshold,
   resolvePlay,
@@ -22,10 +26,14 @@ import { observeRound, observeUpgrades, perkLevels, RARITIES, type AchievementDe
 import { addContribution, markPrestige, recordRate, recordSample, recordView, sampleContribution } from './history';
 import {
   CASINO_UPGRADES,
+  MANAGER_PRESTIGE_LEVEL,
+  MANAGER_RESERVE_BETS,
+  MANAGER_TOGGLE_LEVEL,
   ascensionReward,
   canAscendWith,
   casinoBonus,
   casinoUpgradeCost,
+  managerInterval,
   type CasinoBonus,
 } from './casino';
 
@@ -51,6 +59,7 @@ export class Game {
   notice: { text: string; seq: number } | null = null;
   private seq = 0;
   private acc: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
+  private managerClock: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
 
   constructor(state: GameState, private rng: Rng = Math.random) {
     this.state = state;
@@ -108,8 +117,9 @@ export class Game {
     if (stake <= 0) return null;
 
     ts.wallet -= stake;
-    const outcome = resolvePlay(def, this.levelsFor(id), ts.prestige, stake, this.rng, this.bonusFor(id));
+    const outcome = resolvePlay(def, this.levelsFor(id), ts.prestige, stake, this.rng, this.bonusFor(id), ts.streak);
     ts.wallet += outcome.payout;
+    ts.streak = nextStreak(ts.streak, outcome.net);
     ts.plays++;
     ts.profit += outcome.net;
     ts.lifetimeProfit += outcome.net;
@@ -137,10 +147,74 @@ export class Game {
       n = Math.min(n, MAX_AUTO_PLAYS_PER_TICK);
       for (let i = 0; i < n; i++) {
         if (!this.play(id)) break;
+        // Second Dealer: a play may immediately trigger another at the same table.
+        const chance = dealerChance(ts.levels);
+        for (let b = 0; b < MAX_BONUS_PLAYS && chance > 0 && this.rng() < chance; b++) {
+          if (!this.play(id)) break;
+        }
       }
       recordRate(ts.history, dt, ts.plays, ts.lifetimeProfit);
     }
+    this.runManager(dt);
     this.bailout();
+  }
+
+  /** Whether the Floor Manager may buy this upgrade (it is on unless switched off at manager level 3+). */
+  autoBuyEnabled(id: TableId, upgradeId: string): boolean {
+    return !this.state.casino.autoOff.includes(`${id}:${upgradeId}`);
+  }
+
+  /** Switches the Floor Manager's buying of one upgrade on or off. */
+  setAutoBuy(id: TableId, upgradeId: string, on: boolean): void {
+    if (this.casinoLevel('manager') < MANAGER_TOGGLE_LEVEL) return;
+    const off = this.state.casino.autoOff;
+    const key = `${id}:${upgradeId}`;
+    const at = off.indexOf(key);
+    if (on && at >= 0) off.splice(at, 1);
+    if (!on && at < 0) off.push(key);
+  }
+
+  setAutoPrestige(on: boolean): void {
+    if (this.casinoLevel('manager') < MANAGER_PRESTIGE_LEVEL) return;
+    this.state.casino.autoPrestige = on;
+  }
+
+  /** The Floor Manager's purchase for one table: the cheapest enabled upgrade that leaves the bet reserve intact. */
+  autoBuy(id: TableId): boolean {
+    const def = TABLES[id];
+    const ts = this.state.tables[id];
+    if (!ts.unlocked) return false;
+    const reserve = minBet(def, ts.prestige) * MANAGER_RESERVE_BETS;
+    let best: { id: string; cost: number } | null = null;
+    for (const upg of allUpgrades(def)) {
+      const level = ts.levels[upg.id] ?? 0;
+      if (level >= upg.maxLevel || !this.autoBuyEnabled(id, upg.id)) continue;
+      const cost = upgradeCost(def, upg, ts.prestige, level, this.bonus);
+      if (ts.wallet - cost < reserve) continue;
+      if (!best || cost < best.cost) best = { id: upg.id, cost };
+    }
+    return best !== null && this.buyUpgrade(id, best.id);
+  }
+
+  /** One manager pass at a table: buy an upgrade, otherwise (level 4, if enabled) prestige. */
+  private managerStep(id: TableId): boolean {
+    if (this.autoBuy(id)) return true;
+    return this.casinoLevel('manager') >= MANAGER_PRESTIGE_LEVEL && this.state.casino.autoPrestige && this.prestige(id);
+  }
+
+  private runManager(dt: number): void {
+    const interval = managerInterval(this.casinoLevel('manager'));
+    if (interval <= 0) return;
+    for (const id of TABLE_IDS) {
+      if (!this.state.tables[id].unlocked) continue;
+      this.managerClock[id] += dt;
+      // Several steps at most per call so a long frame can't spin.
+      for (let i = 0; i < 20 && this.managerClock[id] >= interval; i++) {
+        this.managerClock[id] -= interval;
+        this.managerStep(id);
+      }
+      if (this.managerClock[id] > interval) this.managerClock[id] = interval;
+    }
   }
 
   /** If a table's wallet can't cover its minimum bet, the house comps that table some chips. */
@@ -213,6 +287,7 @@ export class Game {
     ts.prestige += 1;
     ts.levels = {};
     ts.profit = 0;
+    ts.streak = 0;
     ts.wallet = prestigeWallet(TABLES[id], ts.prestige);
     this.acc[id] = 0;
     const b = this.state.bankroll;
@@ -240,6 +315,7 @@ export class Game {
     for (const id of TABLE_IDS) {
       this.state.tables[id] = newTableState(TABLES[id]);
       this.acc[id] = 0;
+      this.managerClock[id] = 0;
       delete this.last[id];
     }
     markPrestige(this.state.bankroll, this.state.bankroll.rounds);
@@ -269,6 +345,16 @@ export class Game {
     return true;
   }
 
+  /** Offline, the manager gets the purchases it would have made (bounded, at the table's current wallet). */
+  private offlineManager(id: TableId, seconds: number): void {
+    const interval = managerInterval(this.casinoLevel('manager'));
+    if (interval <= 0) return;
+    const steps = Math.min(100, Math.floor(seconds / interval));
+    for (let i = 0; i < steps; i++) {
+      if (!this.managerStep(id)) break;
+    }
+  }
+
   /** Approximates play for time spent away using an expected-value estimate. */
   applyOffline(seconds: number): OfflineReport {
     const report: OfflineReport = { seconds, plays: 0, net: 0 };
@@ -280,7 +366,8 @@ export class Game {
       const def = TABLES[id];
       const ts = this.state.tables[id];
       if (!ts.unlocked) continue;
-      const plays = Math.floor(autoPlaysPerSecond(ts.levels, bonus) * effective * efficiency);
+      this.offlineManager(id, effective * efficiency);
+      const plays = Math.floor(effectivePlaysPerSecond(ts.levels, bonus) * effective * efficiency);
       if (plays <= 0) continue;
       const bet = chooseAutoBet(def, ts);
       if (bet <= 0) continue;
@@ -325,7 +412,7 @@ export class Game {
     const def = TABLES[id];
     const ts = this.state.tables[id];
     const bonus = this.bonus;
-    const rate = autoPlaysPerSecond(ts.levels, bonus);
+    const rate = effectivePlaysPerSecond(ts.levels, bonus);
     const bet = chooseAutoBet(def, ts);
     if (bet <= 0) return 0;
     return rate * estimateNetPerPlay(def, this.levelsFor(id), ts.prestige, bet, mulberry32(7), 400, this.bonusFor(id));

@@ -354,6 +354,15 @@ small {
   border-top: none;
 }
 
+.auto-buy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8em;
+  color: var(--muted, inherit);
+  white-space: nowrap;
+}
+
 .upgrade-text {
   display: flex;
   flex-direction: column;

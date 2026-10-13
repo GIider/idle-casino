@@ -4,7 +4,7 @@ import {
   allUpgrades,
   autoBetFraction,
   chooseAutoBet,
-  autoPlaysPerSecond,
+  effectivePlaysPerSecond,
   luckChance,
   maxBet,
   maxPayout,
@@ -14,6 +14,7 @@ import {
   CROSS_PRESTIGE_BONUS,
   upgradeCost,
 } from '../core/economy';
+import { MANAGER_TOGGLE_LEVEL } from '../core/casino';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
 import { TABLE_IDS, previousTable } from '../tables';
@@ -27,6 +28,9 @@ interface UpgradeRow {
   root: HTMLElement;
   level: HTMLElement;
   button: HTMLButtonElement;
+  /** Floor Manager switch (manager level 3+): whether the manager may buy this upgrade. */
+  auto: HTMLLabelElement;
+  autoBox: HTMLInputElement;
 }
 
 export class TablePanel {
@@ -89,14 +93,20 @@ export class TablePanel {
     for (const u of allUpgrades(def)) {
       const level = h('span', { class: 'level' });
       const button = h('button', { class: 'btn buy', onclick: () => game.buyUpgrade(id, u.id) });
+      const autoBox = h('input', {
+        type: 'checkbox',
+        onchange: () => game.setAutoBuy(id, u.id, autoBox.checked),
+      });
+      const auto = h('label', { class: 'auto-buy hidden', title: 'Let the Floor Manager buy this upgrade' }, autoBox, ' auto');
       const root = h(
         'div',
         { class: 'upgrade' },
         h('div', { class: 'upgrade-text' }, h('div', {}, h('strong', { text: u.name }), ' ', level), h('small', { text: u.description })),
+        auto,
         button,
       );
       upgrades.append(root);
-      this.rows.push({ def: u, root, level, button });
+      this.rows.push({ def: u, root, level, button, auto, autoBox });
     }
 
     // Prestige
@@ -172,11 +182,11 @@ export class TablePanel {
     const hi = maxBet(def, ts.prestige);
     setText(
       this.statsEl,
-      `Wallet ${fmt(ts.wallet)} ${cur.icon} ${cur.name} · Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels, game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonusFor(id), def.baseWinBonus).toFixed(2)}`,
+      `Wallet ${fmt(ts.wallet)} ${cur.icon} ${cur.name} · Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels, game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak).toFixed(2)}${ts.levels.streak ? ` · streak ${ts.streak}` : ''}`,
     );
 
     const bonus = game.bonus;
-    const rate = autoPlaysPerSecond(ts.levels, bonus);
+    const rate = effectivePlaysPerSecond(ts.levels, bonus);
     const frac = autoBetFraction(ts.levels);
     const bet = chooseAutoBet(def, ts);
     const betText = frac > 0 ? `${(frac * 100).toFixed(1).replace(/\.0$/, '')}% of wallet` : 'minimum bet';
@@ -186,7 +196,11 @@ export class TablePanel {
         `max payout per play ${fmt(maxPayout(def, ts.prestige))} · ≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}/sec`,
     );
 
+    const toggles = game.casinoLevel('manager') >= MANAGER_TOGGLE_LEVEL;
     for (const row of this.rows) {
+      toggleClass(row.auto, 'hidden', !toggles);
+      const enabled = game.autoBuyEnabled(id, row.def.id);
+      if (row.autoBox.checked !== enabled) row.autoBox.checked = enabled;
       const level = ts.levels[row.def.id] ?? 0;
       const maxed = level >= row.def.maxLevel;
       setText(row.level, `Lv ${level}/${row.def.maxLevel}`);

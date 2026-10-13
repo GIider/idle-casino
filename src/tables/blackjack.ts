@@ -1,5 +1,5 @@
-import type { PlayView, Rng, TableDef } from '../core/types';
-import { GENTLEMAN_PUSH_MULT, MARKED_DECK_MULT, SECOND_THOUGHTS_CHANCE } from '../core/achievements';
+import type { PlayResult, PlayView, Rng, TableDef } from '../core/types';
+import { CARD_LOSS_REFUND, CARD_WIN_BONUS, GENTLEMAN_PUSH_MULT, MARKED_DECK_MULT, SECOND_THOUGHTS_CHANCE } from '../core/achievements';
 
 type BlackjackOutcome = 'natural' | 'bust' | 'win' | 'push' | 'lose';
 
@@ -29,6 +29,21 @@ function total(cards: number[]): number {
 
 function isNatural(cards: number[]): boolean {
   return cards.length === 2 && total(cards) === 21;
+}
+
+/** Applies the card-count perks: bigger profit on N-card wins, a refund on N-card losses to the dealer. */
+function applyCardPerks(result: PlayResult, levels: Record<string, number>): PlayResult {
+  const view = result.view;
+  if (!view || view.kind !== 'blackjack') return result;
+  const cards = view.player.length;
+  if (view.outcome === 'win' || view.outcome === 'natural') {
+    const tier = levels[`perk_winCards${cards}`] ?? 0;
+    if (tier > 0) return { ...result, mult: 1 + (result.mult - 1) * (1 + CARD_WIN_BONUS[tier - 1]) };
+  } else if (view.outcome === 'lose') {
+    const tier = levels[`perk_loseCards${cards}`] ?? 0;
+    if (tier > 0) return { ...result, mult: result.mult + CARD_LOSS_REFUND[tier - 1] };
+  }
+  return result;
 }
 
 export const blackjack: TableDef = {
@@ -69,58 +84,62 @@ export const blackjack: TableDef = {
     },
   ],
   play(rng, levels) {
-    const sleeve = levels.sleeve ?? 0;
-    const insure = levels.insure ?? 0;
-    const strategy = levels.strategy ?? 0;
-
-    const player = rng() < 0.03 * sleeve ? [1, 10] : [draw(rng), draw(rng)];
-    const dealer = [draw(rng), draw(rng)];
-    const upcard = dealer[0] === 1 ? 11 : dealer[0];
-
-    const playerNatural = isNatural(player);
-    const dealerNatural = isNatural(dealer);
-    const view = (outcome: BlackjackOutcome, insured = false): PlayView => ({
-      kind: 'blackjack',
-      player: [...player],
-      dealer: [...dealer],
-      outcome,
-      insured,
-    });
-    if (playerNatural && dealerNatural) return { mult: 1, detail: '🃏 Both natural — push', view: view('push') };
-    if (playerNatural) return { mult: levels.perk_naturalBorn ? MARKED_DECK_MULT[levels.perk_naturalBorn - 1] : 2.5, detail: '🃏 Blackjack!', view: view('natural') };
-    if (dealerNatural) return { mult: 0, detail: '🃏 Dealer blackjack', view: view('lose') };
-
-    const standAt = (): number => {
-      if (strategy >= 2 && upcard >= 2 && upcard <= 6) return 13;
-      if (strategy >= 1 && upcard >= 4 && upcard <= 6) return 12;
-      return 17;
-    };
-    while (total(player) < standAt()) player.push(draw(rng));
-
-    let p = total(player);
-    if (p > 21 && levels.perk_bustOut && rng() < SECOND_THOUGHTS_CHANCE[levels.perk_bustOut - 1]) {
-      // Second Thoughts: the busting card is discarded and drawn again.
-      player.pop();
-      player.push(draw(rng));
-      p = total(player);
-    }
-    if (p > 21) {
-      const saved = rng() < 0.12 * insure;
-      return {
-        mult: saved ? 0.5 : 0,
-        detail: saved ? `🃏 Bust (${p}) — insured` : `🃏 Bust (${p})`,
-        view: view('bust', saved),
-      };
-    }
-
-    while (total(dealer) < 17) dealer.push(draw(rng));
-    const d = total(dealer);
-    const detail = `🃏 You ${p} · Dealer ${d}`;
-    if (d > 21 || p > d) return { mult: 2, detail, view: view('win') };
-    if (p === d) {
-      const push = levels.perk_winStreak ? GENTLEMAN_PUSH_MULT[levels.perk_winStreak - 1] : 1;
-      return { mult: push, detail, view: view('push') };
-    }
-    return { mult: 0, detail, view: view('lose') };
+    return applyCardPerks(playRound(rng, levels), levels);
   },
 };
+
+function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
+  const sleeve = levels.sleeve ?? 0;
+  const insure = levels.insure ?? 0;
+  const strategy = levels.strategy ?? 0;
+
+  const player = rng() < 0.03 * sleeve ? [1, 10] : [draw(rng), draw(rng)];
+  const dealer = [draw(rng), draw(rng)];
+  const upcard = dealer[0] === 1 ? 11 : dealer[0];
+
+  const playerNatural = isNatural(player);
+  const dealerNatural = isNatural(dealer);
+  const view = (outcome: BlackjackOutcome, insured = false): PlayView => ({
+    kind: 'blackjack',
+    player: [...player],
+    dealer: [...dealer],
+    outcome,
+    insured,
+  });
+  if (playerNatural && dealerNatural) return { mult: 1, detail: '🃏 Both natural — push', view: view('push') };
+  if (playerNatural) return { mult: levels.perk_naturalBorn ? MARKED_DECK_MULT[levels.perk_naturalBorn - 1] : 2.5, detail: '🃏 Blackjack!', view: view('natural') };
+  if (dealerNatural) return { mult: 0, detail: '🃏 Dealer blackjack', view: view('lose') };
+
+  const standAt = (): number => {
+    if (strategy >= 2 && upcard >= 2 && upcard <= 6) return 13;
+    if (strategy >= 1 && upcard >= 4 && upcard <= 6) return 12;
+    return 17;
+  };
+  while (total(player) < standAt()) player.push(draw(rng));
+
+  let p = total(player);
+  if (p > 21 && levels.perk_bustOut && rng() < SECOND_THOUGHTS_CHANCE[levels.perk_bustOut - 1]) {
+    // Second Thoughts: the busting card is discarded and drawn again.
+    player.pop();
+    player.push(draw(rng));
+    p = total(player);
+  }
+  if (p > 21) {
+    const saved = rng() < 0.12 * insure;
+    return {
+      mult: saved ? 0.5 : 0,
+      detail: saved ? `🃏 Bust (${p}) — insured` : `🃏 Bust (${p})`,
+      view: view('bust', saved),
+    };
+  }
+
+  while (total(dealer) < 17) dealer.push(draw(rng));
+  const d = total(dealer);
+  const detail = `🃏 You ${p} · Dealer ${d}`;
+  if (d > 21 || p > d) return { mult: 2, detail, view: view('win') };
+  if (p === d) {
+    const push = levels.perk_winStreak ? GENTLEMAN_PUSH_MULT[levels.perk_winStreak - 1] : 1;
+    return { mult: push, detail, view: view('push') };
+  }
+  return { mult: 0, detail, view: view('lose') };
+}

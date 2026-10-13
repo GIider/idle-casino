@@ -15,6 +15,8 @@ export interface TableState {
   plays: number;
   /** Sampled lifetime-profit series for the history chart. */
   history: History;
+  /** Consecutive won rounds (feeds the Hot Streak upgrade); reset by a loss, prestige and ascension. */
+  streak: number;
 }
 
 /** A bounded, down-sampled series of [x, value] points with vertical event marks at given x positions. */
@@ -108,6 +110,10 @@ export interface CasinoState {
   totalChips: number;
   ascensions: number;
   levels: Record<string, number>;
+  /** Floor Manager (level 4): prestige a table automatically as soon as it can. */
+  autoPrestige: boolean;
+  /** Upgrades the Floor Manager must not buy, keyed `table:upgradeId`. */
+  autoOff: string[];
 }
 
 export interface GameState {

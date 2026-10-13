@@ -27,6 +27,30 @@ export const COMMON_UPGRADES: UpgradeDef[] = [
     maxLevel: 20,
   },
   {
+    id: 'streak',
+    name: 'Hot Streak',
+    description: 'Every win in a row adds +3% per level to winnings (stacks up to 10 wins, a loss resets it)',
+    baseCost: 60,
+    growth: 1.9,
+    maxLevel: 5,
+  },
+  {
+    id: 'cashback',
+    name: 'Cashback',
+    description: 'Lost rounds refund +4% of your bet per level',
+    baseCost: 50,
+    growth: 1.6,
+    maxLevel: 8,
+  },
+  {
+    id: 'dealer',
+    name: 'Second Dealer',
+    description: '+5% chance per level that a play triggers an immediate bonus play at the same stake',
+    baseCost: 120,
+    growth: 2.1,
+    maxLevel: 6,
+  },
+  {
     id: 'autobet',
     name: 'Bigger Bets',
     description: 'Wager a larger share of the table wallet on every play',
@@ -53,6 +77,14 @@ export const COLLECTION_PERK_KEY = 'perk_collection';
 /** Winnings bonus per tier of the "every upgrade" achievement. */
 export const COLLECTION_BONUS_PER_TIER = 0.05;
 export const AUTO_BASE_RATE = 1;
+/** Hot Streak: winnings bonus per level per consecutive win, and the streak length that stops counting. */
+export const STREAK_BONUS_PER_LEVEL = 0.03;
+export const STREAK_CAP = 10;
+/** Cashback: share of a lost bet refunded, per level. */
+export const CASHBACK_PER_LEVEL = 0.04;
+/** Second Dealer: chance per level of a bonus play, and the longest chain of bonus plays after one play. */
+export const DEALER_CHANCE_PER_LEVEL = 0.05;
+export const MAX_BONUS_PLAYS = 10;
 /** Extra plays/sec (as a multiple of the base rate) per `speed` level. */
 export const SPEED_PER_LEVEL = 0.5;
 export const MAX_AUTO_PLAYS_PER_TICK = 300;
@@ -95,21 +127,45 @@ export function luckChance(levels: Record<string, number>, bonus: CasinoBonus = 
   return Math.min(0.95, 0.025 * (levels.luck ?? 0) + bonus.luck);
 }
 
+/** Winnings multiplier from the Hot Streak upgrade at the given win streak. */
+export function streakMultiplier(levels: Record<string, number>, streak: number): number {
+  return 1 + STREAK_BONUS_PER_LEVEL * (levels.streak ?? 0) * Math.min(STREAK_CAP, Math.max(0, streak));
+}
+
+export function cashbackFraction(levels: Record<string, number>): number {
+  return Math.min(0.9, CASHBACK_PER_LEVEL * (levels.cashback ?? 0));
+}
+
+export function dealerChance(levels: Record<string, number>): number {
+  return Math.min(0.9, DEALER_CHANCE_PER_LEVEL * (levels.dealer ?? 0));
+}
+
 export function payoutMultiplier(
   levels: Record<string, number>,
   prestige: number,
   bonus: CasinoBonus = NO_BONUS,
   baseWinBonus = 0,
+  streak = 0,
 ): number {
   const collection = 1 + COLLECTION_BONUS_PER_TIER * (levels[COLLECTION_PERK_KEY] ?? 0);
   return (
-    (1 + baseWinBonus) * (1 + 0.08 * (levels.payout ?? 0)) * (1 + PRESTIGE_PAYOUT_BONUS * prestige) * collection * bonus.payout
+    (1 + baseWinBonus) *
+    (1 + 0.08 * (levels.payout ?? 0)) *
+    (1 + PRESTIGE_PAYOUT_BONUS * prestige) *
+    collection *
+    bonus.payout *
+    streakMultiplier(levels, streak)
   );
 }
 
 /** Plays per second a table runs on its own; every unlocked table plays from the start. */
 export function autoPlaysPerSecond(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {
   return AUTO_BASE_RATE * (1 + SPEED_PER_LEVEL * (levels.speed ?? 0)) * bonus.speed;
+}
+
+/** Plays per second including the expected extra plays from Second Dealer (what display and offline use). */
+export function effectivePlaysPerSecond(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {
+  return autoPlaysPerSecond(levels, bonus) / (1 - dealerChance(levels));
 }
 
 export function autoBetFraction(levels: Record<string, number>): number {
@@ -144,6 +200,12 @@ export interface Outcome {
   capped: boolean;
 }
 
+/** Win streak after a round with the given net result: wins extend it, losses reset it, pushes keep it. */
+export function nextStreak(streak: number, net: number): number {
+  if (net > 0) return Math.min(STREAK_CAP, streak + 1);
+  return net < 0 ? 0 : streak;
+}
+
 /** Plays one round: applies the luck re-roll, payout upgrades and the payout cap. */
 export function resolvePlay(
   def: TableDef,
@@ -152,6 +214,7 @@ export function resolvePlay(
   bet: number,
   rng: Rng,
   bonus: CasinoBonus = NO_BONUS,
+  streak = 0,
 ): Outcome {
   let result = def.play(rng, levels);
   let rerolled = false;
@@ -163,7 +226,7 @@ export function resolvePlay(
   let payout: number;
   let capped = false;
   if (result.mult > 1) {
-    let profit = (result.mult - 1) * bet * payoutMultiplier(levels, prestige, bonus, def.baseWinBonus);
+    let profit = (result.mult - 1) * bet * payoutMultiplier(levels, prestige, bonus, def.baseWinBonus, streak);
     const cap = maxPayout(def, prestige);
     if (profit > cap) {
       profit = cap;
@@ -172,6 +235,8 @@ export function resolvePlay(
     payout = bet + Math.floor(profit);
   } else {
     payout = Math.floor(bet * result.mult);
+    // Cashback only softens losses: it never turns a round into a win.
+    if (payout < bet) payout = Math.min(bet, payout + Math.floor(bet * cashbackFraction(levels)));
   }
 
   return {
@@ -196,8 +261,11 @@ export function estimateNetPerPlay(
   bonus: CasinoBonus = NO_BONUS,
 ): number {
   let sum = 0;
+  let streak = 0;
   for (let i = 0; i < samples; i++) {
-    sum += resolvePlay(def, levels, prestige, bet, rng, bonus).net;
+    const net = resolvePlay(def, levels, prestige, bet, rng, bonus, streak).net;
+    sum += net;
+    streak = nextStreak(streak, net);
   }
   return sum / samples;
 }

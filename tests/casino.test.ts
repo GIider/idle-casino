@@ -144,14 +144,14 @@ describe('ascension', () => {
 
   it('round-trips and sanitizes casino state in saves', () => {
     const g = newGame();
-    g.state.casino = { chips: 7, totalChips: 12, ascensions: 2, levels: { payout: 3, luck: 9999 } };
+    g.state.casino = { chips: 7, totalChips: 12, ascensions: 2, levels: { payout: 3, luck: 9999 }, autoPrestige: false, autoOff: [] };
     const loaded = importSave(exportSave(g.state));
     expect(loaded.casino.chips).toBe(7);
     expect(loaded.casino.ascensions).toBe(2);
     expect(loaded.casino.levels.payout).toBe(3);
     expect(loaded.casino.levels.luck).toBe(15);
     const junk = normalizeState({ version: SAVE_VERSION, tables: {}, casino: { chips: 'x', levels: 3 } });
-    expect(junk.casino).toEqual({ chips: 0, totalChips: 0, ascensions: 0, levels: {} });
+    expect(junk.casino).toEqual({ chips: 0, totalChips: 0, ascensions: 0, levels: {}, autoPrestige: false, autoOff: [] });
     expect(normalizeState({ version: SAVE_VERSION, tables: {} }).casino.ascensions).toBe(0);
   });
 });

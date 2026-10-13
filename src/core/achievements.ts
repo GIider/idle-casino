@@ -42,6 +42,43 @@ export const MARKED_DECK_MULT = [2.7, 2.85, 3];
 export const SECOND_THOUGHTS_CHANCE = [0.05, 0.1, 0.15];
 export const GENTLEMAN_PUSH_MULT = [1.1, 1.2, 1.3];
 
+/** Blackjack card-count perks: extra profit on N-card wins, and a refund on N-card losses to the dealer. */
+export const CARD_WIN_BONUS = [0.05, 0.1, 0.15];
+export const CARD_LOSS_REFUND = [0.05, 0.1, 0.15];
+export const CARD_COUNTS = [2, 3, 4, 5, 6] as const;
+/** Grind targets by player card count: shorter hands happen far more often than 5- or 6-card hands. */
+const CARD_WIN_TARGETS: Record<number, number[]> = {
+  2: [10000, 100000, 1000000],
+  3: [7500, 75000, 750000],
+  4: [2500, 25000, 250000],
+  5: [500, 5000, 50000],
+  6: [60, 600, 6000],
+};
+const CARD_LOSS_TARGETS: Record<number, number[]> = {
+  2: [6500, 65000, 650000],
+  3: [3500, 35000, 350000],
+  4: [1000, 10000, 100000],
+  5: [200, 2000, 20000],
+  6: [30, 300, 3000],
+};
+
+/** Blackjack hands won (or lost to the dealer) with exactly `cards` cards in the player's hand. */
+const cardCount = (cards: number, won: boolean): AchievementDef => ({
+  id: `${won ? 'winCards' : 'loseCards'}${cards}`,
+  table: 'blackjack',
+  name: won ? `${cards}-Card Winner` : `${cards}-Card Loser`,
+  goal: won ? `Win with ${cards} cards` : `Lose to the dealer with ${cards} cards`,
+  kind: 'grind',
+  targets: won ? CARD_WIN_TARGETS[cards] : CARD_LOSS_TARGETS[cards],
+  score: (v) => {
+    if (v.kind !== 'blackjack' || v.player.length !== cards) return 0;
+    return won ? (v.outcome === 'win' || v.outcome === 'natural' ? 1 : 0) : v.outcome === 'lose' ? 1 : 0;
+  },
+  perk: won
+    ? { name: `${cards}-Card Charm`, describe: (t) => `${cards}-card wins pay +${pct(byTier(CARD_WIN_BONUS, t))} profit` }
+    : { name: `${cards}-Card Cushion`, describe: (t) => `${cards}-card losses to the dealer refund ${pct(byTier(CARD_LOSS_REFUND, t))} of your bet` },
+});
+
 const collection = (table: TableId, name: string): AchievementDef => ({
   id: `collect_${table}`,
   table,
@@ -199,6 +236,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
       describe: (t) => `Pushes pay ${byTier(GENTLEMAN_PUSH_MULT, t).toFixed(1)}× your bet`,
     },
   },
+  ...CARD_COUNTS.map((n) => cardCount(n, true)),
+  ...CARD_COUNTS.map((n) => cardCount(n, false)),
 ];
 
 export function achievementsFor(table: TableId): AchievementDef[] {

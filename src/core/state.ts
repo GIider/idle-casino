@@ -6,6 +6,7 @@ import { backfillAchievements, newAchievements, normalizeAchievements, observeUp
 import { allUpgrades, minBet } from './economy';
 
 export const SAVE_VERSION = 3;
+const MAX_STREAK_STORED = 1000;
 /** The first table's starting wallet. */
 export const START_MONEY = 100;
 /** A newly unlocked table starts with this many of its own minimum bets. */
@@ -38,11 +39,12 @@ export function newTableState(def: TableDef): TableState {
     lifetimeProfit: 0,
     plays: 0,
     history: newHistory(),
+    streak: 0,
   };
 }
 
 export function newCasinoState(): CasinoState {
-  return { chips: 0, totalChips: 0, ascensions: 0, levels: {} };
+  return { chips: 0, totalChips: 0, ascensions: 0, levels: {}, autoPrestige: false, autoOff: [] };
 }
 
 export function createInitialState(now = Date.now()): GameState {
@@ -79,6 +81,7 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
     ts.profit = num(src.profit, 0, -Infinity);
     ts.lifetimeProfit = num(src.lifetimeProfit, 0, -Infinity);
     ts.plays = Math.floor(num(src.plays, 0));
+    ts.streak = Math.min(MAX_STREAK_STORED, Math.floor(num(src.streak, 0)));
     ts.history = normalizeHistory(src.history, ts.plays, ts.lifetimeProfit);
     if (src.levels && typeof src.levels === 'object') {
       // Only current upgrades survive (e.g. the retired `auto` level is dropped), clamped to their max.
@@ -100,6 +103,10 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
       for (const upg of CASINO_UPGRADES) {
         state.casino.levels[upg.id] = Math.min(upg.maxLevel, Math.floor(num(c.levels[upg.id], 0)));
       }
+    }
+    state.casino.autoPrestige = c.autoPrestige === true;
+    if (Array.isArray(c.autoOff)) {
+      state.casino.autoOff = c.autoOff.filter((k: unknown): k is string => typeof k === 'string').slice(0, 64);
     }
   }
   // Saves from before achievements get their grind counts seeded from lifetime play stats.

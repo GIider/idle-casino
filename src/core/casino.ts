@@ -12,6 +12,15 @@ export interface CasinoUpgradeDef {
 
 export const CASINO_UPGRADES: CasinoUpgradeDef[] = [
   {
+    id: 'manager',
+    name: 'Floor Manager',
+    description:
+      'Buys table upgrades for you: every 10s (Lv1), 5s (Lv2), 2s with per-upgrade switches (Lv3), plus auto-prestige (Lv4)',
+    baseCost: 1,
+    growth: 2.5,
+    maxLevel: 4,
+  },
+  {
     id: 'startCash',
     name: 'Trust Fund',
     description: 'Start every ascension with +250 Pennies per level',
@@ -81,6 +90,26 @@ export interface CasinoBonus {
   startCash: number;
 }
 
+/** Winnings multiplier every ascension adds permanently (compounding), on top of any shop purchases. */
+export const ASCENSION_WINNINGS_BONUS = 1.5;
+
+/** Seconds between Floor Manager purchases by shop level (index 0 = level 1). */
+export const MANAGER_INTERVALS = [10, 5, 2, 2];
+/** The manager only buys if the wallet still covers this many minimum bets afterwards. */
+export const MANAGER_RESERVE_BETS = 20;
+export const MANAGER_TOGGLE_LEVEL = 3;
+export const MANAGER_PRESTIGE_LEVEL = 4;
+
+export function ascensionMultiplier(ascensions: number): number {
+  return ASCENSION_WINNINGS_BONUS ** Math.max(0, ascensions);
+}
+
+/** Seconds between auto-purchases at this manager level, or 0 if there is no manager. */
+export function managerInterval(level: number): number {
+  if (level <= 0) return 0;
+  return MANAGER_INTERVALS[Math.min(level, MANAGER_INTERVALS.length) - 1];
+}
+
 export const NO_BONUS: CasinoBonus = {
   payout: 1,
   luck: 0,
@@ -99,7 +128,7 @@ export const ASCEND_THRESHOLD_GROWTH = 5;
 export function casinoBonus(casino: CasinoState): CasinoBonus {
   const lv = (id: string) => casino.levels[id] ?? 0;
   return {
-    payout: 1 + 0.1 * lv('payout'),
+    payout: (1 + 0.1 * lv('payout')) * ascensionMultiplier(casino.ascensions),
     luck: 0.01 * lv('luck'),
     speed: 1 + 0.1 * lv('speed'),
     upgradeCost: 1 - 0.04 * lv('upgradeDiscount'),

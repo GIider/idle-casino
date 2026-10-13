@@ -1,7 +1,17 @@
 import type { Game } from '../core/game';
 import { TABLES, FINAL_TABLE } from '../tables';
 import { casinoValue } from '../core/state';
-import { CASINO_UPGRADES, ascensionThreshold, casinoUpgradeCost, type CasinoUpgradeDef } from '../core/casino';
+import {
+  ASCENSION_WINNINGS_BONUS,
+  CASINO_UPGRADES,
+  MANAGER_PRESTIGE_LEVEL,
+  MANAGER_RESERVE_BETS,
+  ascensionMultiplier,
+  ascensionThreshold,
+  casinoUpgradeCost,
+  managerInterval,
+  type CasinoUpgradeDef,
+} from '../core/casino';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt } from './format';
 import { BankrollChart } from './bankrollChart';
@@ -20,6 +30,10 @@ export class CasinoPanel {
   private ascendBar: HTMLElement;
   private ascendBtn: HTMLButtonElement;
   private rows: Row[] = [];
+  private bonusEl: HTMLElement;
+  private managerEl: HTMLElement;
+  private autoPrestige: HTMLLabelElement;
+  private autoPrestigeBox: HTMLInputElement;
   private bankroll = new BankrollChart();
 
   constructor(private game: Game) {
@@ -34,13 +48,26 @@ export class CasinoPanel {
         if (
           game.canAscend() &&
           window.confirm(
-            `Ascend? Every table, upgrade, prestige level and wallet reset (table history too; the casino value graph is kept). You earn ${reward} casino chip${reward === 1 ? '' : 's'}.`,
+            `Ascend? Every table, upgrade, prestige level and wallet reset (table history too; the casino value graph is kept). You earn ${reward} casino chip${reward === 1 ? '' : 's'} and winnings ×${ASCENSION_WINNINGS_BONUS} on every table, permanently.`,
           )
         ) {
           game.ascend();
         }
       },
     });
+
+    this.bonusEl = h('p', { class: 'auto-info' });
+    this.managerEl = h('p', { class: 'auto-info' });
+    this.autoPrestigeBox = h('input', {
+      type: 'checkbox',
+      onchange: () => game.setAutoPrestige(this.autoPrestigeBox.checked),
+    });
+    this.autoPrestige = h(
+      'label',
+      { class: 'auto-buy hidden' },
+      this.autoPrestigeBox,
+      ' Auto-prestige tables as soon as they can',
+    );
 
     const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }));
     for (const def of CASINO_UPGRADES) {
@@ -73,7 +100,16 @@ export class CasinoPanel {
             h('p', { text: 'Ascend to reset the whole floor for casino chips, then spend them on upgrades that apply to every table, forever.' }),
             h('div', { class: 'stats' }, h('span', { text: 'Chips: ' }), this.chipsEl),
           ),
-          h('div', { class: 'card' }, h('h3', { text: 'Ascension' }), this.ascendText, h('div', { class: 'bar' }, this.ascendBar), this.ascendBtn),
+          h(
+            'div',
+            { class: 'card' },
+            h('h3', { text: 'Ascension' }),
+            this.bonusEl,
+            this.ascendText,
+            h('div', { class: 'bar' }, this.ascendBar),
+            this.ascendBtn,
+          ),
+          h('div', { class: 'card' }, h('h3', { text: 'Floor Manager' }), this.managerEl, this.autoPrestige),
           this.bankroll.root,
         ),
         h('div', { class: 'col side' }, shop),
@@ -85,6 +121,21 @@ export class CasinoPanel {
     const { game } = this;
     const casino = game.state.casino;
     setText(this.chipsEl, `${fmt(casino.chips)} (${fmt(casino.totalChips)} earned · ${casino.ascensions} ascensions)`);
+
+    setText(
+      this.bonusEl,
+      `Ascension bonus: winnings ×${fmt(ascensionMultiplier(casino.ascensions), 2)} on every table (×${fmt(ascensionMultiplier(casino.ascensions + 1), 2)} after the next ascension).`,
+    );
+    const manager = game.casinoLevel('manager');
+    const interval = managerInterval(manager);
+    setText(
+      this.managerEl,
+      interval > 0
+        ? `Buys the cheapest affordable upgrade at every table every ${interval}s, keeping ${MANAGER_RESERVE_BETS} minimum bets in reserve.`
+        : 'Buy the Floor Manager in the shop below to have upgrades purchased for you.',
+    );
+    toggleClass(this.autoPrestige, 'hidden', manager < MANAGER_PRESTIGE_LEVEL);
+    if (this.autoPrestigeBox.checked !== casino.autoPrestige) this.autoPrestigeBox.checked = casino.autoPrestige;
 
     const threshold = ascensionThreshold(casino.ascensions);
     const money = game.state.tables[FINAL_TABLE].wallet;
