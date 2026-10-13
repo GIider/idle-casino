@@ -57,6 +57,7 @@ export class TablePanel {
   private winTile: HTMLElement;
   private previewing = false;
   private rows: UpgradeRow[] = [];
+  private cheapestBtn: HTMLButtonElement;
   private barLabel: HTMLElement;
   private barWrap: HTMLElement;
   private prestigeBar: HTMLElement;
@@ -130,7 +131,13 @@ export class TablePanel {
     const bigStats = h('div', { class: 'big-stats' }, bigMinTile, bigMaxTile);
 
     // Upgrades
-    const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }), buyModeSelector());
+    this.cheapestBtn = h('button', {
+      class: 'btn small',
+      text: 'Buy cheapest',
+      title: 'Keep buying the cheapest affordable upgrade until your wallet runs out',
+      onclick: () => game.buyCheapest(id),
+    });
+    const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }), buyModeSelector(), this.cheapestBtn);
     for (const u of allUpgrades(def)) {
       const level = h('span', { class: 'level' });
       const button = h('button', { class: 'btn buy', onclick: () => game.buyUpgrade(id, u.id, buyMode()) });
@@ -282,6 +289,7 @@ export class TablePanel {
     setText(this.tileIncome, `≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}`);
     setText(this.tilePlays, fmt(ts.plays));
 
+    setDisabled(this.cheapestBtn, !game.canBuyCheapest(id));
     const toggles = game.casinoLevel('policy') >= 1;
     for (const row of this.rows) {
       toggleClass(row.auto, 'hidden', !toggles);

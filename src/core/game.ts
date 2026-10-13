@@ -320,6 +320,35 @@ export class Game {
     return true;
   }
 
+  /** Cheapest affordable level of any upgrade at a table, or null. */
+  private cheapestUpgrade(id: TableId): string | null {
+    const def = TABLES[id];
+    const ts = this.state.tables[id];
+    let best: { id: string; cost: number } | null = null;
+    for (const upg of allUpgrades(def)) {
+      const level = ts.levels[upg.id] ?? 0;
+      if (level >= upg.maxLevel) continue;
+      const cost = upgradeCost(def, upg, ts.prestige, level, this.bonus);
+      if (cost <= ts.wallet && (!best || cost < best.cost)) best = { id: upg.id, cost };
+    }
+    return best?.id ?? null;
+  }
+
+  /** Whether any upgrade at the table is currently affordable. */
+  canBuyCheapest(id: TableId): boolean {
+    return this.state.tables[id].unlocked && this.cheapestUpgrade(id) !== null;
+  }
+
+  /** Repeatedly buys the cheapest affordable upgrade level until the wallet can't cover another. */
+  buyCheapest(id: TableId): number {
+    let bought = 0;
+    for (let next = this.cheapestUpgrade(id); next && bought < 10000; next = this.cheapestUpgrade(id)) {
+      if (!this.buyUpgrade(id, next)) break;
+      bought++;
+    }
+    return bought;
+  }
+
   canPrestige(id: TableId): boolean {
     const ts = this.state.tables[id];
     return ts.unlocked && ts.profit >= prestigeThreshold(TABLES[id], ts.prestige, this.bonus);
