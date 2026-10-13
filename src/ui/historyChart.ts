@@ -1,5 +1,5 @@
 import type { History, TableId } from '../core/types';
-import { GameHistoryView, SlotsCombosView, VIEW_LABELS } from './historyViews';
+import { BlackjackHandsView, GameHistoryView, SlotsCombosView, VIEW_LABELS } from './historyViews';
 import { COLORS, setupCanvas } from './stage/canvas';
 import { h, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
@@ -20,7 +20,7 @@ export class HistoryChart {
   private btns: Record<Range, HTMLButtonElement>;
   private step = 1;
   private gameView: GameHistoryView;
-  private combosView: SlotsCombosView | null;
+  private combosView: SlotsCombosView | BlackjackHandsView | null;
   private tabs: Record<Mode, HTMLButtonElement | undefined>;
   private rangeBox: HTMLElement;
   private mode: Mode = 'profit';
@@ -32,11 +32,11 @@ export class HistoryChart {
       profit: h('button', { class: 'btn small', text: 'Income', onclick: () => this.setMode('profit') }),
       game: h('button', { class: 'btn small', text: VIEW_LABELS[id], onclick: () => this.setMode('game') }),
       combos:
-        id === 'slots'
-          ? h('button', { class: 'btn small', text: 'Combos', onclick: () => this.setMode('combos') })
+        id === 'slots' || id === 'blackjack'
+          ? h('button', { class: 'btn small', text: id === 'slots' ? 'Combos' : 'Deals', onclick: () => this.setMode('combos') })
           : undefined,
     };
-    this.combosView = id === 'slots' ? new SlotsCombosView() : null;
+    this.combosView = id === 'slots' ? new SlotsCombosView() : id === 'blackjack' ? new BlackjackHandsView() : null;
     this.canvas = h('canvas', { class: 'history-canvas' });
     this.info = h('div', { class: 'history-info', text: ' ' });
     this.btns = {} as Record<Range, HTMLButtonElement>;
@@ -82,7 +82,7 @@ export class HistoryChart {
     toggleClass(this.gameView.root, 'hidden', mode !== 'game');
     this.syncButtons();
     if (this.combosView) toggleClass(this.combosView.root, 'hidden', mode !== 'combos');
-    if (mode === 'combos' && this.history && this.combosView) this.combosView.update(this.history.stats.slots, true);
+    if (mode === 'combos' && this.history && this.combosView) this.combosView.update(this.history.stats, true);
     else if (mode === 'game' && this.history) this.gameView.update(this.history.stats, true);
     else this.draw();
   }
@@ -109,7 +109,7 @@ export class HistoryChart {
       return;
     }
     if (this.mode === 'combos') {
-      this.combosView?.update(history.stats.slots);
+      this.combosView?.update(history.stats);
       return;
     }
     const series = history.rate.points;

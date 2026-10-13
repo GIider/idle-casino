@@ -76,6 +76,18 @@ export interface BlackjackStats {
   push: number;
   lose: number;
   bust: number;
+  /** The last few hands, oldest first. */
+  recent: BlackjackHand[];
+}
+
+export interface BlackjackHand {
+  player: number[];
+  dealer: number[];
+  outcome: 'natural' | 'bust' | 'win' | 'push' | 'lose';
+  /** Second hand of a free split. */
+  split?: number[];
+  doubled?: boolean;
+  surrendered?: boolean;
 }
 
 export interface PlayStats {

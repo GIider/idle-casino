@@ -1,5 +1,10 @@
 # Idle Casino
 
+**Play now:** https://giider.github.io/idle-casino/  
+**Download the single-file build:** https://github.com/GIider/idle-casino/releases/tag/latest (`idle-casino.html`, runs offline)
+
+Every push to `main` runs the tests, builds a self-contained HTML file and publishes it as the `latest` release and to GitHub Pages.
+
 A single-player browser idle game. Every table plays itself the moment it opens; you spend each table's winnings on speed, bigger bets and odds-tilting upgrades, and prestige tables to raise their stakes. Every table has its own currency, so no single table can fund the whole casino.
 
 ## Tables

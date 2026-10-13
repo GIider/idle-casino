@@ -1,4 +1,4 @@
-import type { History, PlayStats, PlayView, Series } from './types';
+import type { BlackjackHand, History, PlayStats, PlayView, Series } from './types';
 
 export const MAX_HISTORY_POINTS = 400;
 /** Income is averaged over at least this many seconds of play per chart sample. */
@@ -9,13 +9,15 @@ export const POCKETS = 37;
 export const RECENT_COINS = 60;
 export const RECENT_POCKETS = 30;
 export const RECENT_SPINS = 12;
+export const RECENT_HANDS = 12;
+const BJ_OUTCOMES = ['natural', 'win', 'push', 'lose', 'bust'];
 
 export function newStats(): PlayStats {
   return {
     coin: { heads: 0, tails: 0, streak: 0, longest: 0, recent: [] },
     slots: { symbols: new Array(SLOT_SYMBOLS).fill(0), triples: 0, pairs: 0, rounds: 0, recent: [] },
     roulette: { pockets: new Array(POCKETS).fill(0), recent: [] },
-    blackjack: { natural: 0, win: 0, push: 0, lose: 0, bust: 0 },
+    blackjack: { natural: 0, win: 0, push: 0, lose: 0, bust: 0, recent: [] },
   };
 }
 
@@ -67,6 +69,15 @@ export function recordView(h: History, view: PlayView | undefined): void {
     }
     case 'blackjack':
       s.blackjack[view.outcome]++;
+      s.blackjack.recent.push({
+        player: [...view.player],
+        dealer: [...view.dealer],
+        outcome: view.outcome,
+        ...(view.split ? { split: [...view.split] } : {}),
+        ...(view.doubled ? { doubled: true } : {}),
+        ...(view.surrendered ? { surrendered: true } : {}),
+      });
+      if (s.blackjack.recent.length > RECENT_HANDS) s.blackjack.recent.shift();
       break;
   }
 }
@@ -172,6 +183,22 @@ export function normalizeStats(raw: unknown): PlayStats {
   }
   if (r.blackjack && typeof r.blackjack === 'object') {
     for (const k of ['natural', 'win', 'push', 'lose', 'bust'] as const) s.blackjack[k] = count(r.blackjack[k]);
+    if (Array.isArray(r.blackjack.recent)) {
+      const cards = (x: unknown) => recent(x, 12, 10).filter((c) => c >= 1);
+      for (const x of r.blackjack.recent as any[]) {
+        if (!x || typeof x !== 'object' || !BJ_OUTCOMES.includes(x.outcome)) continue;
+        const player = cards(x.player);
+        const dealer = cards(x.dealer);
+        if (player.length < 2 || dealer.length < 2) continue;
+        const hand: BlackjackHand = { player, dealer, outcome: x.outcome };
+        const split = cards(x.split);
+        if (split.length >= 2) hand.split = split;
+        if (x.doubled === true) hand.doubled = true;
+        if (x.surrendered === true) hand.surrendered = true;
+        s.blackjack.recent.push(hand);
+      }
+      s.blackjack.recent = s.blackjack.recent.slice(-RECENT_HANDS);
+    }
   }
   return s;
 }

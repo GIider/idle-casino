@@ -14,7 +14,8 @@ export class SlotsCombosView {
     this.root = h('div', { class: 'combo-list hidden' });
   }
 
-  update(s: SlotsStats, force = false): void {
+  update(stats: PlayStats, force = false): void {
+    const s = stats.slots;
     const key = JSON.stringify(s.recent);
     if (!force && key === this.key) return;
     this.key = key;
@@ -32,6 +33,51 @@ export class SlotsCombosView {
           { class: `combo ${kind}` },
           h('span', { class: 'combo-reels', text: reels.map((r) => SYMBOLS[r]).join(' ') }),
           h('span', { class: 'combo-tag', text: kind === 'triple' ? 'Triple' : kind === 'pair' ? 'Pair' : '' }),
+        ),
+      );
+    }
+  }
+}
+
+const CARD_NAMES = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+const handText = (cards: number[]) => cards.map((c) => CARD_NAMES[c] ?? '?').join(' ');
+const handTotal = (cards: number[]) => {
+  let t = cards.reduce((a, c) => a + c, 0);
+  if (cards.includes(1) && t + 10 <= 21) t += 10;
+  return t;
+};
+
+/** Blackjack-only: the last few hands, player vs dealer, newest first. */
+export class BlackjackHandsView {
+  readonly root: HTMLElement;
+  private key = '';
+
+  constructor() {
+    this.root = h('div', { class: 'combo-list hidden' });
+  }
+
+  update(stats: PlayStats, force = false): void {
+    const s = stats.blackjack;
+    const key = JSON.stringify(s.recent);
+    if (!force && key === this.key) return;
+    this.key = key;
+    this.root.replaceChildren();
+    if (s.recent.length === 0) {
+      this.root.append(h('div', { class: 'history-info', text: 'No hands yet' }));
+      return;
+    }
+    for (const hand of s.recent.slice().reverse()) {
+      const mine = (cards: number[]) => `${handText(cards)} (${handTotal(cards)})`;
+      const player = hand.split ? `${mine(hand.player)} | ${mine(hand.split)}` : mine(hand.player);
+      const tags = [BJ_NAMES[hand.outcome], hand.doubled ? 'Double' : '', hand.split ? 'Split' : '', hand.surrendered ? 'Surrender' : '']
+        .filter(Boolean)
+        .join(' · ');
+      this.root.append(
+        h(
+          'div',
+          { class: `combo bj-${hand.outcome}` },
+          h('span', { class: 'bj-hand' }, h('b', { text: player }), h('span', { class: 'bj-vs', text: ' vs ' }), h('span', { text: mine(hand.dealer) })),
+          h('span', { class: 'combo-tag', text: tags }),
         ),
       );
     }

@@ -1,12 +1,9 @@
 import { defineConfig } from 'vite';
-import { resolve } from 'node:path';
+import { viteSingleFile } from 'vite-plugin-singlefile';
 
+// The release build is one self-contained `dist/index.html` (JS and CSS inlined).
+// `sim.html` (dev-only bot visualiser) is only served by `npm run dev`.
 export default defineConfig({
   base: './',
-  build: {
-    rollupOptions: {
-      // `sim.html` is the dev-only bot visualiser; it is built but not linked from the game.
-      input: { main: resolve(__dirname, 'index.html'), sim: resolve(__dirname, 'sim.html') },
-    },
-  },
+  plugins: [viteSingleFile()],
 });

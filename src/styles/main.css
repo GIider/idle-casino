@@ -930,3 +930,10 @@ small {
 .bar-wrap { position: relative; }
 .bar-wrap .bar { height: 18px; }
 .bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px #000; pointer-events: none; }
+
+.bj-hand { font-size: 14px; }
+.bj-vs { color: var(--muted); }
+.combo.bj-natural, .combo.bj-win { border-color: var(--green); }
+.combo.bj-natural .combo-tag { color: var(--gold); font-weight: 800; }
+.combo.bj-win .combo-tag { color: var(--green); }
+.combo.bj-lose .combo-tag, .combo.bj-bust .combo-tag { color: var(--red); }
