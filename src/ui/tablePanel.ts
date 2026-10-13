@@ -181,7 +181,7 @@ export class TablePanel {
     const hi = maxBet(def, ts.prestige);
     setText(
       this.statsEl,
-      `Wallet ${fmt(ts.wallet)} ${cur.icon} ${cur.name} · Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(ts.levels, game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak).toFixed(2)}${ts.levels.streak ? ` · streak ${ts.streak}` : ''}`,
+      `Wallet ${fmt(ts.wallet)} ${cur.icon} ${cur.name} · Prestige ${ts.prestige} · ${fmt(ts.plays)} plays · run profit ${fmtSigned(ts.profit)} · luck ${(luckChance(game.levelsFor(id), game.bonus) * 100).toFixed(1)}% · winnings ×${payoutMultiplier(game.levelsFor(id), ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak).toFixed(2)}${ts.levels.streak ? ` · streak ${ts.streak}` : ''}`,
     );
 
     const bonus = game.bonus;
@@ -192,7 +192,7 @@ export class TablePanel {
     setText(
       this.autoInfo,
       `${rate.toFixed(1)} plays/sec · bet ${fmt(bet || lo)} ${cur.name} (${betText}, limits ${fmt(lo)}–${fmt(hi)}) · ` +
-        `max payout per play ${fmt(maxPayout(def, ts.prestige))} · ≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}/sec`,
+        `max payout per play ${fmt(maxPayout(def, ts.prestige, game.levelsFor(id)))} · ≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}/sec`,
     );
 
     const toggles = game.casinoLevel('policy') >= 1;

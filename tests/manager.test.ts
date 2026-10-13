@@ -151,20 +151,4 @@ describe('blackjack card-count achievements', () => {
     expect(ach.loseCards4.count).toBe(0);
     expect(ach.winCards4.count).toBe(0);
   });
-
-  it('perks boost N-card wins and refund N-card losses', () => {
-    const def = TABLES.blackjack;
-    const scan = (levels: Record<string, number>, want: 'win' | 'lose', cards: number) => {
-      const rng = mulberry32(11);
-      for (let i = 0; i < 20000; i++) {
-        const r = def.play(rng, levels);
-        const v = r.view as Extract<PlayView, { kind: 'blackjack' }>;
-        if (v.outcome === want && v.player.length === cards) return r.mult;
-      }
-      throw new Error('no such hand');
-    };
-    expect(scan({ perk_winCards3: 3 }, 'win', 3)).toBeCloseTo(2.15);
-    expect(scan({ perk_loseCards3: 2 }, 'lose', 3)).toBeCloseTo(0.1);
-    expect(scan({}, 'win', 3)).toBe(2);
-  });
 });

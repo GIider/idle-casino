@@ -66,6 +66,8 @@ export class App {
       ),
     );
 
+    game.freeCasinoShop = new URLSearchParams(window.location.search).get('cardcounting') === '1';
+
     const nav = h('nav', { class: 'tabs' });
     const main = h('main', {});
     for (const id of TABLE_IDS) {

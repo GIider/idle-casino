@@ -1,6 +1,6 @@
 import type { TableDef } from '../core/types';
 import { pickWeighted } from '../core/rng';
-import { NEAR_MISS_REFUND, POLISHED_TRIPLE_BONUS, SWEET_PAIR_MULT } from '../core/achievements';
+import { CASCADE_SPINS, FREE_SPINS, HOLD_CHANCE, JACKPOT_SEED, SCATTER_PAY, WILD_REACH } from '../core/achievements';
 
 export const SYMBOLS = ['🍒', '🍋', '🔔', '🍀', '7️⃣', '💎'];
 /** Payout multiplier for three of a kind. */
@@ -34,18 +34,56 @@ export const slots: TableDef = {
   ],
   play(rng, levels) {
     const weights = slotWeights(levels.loaded ?? 0);
-    const reels = [0, 1, 2].map(() => pickWeighted(rng, weights));
-    const detail = reels.map((r) => SYMBOLS[r]).join(' ');
-    if (reels[0] === reels[1] && reels[1] === reels[2]) {
-      const polish = levels.perk_tripleCrown ? POLISHED_TRIPLE_BONUS[levels.perk_tripleCrown - 1] : 1;
-      return { mult: TRIPLE_PAYOUT[reels[0]] * polish, detail, view: { kind: 'slots', reels } };
+    const spin = () => [0, 1, 2].map(() => pickWeighted(rng, weights));
+    const wild = levels.perk_diamondMine ? WILD_REACH[levels.perk_diamondMine - 1] : -1;
+    const jackpot = levels.perk_collect_slots ? JACKPOT_SEED[levels.perk_collect_slots - 1] : 0;
+    const isTriple = (r: number[]) => r[0] === r[1] && r[1] === r[2];
+
+    /** Payout multiple of one set of reels, wild diamonds included. */
+    const line = (r: number[]): number => {
+      let triple = isTriple(r) ? r[0] : -1;
+      if (triple < 0 && wild >= 0) {
+        // Wild Diamond: 💎 completes a line of a symbol it is allowed to stand in for.
+        const rest = r.filter((x) => x !== 5);
+        if (rest.length > 0 && rest.length < 3 && rest.every((x) => x === rest[0]) && rest[0] <= wild) triple = rest[0];
+      }
+      if (triple >= 0) return TRIPLE_PAYOUT[triple] + (triple === 5 && isTriple(r) ? jackpot : 0);
+      return r.filter((x) => x === 0).length === 2 ? 1 : 0;
+    };
+
+    let reels = spin();
+    // Hold & Respin: now and then the cherries stay and everything else spins again.
+    const hold = levels.perk_cherrySeason ? HOLD_CHANCE[levels.perk_cherrySeason - 1] : 0;
+    if (hold > 0 && reels.some((r) => r === 0) && !isTriple(reels) && rng() < hold) {
+      const next = spin();
+      reels = reels.map((r, k) => (r === 0 ? r : next[k]));
     }
-    const cherries = reels.filter((r) => r === 0).length;
-    if (cherries === 2) {
-      return { mult: levels.perk_cherrySeason ? SWEET_PAIR_MULT[levels.perk_cherrySeason - 1] : 1, detail, view: { kind: 'slots', reels } };
+    let mult = line(reels);
+    const notes: string[] = [];
+    // Cascade: a three of a kind chains into free spins until one misses.
+    const cascade = levels.perk_tripleCrown ? CASCADE_SPINS[levels.perk_tripleCrown - 1] : 0;
+    if (cascade > 0 && isTriple(reels)) {
+      for (let i = 0; i < cascade; i++) {
+        const extra = spin();
+        mult += line(extra);
+        if (!isTriple(extra)) break;
+        notes.push('cascade');
+      }
     }
-    const pair = reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2];
-    const nearMiss = pair && levels.perk_hotStreak ? NEAR_MISS_REFUND[levels.perk_hotStreak - 1] : 0;
-    return { mult: nearMiss, detail, view: { kind: 'slots', reels } };
+    // Free Spins: a 2x+ win earns spins that pay in full.
+    const free = levels.perk_hotStreak ? FREE_SPINS[levels.perk_hotStreak - 1] : 0;
+    if (free > 0 && mult >= 2) {
+      for (let i = 0; i < free; i++) mult += line(spin());
+      notes.push(`${free} free spin${free > 1 ? 's' : ''}`);
+    }
+    // Scatter Sevens: every seven anywhere pays.
+    const scatter = levels.perk_sevenHeaven ? SCATTER_PAY[levels.perk_sevenHeaven - 1] : 0;
+    const sevens = reels.filter((r) => r === 4).length;
+    if (scatter > 0 && sevens > 0) {
+      mult += scatter * sevens;
+      notes.push(`${sevens}× scatter`);
+    }
+    const detail = reels.map((r) => SYMBOLS[r]).join(' ') + (notes.length ? ` (${notes.join(', ')})` : '');
+    return { mult, detail, view: { kind: 'slots', reels } };
   },
 };

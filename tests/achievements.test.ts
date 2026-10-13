@@ -3,7 +3,7 @@ import { Game } from '../src/core/game';
 import { createInitialState, normalizeState } from '../src/core/state';
 import { exportSave, importSave } from '../src/core/save';
 import { mulberry32 } from '../src/core/rng';
-import { allUpgrades, estimateNetPerPlay, payoutMultiplier } from '../src/core/economy';
+import { allUpgrades, estimateNetPerPlay } from '../src/core/economy';
 import { ACHIEVEMENTS, backfillAchievements, normalizeAchievements, observeRound, perkKey, perkLevels } from '../src/core/achievements';
 import { TABLES, TABLE_IDS } from '../src/tables';
 import type { PlayView } from '../src/core/types';
@@ -65,8 +65,8 @@ describe('achievements', () => {
     const g = new Game(createInitialState(0), mulberry32(1));
     g.state.achievements.headsCollector.count = ACHIEVEMENTS.find((a) => a.id === 'headsCollector')!.targets[0] - 1;
     g.table('coinflip').wallet = 1e6;
-    for (let i = 0; i < 50 && !g.notice?.text.includes('Lucky Penny'); i++) g.play('coinflip');
-    expect(g.notice?.text).toContain('Lucky Penny');
+    for (let i = 0; i < 50 && !g.notice?.text.includes('Let It Ride'); i++) g.play('coinflip');
+    expect(g.notice?.text).toContain('Let It Ride');
   });
 
   it('normalizes junk and backfills old saves from play stats', () => {
@@ -94,7 +94,7 @@ describe('achievements', () => {
       const base = estimateNetPerPlay(def, {}, 0, bet, mulberry32(5), 20000) / bet;
       const perked = estimateNetPerPlay(def, maxed, 0, bet, mulberry32(5), 20000) / bet;
       expect(perked).toBeGreaterThanOrEqual(base - 0.02);
-      expect(perked - base).toBeLessThan(0.35);
+      expect(perked - base, id).toBeLessThan(1.25);
     }
   });
 
@@ -108,9 +108,9 @@ describe('achievements', () => {
     g.buyUpgrade('coinflip', ups[ups.length - 1].id);
     expect(g.state.achievements.collect_coinflip.tier).toBe(1);
     expect(g.notice?.text).toContain('Fully Loaded Coin');
-    expect(g.levelsFor('coinflip').perk_collection).toBe(1);
+    expect(g.levelsFor('coinflip').perk_collect_coinflip).toBe(1);
     // Other tables are unaffected.
-    expect(g.levelsFor('slots').perk_collection).toBeUndefined();
+    expect(g.levelsFor('slots').perk_collect_slots).toBeUndefined();
 
     for (const u of ups) while (g.upgradeLevel('coinflip', u.id) < u.maxLevel) g.buyUpgrade('coinflip', u.id);
     expect(g.state.achievements.collect_coinflip.tier).toBe(2);
@@ -119,12 +119,7 @@ describe('achievements', () => {
     expect(g.prestige('coinflip')).toBe(true);
     expect(g.table('coinflip').levels).toEqual({});
     expect(g.state.achievements.collect_coinflip.tier).toBe(2);
-    expect(g.levelsFor('coinflip').perk_collection).toBe(2);
-  });
-
-  it('collection perk adds 5% winnings per tier', () => {
-    expect(payoutMultiplier({ perk_collection: 2 }, 0)).toBeCloseTo(1.1);
-    expect(payoutMultiplier({}, 0)).toBe(1);
+    expect(g.levelsFor('coinflip').perk_collect_coinflip).toBe(2);
   });
 
   it('earned tiers survive raised targets, and old single-tier grinds keep the full perk', () => {

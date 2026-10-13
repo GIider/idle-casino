@@ -1,5 +1,13 @@
 import type { TableDef } from '../core/types';
-import { COIN_HEADS_CHANCE, CONSOLATION_REFUND, DOUBLE_HEADER_CHANCE } from '../core/achievements';
+import {
+  EDGE_CHANCE,
+  EDGE_MULT,
+  GOLD_COIN_CHANCE,
+  GOLD_COIN_MULT,
+  PITY_CHANCE,
+  RIDE_CHANCE,
+  RIDE_LINKS,
+} from '../core/achievements';
 
 export const coinflip: TableDef = {
   id: 'coinflip',
@@ -23,18 +31,32 @@ export const coinflip: TableDef = {
     },
   ],
   play(rng, levels) {
-    const luckyPenny = levels.perk_headsCollector ? COIN_HEADS_CHANCE[levels.perk_headsCollector - 1] : 0;
-    const chance = 0.55 + 0.012 * (levels.edge ?? 0) + luckyPenny;
-    const win = rng() < chance;
-    const view = { kind: 'coin' as const, heads: win };
-    if (win) {
-      // Double Header: some wins pay 3x.
-      const header = levels.perk_hotHand ? DOUBLE_HEADER_CHANCE[levels.perk_hotHand - 1] : 0;
-      const triple = header > 0 && rng() < header;
-      return { mult: triple ? 3 : 2, detail: triple ? '🪙 Heads — double header!' : '🪙 Heads', view };
+    const chance = 0.55 + 0.012 * (levels.edge ?? 0);
+    const gold = levels.perk_collect_coinflip ? GOLD_COIN_CHANCE[levels.perk_collect_coinflip - 1] : 0;
+    // Gold Coin (capstone): a rare jackpot flip.
+    if (gold > 0 && rng() < gold) {
+      return { mult: GOLD_COIN_MULT, detail: '🪙 Gold coin!', view: { kind: 'coin', heads: true } };
     }
-    // Consolation Prize: tails give part of the stake back.
-    const refund = levels.perk_coldComfort ? CONSOLATION_REFUND[levels.perk_coldComfort - 1] : 0;
-    return { mult: refund, detail: '🪙 Tails', view };
+    // Edge Landing: the coin stands on its rim.
+    const edge = levels.perk_coldComfort ? EDGE_CHANCE[levels.perk_coldComfort - 1] : 0;
+    if (edge > 0 && rng() < edge) {
+      return { mult: EDGE_MULT, detail: '🪙 Landed on its edge!', view: { kind: 'coin', heads: true } };
+    }
+    let heads = rng() < chance;
+    let mult = heads ? 2 : 0;
+    let rode = 0;
+    // Let It Ride: a win may be flipped again, doubling the winnings or losing them.
+    const links = levels.perk_headsCollector ? RIDE_LINKS[levels.perk_headsCollector - 1] : 0;
+    for (let i = 0; i < links && heads && rng() < RIDE_CHANCE; i++) {
+      rode++;
+      heads = rng() < chance;
+      mult = heads ? mult * 2 : 0;
+    }
+    const view = { kind: 'coin' as const, heads };
+    const ride = rode > 0 ? (heads ? ` — rode ${rode}× to ${mult}×!` : ' — lost the ride') : '';
+    // Pity Flip: tails may earn a free play.
+    const pity = levels.perk_tailsCollector ? PITY_CHANCE[levels.perk_tailsCollector - 1] : 0;
+    const bonusPlay = !heads && pity > 0 && rng() < pity;
+    return { mult, detail: `🪙 ${heads ? 'Heads' : 'Tails'}${ride}`, view, bonusPlay: bonusPlay || undefined };
   },
 };

@@ -133,13 +133,15 @@ export interface PlayResult {
   detail: string;
   /** Structured description of the round, for rendering. */
   view?: PlayView;
+  /** The round earned a free follow-up play (Pity Flip). */
+  bonusPlay?: boolean;
 }
 
 export type PlayView =
   | { kind: 'coin'; heads: boolean }
   | { kind: 'slots'; reels: number[] }
   | { kind: 'roulette'; pocket: number; bets: string[] }
-  | { kind: 'blackjack'; player: number[]; dealer: number[]; outcome: 'natural' | 'bust' | 'win' | 'push' | 'lose'; insured: boolean };
+  | { kind: 'blackjack'; player: number[]; dealer: number[]; outcome: 'natural' | 'bust' | 'win' | 'push' | 'lose'; insured: boolean; /** The second hand of a free split. */ split?: number[]; doubled?: boolean; surrendered?: boolean };
 
 export interface UpgradeDef {
   id: string;

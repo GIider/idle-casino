@@ -55,6 +55,8 @@ export class Game {
   /** Cumulative net winnings per table this session; the UI derives income/sec from it. */
   sessionNet: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
   notice: { text: string; seq: number } | null = null;
+  /** Dev mode (`?cardcounting=1`): casino shop upgrades cost no chips. */
+  freeCasinoShop = false;
   private seq = 0;
   private acc: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
   private managerClock: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
@@ -117,7 +119,7 @@ export class Game {
     ts.wallet -= stake;
     const outcome = resolvePlay(def, this.levelsFor(id), ts.prestige, stake, this.rng, this.bonusFor(id), ts.streak);
     ts.wallet += outcome.payout;
-    ts.streak = nextStreak(ts.streak, outcome.net);
+    ts.streak = nextStreak(ts.streak, outcome.net, this.levelsFor(id));
     ts.plays++;
     ts.profit += outcome.net;
     ts.lifetimeProfit += outcome.net;
@@ -144,11 +146,16 @@ export class Game {
       this.acc[id] -= n;
       n = Math.min(n, MAX_AUTO_PLAYS_PER_TICK);
       for (let i = 0; i < n; i++) {
-        if (!this.play(id)) break;
-        // Second Dealer: a play may immediately trigger another at the same table.
+        const first = this.play(id);
+        if (!first) break;
+        // Second Dealer (and Pity Flip): a play may immediately trigger another at the same table.
         const chance = dealerChance(ts.levels);
-        for (let b = 0; b < MAX_BONUS_PLAYS && chance > 0 && this.rng() < chance; b++) {
-          if (!this.play(id)) break;
+        const again = (o: { bonusPlay?: boolean }) => !!o.bonusPlay || (chance > 0 && this.rng() < chance);
+        let more = again(first);
+        for (let b = 0; b < MAX_BONUS_PLAYS && more; b++) {
+          const o = this.play(id);
+          if (!o) break;
+          more = again(o);
         }
       }
       recordRate(ts.history, dt, ts.plays, ts.lifetimeProfit);
@@ -334,6 +341,11 @@ export class Game {
     return this.state.casino.levels[upgradeId] ?? 0;
   }
 
+  /** Chip price of a casino upgrade level; free in dev mode. */
+  casinoUpgradeCostFor(upg: Parameters<typeof casinoUpgradeCost>[0], level: number): number {
+    return this.freeCasinoShop ? 0 : casinoUpgradeCost(upg, level);
+  }
+
   buyCasinoUpgrade(upgradeId: string): boolean {
     const upg = CASINO_UPGRADES.find((u) => u.id === upgradeId);
     if (!upg) return false;
@@ -341,7 +353,7 @@ export class Game {
     const level = casino.levels[upgradeId] ?? 0;
     if (level >= upg.maxLevel) return false;
     if (upg.requires && (casino.levels[upg.requires.id] ?? 0) < upg.requires.level) return false;
-    const cost = casinoUpgradeCost(upg, level);
+    const cost = this.casinoUpgradeCostFor(upg, level);
     if (casino.chips < cost) return false;
     casino.chips -= cost;
     casino.levels[upgradeId] = level + 1;

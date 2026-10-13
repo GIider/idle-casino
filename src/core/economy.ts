@@ -1,5 +1,6 @@
 import type { PlayView, Rng, TableDef, TableState, UpgradeDef } from './types';
 import { NO_BONUS, type CasinoBonus } from './casino';
+import { CARD_SHARP_LUCK, DOUBLE_LUCK_FRACTION, HEAT_WAVE_CAP, RAISED_CEILING } from './achievements';
 
 export const COMMON_UPGRADES: UpgradeDef[] = [
   {
@@ -72,10 +73,6 @@ export const MAX_PAYOUT_GROWTH = 5;
 export const UPGRADE_PRESTIGE_GROWTH = 8;
 export const PRESTIGE_THRESHOLD_GROWTH = 10;
 export const PRESTIGE_PAYOUT_BONUS = 0.1;
-/** Level key (per table) under which the "every upgrade" achievement's tier is passed in `levels`. */
-export const COLLECTION_PERK_KEY = 'perk_collection';
-/** Winnings bonus per tier of the "every upgrade" achievement. */
-export const COLLECTION_BONUS_PER_TIER = 0.05;
 export const AUTO_BASE_RATE = 1;
 /** Hot Streak: winnings bonus per level per consecutive win, and the streak length that stops counting. */
 export const STREAK_BONUS_PER_LEVEL = 0.03;
@@ -104,8 +101,9 @@ export function maxBet(def: TableDef, prestige: number): number {
   return def.baseMaxBet * MAX_BET_GROWTH ** prestige;
 }
 
-export function maxPayout(def: TableDef, prestige: number): number {
-  return def.baseMaxPayout * MAX_PAYOUT_GROWTH ** prestige;
+export function maxPayout(def: TableDef, prestige: number, levels: Record<string, number> = {}): number {
+  const ceiling = levels.perk_ceilingBreaker ? 1 + RAISED_CEILING[levels.perk_ceilingBreaker - 1] : 1;
+  return def.baseMaxPayout * MAX_PAYOUT_GROWTH ** prestige * ceiling;
 }
 
 export function upgradeCost(
@@ -124,12 +122,19 @@ export function prestigeThreshold(def: TableDef, prestige: number, bonus: Casino
 }
 
 export function luckChance(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {
-  return Math.min(0.95, 0.025 * (levels.luck ?? 0) + bonus.luck);
+  // Card Sharp (blackjack perk) amplifies Lucky Charm itself.
+  const sharp = levels.perk_loseCards4 ? CARD_SHARP_LUCK[levels.perk_loseCards4 - 1] : 1;
+  return Math.min(0.95, (0.025 * (levels.luck ?? 0) + bonus.luck) * sharp);
+}
+
+/** Longest win streak that still adds winnings; Heat Wave (coin flip perk) raises it. */
+export function streakCap(levels: Record<string, number>): number {
+  return STREAK_CAP + (levels.perk_hotHand ? HEAT_WAVE_CAP[levels.perk_hotHand - 1] : 0);
 }
 
 /** Winnings multiplier from the Hot Streak upgrade at the given win streak. */
 export function streakMultiplier(levels: Record<string, number>, streak: number): number {
-  return 1 + STREAK_BONUS_PER_LEVEL * (levels.streak ?? 0) * Math.min(STREAK_CAP, Math.max(0, streak));
+  return 1 + STREAK_BONUS_PER_LEVEL * (levels.streak ?? 0) * Math.min(streakCap(levels), Math.max(0, streak));
 }
 
 export function cashbackFraction(levels: Record<string, number>): number {
@@ -147,12 +152,10 @@ export function payoutMultiplier(
   baseWinBonus = 0,
   streak = 0,
 ): number {
-  const collection = 1 + COLLECTION_BONUS_PER_TIER * (levels[COLLECTION_PERK_KEY] ?? 0);
   return (
     (1 + baseWinBonus) *
     (1 + 0.08 * (levels.payout ?? 0)) *
     (1 + PRESTIGE_PAYOUT_BONUS * prestige) *
-    collection *
     bonus.payout *
     streakMultiplier(levels, streak)
   );
@@ -198,12 +201,18 @@ export interface Outcome {
   view?: PlayView;
   rerolled: boolean;
   capped: boolean;
+  /** The table asked for a free follow-up play (Pity Flip). */
+  bonusPlay?: boolean;
 }
 
-/** Win streak after a round with the given net result: wins extend it, losses reset it, pushes keep it. */
-export function nextStreak(streak: number, net: number): number {
-  if (net > 0) return Math.min(STREAK_CAP, streak + 1);
-  return net < 0 ? 0 : streak;
+/**
+ * Win streak after a round with the given net result: wins extend it, losses reset it, pushes keep it.
+ * Heat Wave (levels) raises the cap, and at tier 3 a loss only halves the streak.
+ */
+export function nextStreak(streak: number, net: number, levels: Record<string, number> = {}): number {
+  if (net > 0) return Math.min(streakCap(levels), streak + 1);
+  if (net < 0) return levels.perk_hotHand === 3 ? Math.floor(streak / 2) : 0;
+  return streak;
 }
 
 /** Plays one round: applies the luck re-roll, payout upgrades and the payout cap. */
@@ -218,16 +227,20 @@ export function resolvePlay(
 ): Outcome {
   let result = def.play(rng, levels);
   let rerolled = false;
-  if (result.mult < 1 && rng() < luckChance(levels, bonus)) {
+  const luck = luckChance(levels, bonus);
+  if (result.mult < 1 && rng() < luck) {
     result = def.play(rng, levels);
     rerolled = true;
+    // Double Luck: a second re-roll at a fraction of the chance.
+    const second = levels.perk_secondWind ? luck * DOUBLE_LUCK_FRACTION[levels.perk_secondWind - 1] : 0;
+    if (result.mult < 1 && second > 0 && rng() < second) result = def.play(rng, levels);
   }
 
   let payout: number;
   let capped = false;
   if (result.mult > 1) {
     let profit = (result.mult - 1) * bet * payoutMultiplier(levels, prestige, bonus, def.baseWinBonus, streak);
-    const cap = maxPayout(def, prestige);
+    const cap = maxPayout(def, prestige, levels);
     if (profit > cap) {
       profit = cap;
       capped = true;
@@ -247,6 +260,7 @@ export function resolvePlay(
     view: result.view,
     rerolled,
     capped,
+    bonusPlay: result.bonusPlay,
   };
 }
 
@@ -265,7 +279,7 @@ export function estimateNetPerPlay(
   for (let i = 0; i < samples; i++) {
     const net = resolvePlay(def, levels, prestige, bet, rng, bonus, streak).net;
     sum += net;
-    streak = nextStreak(streak, net);
+    streak = nextStreak(streak, net, levels);
   }
   return sum / samples;
 }

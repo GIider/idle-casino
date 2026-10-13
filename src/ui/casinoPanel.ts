@@ -7,7 +7,6 @@ import {
   MANAGER_RESERVE_BETS,
   ascensionMultiplier,
   ascensionThreshold,
-  casinoUpgradeCost,
   managerInterval,
   type CasinoUpgradeDef,
 } from '../core/casino';
@@ -156,7 +155,7 @@ export class CasinoPanel {
         setText(row.button, 'Maxed');
         setDisabled(row.button, true);
       } else {
-        const cost = casinoUpgradeCost(row.def, level);
+        const cost = game.casinoUpgradeCostFor(row.def, level);
         const req = row.def.requires;
         const locked = req !== undefined && game.casinoLevel(req.id) < req.level;
         const reqName = req ? CASINO_UPGRADES.find((u) => u.id === req.id)?.name : '';
