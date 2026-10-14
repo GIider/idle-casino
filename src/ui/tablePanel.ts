@@ -339,8 +339,11 @@ export class TablePanel {
     setText(this.statTiles.winnings, `×${(pv ? nextWin : curWin).toFixed(2)}`);
     setText(this.bigMin, `${cur.icon} ${fmt(pv ? minBet(def, ts.prestige + 1) : curMin)}`);
     setText(this.bigMax, `${cur.icon} ${fmt(pv ? maxPayout(def, ts.prestige + 1, levels) : curMax)}`);
-    setText(this.bigMinOld, pv ? `was ${fmt(curMin)}` : ' ');
-    setText(this.bigMaxOld, pv ? `was ${fmt(curMax)}` : ' ');
+    // Always rendered (just concealed) so the tile keeps its size and the button doesn't move under the cursor.
+    setText(this.bigMinOld, `was ${fmt(curMin)}`);
+    setText(this.bigMaxOld, `was ${fmt(curMax)}`);
+    toggleClass(this.bigMinOld, 'concealed', !pv);
+    toggleClass(this.bigMaxOld, 'concealed', !pv);
     if (pv && this.frozenWin === null) this.frozenWin = payoutMultiplier({}, ts.prestige, game.bonusFor(id), def.baseWinBonus, 0);
     if (!pv) this.frozenWin = null;
     setText(this.winOld, `was ×${(this.frozenWin ?? curWin).toFixed(2)}`);

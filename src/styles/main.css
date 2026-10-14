@@ -946,6 +946,9 @@ small {
 .stat-tile.big { padding: 12px 14px; transition: box-shadow .15s, border-color .15s; }
 .stat-tile.big .big-value { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
 .big-old { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); min-height: 16px; text-decoration: line-through; }
+.big-old.concealed { visibility: hidden; }
+.stat-tile.big small { white-space: nowrap; }
+.stat-tile.big .big-value { white-space: nowrap; }
 .stat-tile.preview, .kv.preview { border-color: var(--gold); box-shadow: 0 0 14px rgba(255, 200, 80, .45); }
 .stat-tile.preview .big-value, .kv.preview .kv-value { color: var(--gold); }
 .kv.preview { border-left-color: var(--gold); }
