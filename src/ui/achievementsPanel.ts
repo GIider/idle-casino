@@ -126,3 +126,54 @@ export class AchievementsCard {
     return lines.join('\n');
   }
 }
+
+/** Snapshot of one achievement's progress, shared by the casino-wide achievements page. */
+export interface AchievementStatus {
+  def: AchievementDef;
+  tier: number;
+  top: number;
+  done: boolean;
+  /** 0..1 progress toward the next tier (1 when complete). */
+  fraction: number;
+  /** "123 / 1,000", "best 4 / 7", "3 / 5 owned" or "Complete". */
+  label: string;
+  /** What to do next; empty when complete. */
+  goal: string;
+  /** Perk text for the current tier (or the first tier while locked). */
+  effect: string;
+  /** Perk text for the next tier; empty when complete. */
+  nextEffect: string;
+}
+
+export function achievementStatus(game: Game, def: AchievementDef): AchievementStatus {
+  const p = game.state.achievements[def.id] ?? { count: 0, run: 0, best: 0, tier: 0 };
+  const top = maxTier(def);
+  const done = p.tier >= top;
+  const effect = def.perk.describe(Math.max(1, p.tier));
+  const nextEffect = done ? '' : def.perk.describe(p.tier + 1);
+  if (def.kind === 'collect') {
+    const upgrades = allUpgrades(game.def(def.table));
+    const levels = game.table(def.table).levels;
+    const have =
+      p.tier === 0
+        ? upgrades.filter((u) => (levels[u.id] ?? 0) >= 1).length
+        : upgrades.filter((u) => (levels[u.id] ?? 0) >= u.maxLevel).length;
+    return {
+      def, tier: p.tier, top, done,
+      fraction: done ? 1 : have / Math.max(1, upgrades.length),
+      label: done ? 'Complete' : `${have} / ${upgrades.length} ${p.tier === 0 ? 'owned' : 'maxed'}`,
+      goal: done ? '' : p.tier === 0 ? 'Own every upgrade' : 'Max every upgrade',
+      effect, nextEffect,
+    };
+  }
+  const value = def.kind === 'grind' ? p.count : p.best;
+  const next = def.targets[Math.min(p.tier, top - 1)];
+  const prev = p.tier > 0 ? def.targets[p.tier - 1] : 0;
+  return {
+    def, tier: p.tier, top, done,
+    fraction: done ? 1 : Math.min(1, Math.max(0, (value - prev) / (next - prev))),
+    label: done ? 'Complete' : def.kind === 'grind' ? `${fmt(value)} / ${fmt(next)}` : `best ${value} / ${next}`,
+    goal: done ? '' : def.kind === 'grind' ? `${def.goal} ${fmt(next)} times` : `${def.goal}: ${next}`,
+    effect, nextEffect,
+  };
+}

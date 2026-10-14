@@ -1175,3 +1175,23 @@ small {
 .legend-item .blip { display: inline-block; flex: none; width: 10px; height: 10px; }
 
 .tile.unlocking .bar-fill { background: var(--green); }
+
+/* Achievements page */
+.ach-summary { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
+.ach-filters { display: flex; flex-direction: column; gap: 6px; }
+.ach-body { display: flex; flex-direction: column; gap: 8px; }
+.ach-head { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; color: var(--fg); font: inherit; font-weight: 800; cursor: pointer; padding: 0 0 8px; }
+.ach-head small { color: var(--muted); font-weight: 600; }
+.ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.ach-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px; border-top-width: 1px; gap: 4px; }
+.ach-card:first-of-type { border-top: 1px solid var(--line); }
+.ach-card.maxed { border-color: var(--gold); }
+.ach-title { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.ach-sub, .ach-next-gain { color: var(--muted); text-transform: capitalize; }
+.ach-next-gain { text-transform: none; font-size: 11px; }
+.ach-pips { display: inline-flex; gap: 4px; flex: none; }
+.ach-pip { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--muted); }
+.ach-pip.on.r0 { background: var(--cyan); border-color: var(--cyan); }
+.ach-pip.on.r1 { background: var(--pink); border-color: var(--pink); }
+.ach-pip.on.r2 { background: var(--gold); border-color: var(--gold); }
+@media (max-width: 800px) { .ach-grid { grid-template-columns: 1fr; } }

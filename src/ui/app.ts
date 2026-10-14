@@ -6,6 +6,7 @@ import { h, setText, toggleClass } from './dom';
 import { fmt } from './format';
 import { TablePanel } from './tablePanel';
 import { CasinoPanel } from './casinoPanel';
+import { AchievementsPage } from './achievementsPage';
 import { cycleQuality } from './quality';
 import { CROSS_PRESTIGE_BONUS, allUpgrades } from '../core/economy';
 import { previousTable } from '../tables';
@@ -20,7 +21,11 @@ export class App {
   private game: Game;
   private panels = new Map<TableId, TablePanel>();
   private tabs = new Map<TableId, HTMLButtonElement>();
-  private selected: TableId | 'casino' = 'coinflip';
+  private selected: TableId | 'casino' | 'achievements' = 'coinflip';
+  private achPage: AchievementsPage;
+  private achTab: HTMLButtonElement;
+  private achLabel: HTMLElement;
+  private achFill: HTMLElement;
   private casinoPanel: CasinoPanel;
   private casinoTab: HTMLButtonElement;
   private casinoLabel: HTMLElement;
@@ -32,7 +37,7 @@ export class App {
   private handlers: AppHandlers;
   private sides = new Map<TableId, HTMLElement>();
   private qualityBtn: HTMLButtonElement;
-  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; name: HTMLElement; fill: HTMLElement; wallet: HTMLElement; money: HTMLElement }>();
+  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; fill: HTMLElement; wallet: HTMLElement; money: HTMLElement }>();
   private chips = new Map<TableId, HTMLElement>();
   private slowAt = 0;
 
@@ -95,13 +100,12 @@ export class App {
       const lvl = h('small', { text: '' });
       const sub = h('small', { class: 'tile-rate', text: '' });
       const icon = h('span', { class: 'tile-icon', text: def.icon });
-      const name = h('strong', { text: def.name });
       const fill = h('div', { class: 'bar-fill' });
       const bar = h('div', { class: 'bar tile-bar' }, fill);
       const money = h('span', { class: 'money', text: '0' });
       const wallet = h('span', { class: 'tile-wallet', title: `${def.currency.name} in the ${def.name} wallet` }, h('span', { text: def.currency.icon }), money);
-      const root = h('button', { class: 'tab tile', title: def.name, onclick: () => this.select(id) }, icon, bar, name, wallet, lvl, sub);
-      this.tiles.set(id, { root, sub, lvl, icon, name, fill, wallet, money });
+      const root = h('button', { class: 'tab tile', title: def.name, onclick: () => this.select(id) }, icon, bar, wallet, lvl, sub);
+      this.tiles.set(id, { root, sub, lvl, icon, fill, wallet, money });
       this.tabs.set(id, root);
       if (previousTable(id)) {
         const chip = h('span', { class: 'link-chip', text: '→' });
@@ -125,21 +129,36 @@ export class App {
       this.casinoLabel,
     );
     tileRow.append(this.casinoTab);
+    this.achPage = new AchievementsPage(game);
+    this.achLabel = h('small', { text: '' });
+    this.achTab = h(
+      'button',
+      { class: 'tab tile', title: 'Achievements', onclick: () => this.select('achievements') },
+      h('span', { class: 'tile-icon', text: '🏆' }),
+      h('div', { class: 'bar tile-bar' }, (this.achFill = h('div', { class: 'bar-fill' }))),
+      h('strong', { text: 'Achievements' }),
+      this.achLabel,
+    );
+    tileRow.append(this.achTab);
     main.prepend(yourCasino);
-    main.append(this.casinoPanel.root);
+    main.append(this.casinoPanel.root, this.achPage.root);
 
     host.replaceChildren(header, h('div', { class: 'shell' }, main, side), this.toastEl);
     this.select(this.selected);
   }
 
-  select(id: TableId | 'casino'): void {
+  select(id: TableId | 'casino' | 'achievements'): void {
     const g = this.game;
-    if (id === 'casino' ? !g.casinoVisible() : !g.tableVisible(id)) id = 'coinflip';
+    if (id === 'achievements') {
+      // always available
+    } else if (id === 'casino' ? !g.casinoVisible() : !g.tableVisible(id)) id = 'coinflip';
     this.selected = id;
     for (const [tid, panel] of this.panels) toggleClass(panel.root, 'hidden', tid !== id);
     for (const [tid, el] of this.sides) toggleClass(el, 'hidden', tid !== id);
     for (const [tid, tab] of this.tabs) toggleClass(tab, 'active', tid === id);
     this.casinoPanel.setHidden(id !== 'casino');
+    this.achPage.setHidden(id !== 'achievements');
+    toggleClass(this.achTab, 'active', id === 'achievements');
     toggleClass(this.casinoTab, 'active', id === 'casino');
     this.slowAt = 0;
     this.updateSelected();
@@ -147,6 +166,7 @@ export class App {
 
   private updateSelected(): void {
     if (this.selected === 'casino') this.casinoPanel.update();
+    else if (this.selected === 'achievements') this.achPage.update();
     else this.panels.get(this.selected)!.update();
   }
 
@@ -163,6 +183,9 @@ export class App {
     if (now - this.slowAt >= 250) {
       this.slowAt = now;
       this.updateTiles(g);
+      const { earned, total } = this.achPage.totals();
+      this.achFill.style.transform = `scaleX(${total ? earned / total : 0})`;
+      setText(this.achLabel, `${earned} / ${total} tiers`);
       const ready = TABLE_IDS.some((id) => g.canPrestige(id));
       const title = `${ready ? '● ' : ''}Idle Casino`;
       if (document.title !== title) document.title = title;
@@ -183,12 +206,14 @@ export class App {
     toggleClass(this.casinoTab, 'hidden-feature', !casinoSeen);
     this.casinoTab.disabled = !casinoSeen;
     this.casinoTab.title = casinoSeen ? 'Casino' : '';
-    if (this.selected === 'casino' ? !casinoSeen : !g.tableVisible(this.selected)) this.select('coinflip');
+    if (this.selected === 'achievements') {
+      // always available
+    } else if (this.selected === 'casino' ? !casinoSeen : !g.tableVisible(this.selected)) this.select('coinflip');
     this.updateSelected();
 
     if (g.notice && g.notice.seq !== this.toastSeq) {
       this.toastSeq = g.notice.seq;
-      if (this.selected === 'casino') this.toast(g.notice.text);
+      if (this.selected === 'casino' || this.selected === 'achievements') this.toast(g.notice.text);
       else this.panels.get(this.selected)!.showNotice(g.notice.text);
     }
   }
@@ -232,7 +257,6 @@ export class App {
       toggleClass(t.wallet, 'hidden', !seen || !ts.unlocked);
       setText(t.money, fmt(ts.wallet));
       setText(t.icon, seen ? TABLES[id].icon : '?');
-      setText(t.name, seen ? TABLES[id].name : '???');
       setText(t.lvl, !seen ? '' : ts.unlocked ? `Prestige ${ts.prestige}` : 'Locked');
       setText(
         t.sub,
