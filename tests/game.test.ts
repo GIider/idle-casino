@@ -180,17 +180,27 @@ describe('saves', () => {
 });
 
 describe('dev unlock', () => {
-  it('unlocks every table and maxes upgrades without touching meta progress', () => {
+  it('unlocks every table and grants the Floor Manager without touching meta progress', () => {
     const g = game();
     g.devUnlockAll();
     for (const id of TABLE_IDS) {
       const ts = g.table(id);
       expect(ts.unlocked).toBe(true);
       expect(ts.wallet).toBeGreaterThan(0);
-      for (const u of allUpgrades(TABLES[id])) expect(ts.levels[u.id]).toBe(u.maxLevel);
       expect(ts.prestige).toBe(0);
     }
     expect(g.state.casino.chips).toBe(0);
     expect(g.state.casino.ascensions).toBe(0);
+    expect(g.casinoLevel('manager')).toBe(1);
+    for (const id of TABLE_IDS) {
+      const ts = g.table(id);
+      const total = allUpgrades(TABLES[id]).reduce((sum, u) => {
+        for (let l = 0; l < u.maxLevel; l++) sum += upgradeCost(TABLES[id], u, ts.prestige, l);
+        return sum;
+      }, 0);
+      expect(ts.wallet).toBeGreaterThanOrEqual(total);
+    }
+    g.tick(10);
+    expect(g.managerLog.length).toBeGreaterThan(0);
   });
 });

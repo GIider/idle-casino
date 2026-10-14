@@ -490,15 +490,22 @@ export class Game {
     return report;
   }
 
-  /** Dev tool: unlocks every table, maxes every upgrade, fills wallets and reaches the ascension threshold. Leaves prestige, achievements and chips alone. */
+  /** Dev tool: unlocks every table, grants the Floor Manager upgrades, funds every table to max out its upgrades, and reaches the ascension threshold. Leaves prestige, achievements and chips alone. */
   devUnlockAll(): void {
     for (const id of TABLE_IDS) {
       const def = TABLES[id];
       const ts = this.state.tables[id];
       ts.unlocked = true;
-      ts.wallet = Math.max(ts.wallet, def.baseMinBet * DEV_WALLET_BETS);
-      for (const upg of allUpgrades(def)) ts.levels[upg.id] = upg.maxLevel;
-      this.announce(observeUpgrades(this.state.achievements, id, allUpgrades(def), ts.levels));
+      // Enough to buy every remaining upgrade level at once, with the manager's bet reserve on top.
+      let maxAll = minBet(def, ts.prestige) * MANAGER_RESERVE_BETS;
+      for (const upg of allUpgrades(def)) {
+        for (let l = ts.levels[upg.id] ?? 0; l < upg.maxLevel; l++) maxAll += upgradeCost(def, upg, ts.prestige, l, this.bonus);
+      }
+      ts.wallet = Math.max(ts.wallet, def.baseMinBet * DEV_WALLET_BETS, maxAll);
+    }
+    // Hand over the Floor Manager line so it can be exercised; table upgrades stay unbought for it to work through.
+    for (const upg of CASINO_UPGRADES) {
+      if (['manager', 'overtime', 'concierge'].includes(upg.id)) this.state.casino.levels[upg.id] = upg.maxLevel;
     }
     const final = this.state.tables[FINAL_TABLE];
     const need = ascensionThreshold(this.state.casino.ascensions);
