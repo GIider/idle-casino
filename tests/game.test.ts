@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Game } from '../src/core/game';
 import { SAVE_VERSION, createInitialState, normalizeState } from '../src/core/state';
-import { exportSave, importSave, loadGame, saveGame } from '../src/core/save';
+import { DEV_SAVE_KEY, SAVE_KEY, clearSave, exportSave, importSave, loadGame, saveGame } from '../src/core/save';
 import { mulberry32 } from '../src/core/rng';
 import { STARTER_BETS, prestigeWallet } from '../src/core/state';
 import { prestigeThreshold, minBet, upgradeCost, allUpgrades } from '../src/core/economy';
@@ -138,6 +138,20 @@ describe('Game', () => {
 });
 
 describe('saves', () => {
+  it('clearing the dev save (card counting mode) leaves the main save intact', () => {
+    const mem = new Map<string, string>();
+    const store = {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, v),
+      removeItem: (k: string) => void mem.delete(k),
+    };
+    saveGame(createInitialState(0), store, SAVE_KEY);
+    saveGame(createInitialState(0), store, DEV_SAVE_KEY);
+    clearSave(store, DEV_SAVE_KEY);
+    expect(loadGame(store, DEV_SAVE_KEY)).toBeNull();
+    expect(loadGame(store, SAVE_KEY)).not.toBeNull();
+  });
+
   it('round-trips through storage and export', () => {
     const mem = new Map<string, string>();
     const store = {

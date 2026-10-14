@@ -7,6 +7,7 @@ import { fmt } from './format';
 import { TablePanel } from './tablePanel';
 import { CasinoPanel } from './casinoPanel';
 import { AchievementsPage } from './achievementsPage';
+import { unseenCount } from '../core/achievements';
 import { cycleQuality, qualityLabel } from './quality';
 import { CROSS_PRESTIGE_BONUS, allUpgrades } from '../core/economy';
 import { previousTable } from '../tables';
@@ -25,6 +26,7 @@ export class App {
   private achPage: AchievementsPage;
   private achTab: HTMLButtonElement;
   private achLabel: HTMLElement;
+  private achBadge: HTMLElement;
   private achFill: HTMLElement;
   private casinoPanel: CasinoPanel;
   private casinoTab: HTMLButtonElement;
@@ -134,6 +136,7 @@ export class App {
       h('span', { class: 'tile-icon', text: '🏆' }),
       h('div', { class: 'bar tile-bar' }, (this.achFill = h('div', { class: 'bar-fill' }))),
       this.achLabel,
+      (this.achBadge = h('span', { class: 'tab-badge hidden', text: '' })),
     );
     tileRow.append(this.achTab);
     main.prepend(yourCasino);
@@ -183,6 +186,10 @@ export class App {
       const { earned, total } = this.achPage.totals();
       this.achFill.style.transform = `scaleX(${total ? earned / total : 0})`;
       setText(this.achLabel, `${earned} / ${total}`);
+      const fresh = unseenCount(g.state.achievements);
+      setText(this.achBadge, String(fresh));
+      toggleClass(this.achBadge, 'hidden', fresh === 0);
+      toggleClass(this.achTab, 'has-new', fresh > 0);
       const ready = TABLE_IDS.some((id) => g.canPrestige(id));
       const title = `${ready ? '● ' : ''}Idle Casino`;
       if (document.title !== title) document.title = title;

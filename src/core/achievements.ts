@@ -468,7 +468,7 @@ export function achievementsFor(table: TableId): AchievementDef[] {
 }
 
 export function newProgress(): AchievementProgress {
-  return { count: 0, run: 0, best: 0, unlocked: false };
+  return { count: 0, run: 0, best: 0, unlocked: false, seen: true };
 }
 
 export function newAchievements(): Record<string, AchievementProgress> {
@@ -504,6 +504,7 @@ export function observeRound(
     }
     if (!p.unlocked && reached(def, p)) {
       p.unlocked = true;
+      p.seen = false;
       gained.push(def);
     }
   }
@@ -531,10 +532,16 @@ export function observeUpgrades(
     p.best = Math.max(p.best, maxed);
     if (!p.unlocked && owned === upgrades.length) {
       p.unlocked = true;
+      p.seen = false;
       gained.push(def);
     }
   }
   return gained;
+}
+
+/** Achievements unlocked but not yet noticed by the player. */
+export function unseenCount(achievements: Record<string, AchievementProgress>): number {
+  return Object.values(achievements).filter((p) => p.unlocked && !p.seen).length;
 }
 
 /** The perks unlocked on a table, keyed the way `TableDef.play` reads them (level 1 = unlocked). */
@@ -590,6 +597,8 @@ export function normalizeAchievements(raw: unknown): Record<string, AchievementP
     p.run = Math.min(n(src.run), p.best);
     // Targets can be raised or lowered between versions; an unlock that was earned is never taken back.
     p.unlocked = src.unlocked === true || n(src.tier) > 0 || reached(def, p);
+    // Saves from before this flag existed count as seen, so loading one doesn't flag everything as new.
+    p.seen = src.seen !== false;
   }
   return out;
 }

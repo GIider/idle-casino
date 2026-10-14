@@ -124,6 +124,8 @@ export interface AchievementProgress {
   best: number;
   /** Goal met: the achievement's perk is active. Permanent. */
   unlocked: boolean;
+  /** The player has noticed the unlock (hovered it on the achievements page). Unlocks start unseen. */
+  seen: boolean;
 }
 
 /** Casino-wide meta progression, kept across ascensions. */

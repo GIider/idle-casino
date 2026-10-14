@@ -101,6 +101,12 @@ export class Game {
     return { ...this.state.tables[id].levels, ...perkLevels(this.state.achievements, id) };
   }
 
+  /** Marks an unlocked achievement as noticed, clearing its "new" indicator. */
+  markSeen(id: string): void {
+    const p = this.state.achievements[id];
+    if (p) p.seen = true;
+  }
+
   private announce(gained: AchievementDef[]): void {
     if (gained.length === 0) return;
     this.say(gained.map((a) => `🏆 ${a.perk.name}! ${a.perk.describe()}`).join(' · '));

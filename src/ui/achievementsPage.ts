@@ -5,7 +5,7 @@ import { TABLES, TABLE_IDS } from '../tables';
 import { h, setText, toggleClass } from './dom';
 import { achievementStatus, type AchievementStatus } from './achievementsPanel';
 
-type StatusFilter = 'all' | 'progress' | 'done';
+type StatusFilter = 'all' | 'new' | 'progress' | 'done';
 
 type KindFilter = 'all' | AchievementDef['kind'];
 
@@ -16,8 +16,11 @@ const KIND_LABELS: [KindFilter, string][] = [
   ['collect', 'Collect'],
 ];
 
+const KIND_ICONS: Record<AchievementDef['kind'], string> = { grind: '🔁', streak: '🔥', collect: '🧩' };
+
 const STATUS_LABELS: [StatusFilter, string][] = [
   ['all', 'All'],
+  ['new', 'New'],
   ['progress', 'In progress'],
   ['done', 'Completed'],
 ];
@@ -34,9 +37,12 @@ export class AchievementsPage {
   private kindFilter: KindFilter = 'all';
   private collapsed = new Set<TableId>();
   private key = '';
+  /** Achievements hovered while the New filter is on: they stay listed there until the filter or page changes. */
+  private pinned = new Set<string>();
   private tableBtns = new Map<TableId | 'all', HTMLButtonElement>();
   private statusBtns = new Map<StatusFilter, HTMLButtonElement>();
   private kindBtns = new Map<KindFilter, HTMLButtonElement>();
+  private tableChips = new Map<TableId, { root: HTMLButtonElement; count: HTMLElement; fill: HTMLElement }>();
 
   constructor(private game: Game) {
     this.summary = h('strong');
@@ -64,6 +70,7 @@ export class AchievementsPage {
         text: label,
         onclick: () => {
           this.statusFilter = id;
+          this.pinned.clear();
           this.update();
         },
       });
@@ -83,17 +90,45 @@ export class AchievementsPage {
       this.kindBtns.set(id, btn);
       kindRow.append(btn);
     }
-    this.filters.append(tableRow, statusRow, kindRow);
+
+    const chips = h('div', { class: 'ach-tables' });
+    for (const id of TABLE_IDS) {
+      const count = h('small');
+      const fill = h('div', { class: 'bar-fill' });
+      const root = h(
+        'button',
+        {
+          class: 'ach-chip',
+          title: `Show ${TABLES[id].name} achievements`,
+          onclick: () => {
+            this.tableFilter = this.tableFilter === id ? 'all' : id;
+            this.update();
+          },
+        },
+        h('span', { class: 'ach-chip-name', text: `${TABLES[id].icon} ${TABLES[id].name}` }),
+        count,
+        h('div', { class: 'bar' }, fill),
+      );
+      this.tableChips.set(id, { root, count, fill });
+      chips.append(root);
+    }
+    const labelled = (label: string, row: HTMLElement) => h('div', { class: 'ach-filter-row' }, h('span', { class: 'ach-filter-label', text: label }), row);
+    this.filters.append(labelled('Table', tableRow), labelled('Status', statusRow), labelled('Type', kindRow));
 
     this.root = h(
       'section',
       { class: 'panel hidden' },
       h(
         'div',
-        { class: 'card header-card' },
-        h('h2', { text: '🏆 Achievements' }),
-        h('div', { class: 'ach-summary' }, this.summary),
-        h('div', { class: 'bar' }, this.summaryFill),
+        { class: 'card header-card ach-hero' },
+        h(
+          'div',
+          { class: 'ach-hero-top' },
+          h('span', { class: 'ach-trophy', text: '🏆' }),
+          h('div', { class: 'ach-hero-text' }, h('h2', { text: 'Achievements' }), h('div', { class: 'ach-summary' }, this.summary)),
+        ),
+        h('div', { class: 'bar ach-hero-bar' }, this.summaryFill),
+        chips,
       ),
       h('div', { class: 'card' }, this.filters),
       this.body,
@@ -102,6 +137,7 @@ export class AchievementsPage {
 
   setHidden(hidden: boolean): void {
     toggleClass(this.root, 'hidden', hidden);
+    if (hidden) this.pinned.clear();
   }
 
   /** Unlocked / total achievements across every unlocked table. */
@@ -135,6 +171,15 @@ export class AchievementsPage {
         total++;
       }
     }
+    for (const [id, chip] of this.tableChips) {
+      toggleClass(chip.root, 'hidden', !visible.includes(id));
+      toggleClass(chip.root, 'active', this.tableFilter === id);
+      const list = all.get(id) ?? [];
+      const done = list.filter((x) => x.unlocked).length;
+      setText(chip.count, `${done} / ${list.length}`);
+      chip.fill.style.transform = `scaleX(${list.length ? done / list.length : 0})`;
+      toggleClass(chip.root, 'complete', list.length > 0 && done === list.length);
+    }
     setText(this.summary, `${earned} / ${total} achievements unlocked`);
     this.summaryFill.style.transform = `scaleX(${total ? earned / total : 0})`;
 
@@ -166,7 +211,7 @@ export class AchievementsPage {
       this.kindFilter,
       this.statusFilter,
       [...this.collapsed],
-      [...all].map(([id, l]) => [id, l.map((s) => [s.def.id, s.unlocked, s.label])]),
+      [...all].map(([id, l]) => [id, l.map((s) => [s.def.id, s.unlocked, s.isNew, s.label])]),
     ]);
     if (key === this.key) return;
     this.key = key;
@@ -180,6 +225,7 @@ export class AchievementsPage {
   private pass(s: AchievementStatus, status: StatusFilter, kind: KindFilter): boolean {
     if (kind !== 'all' && s.def.kind !== kind) return false;
     switch (status) {
+      case 'new': return s.isNew || this.pinned.has(s.def.id);
       case 'done': return s.unlocked;
       case 'progress': return !s.unlocked;
       default: return true;
@@ -234,15 +280,34 @@ export class AchievementsPage {
   private cardFor(s: AchievementStatus, withTable: boolean): HTMLElement {
     const fill = h('div', { class: 'bar-fill' });
     fill.style.transform = `scaleX(${s.fraction})`;
-    return h(
+    const chip = s.isNew ? h('span', { class: 'ach-new', text: 'NEW' }) : null;
+    const card = h(
       'div',
-      { class: `achievement ach-card${s.unlocked ? ' earned maxed' : ''}`, title: s.def.goal },
-      h('div', { class: 'ach-title' }, h('strong', { text: `${s.unlocked ? '🏆' : '🔒'} ${s.def.perk.name}` })),
-      h('small', { class: 'ach-sub', text: `${withTable ? `${TABLES[s.def.table].name} · ` : ''}${s.def.kind}` }),
-      h('div', { class: 'bar' }, fill),
-      h('div', { class: 'level', text: s.label }),
+      { class: `achievement ach-card${s.unlocked ? ' earned maxed' : ''}${s.isNew ? ' new' : ''}`, title: s.def.goal },
+      h(
+        'div',
+        { class: 'ach-title' },
+        h('span', { class: 'ach-medal', text: s.unlocked ? '🏆' : KIND_ICONS[s.def.kind] }),
+        h(
+          'div',
+          { class: 'ach-name' },
+          h('strong', { text: s.def.perk.name }),
+          h('small', { class: 'ach-sub', text: `${withTable ? `${TABLES[s.def.table].name} · ` : ''}${s.def.kind}` }),
+        ),
+        ...(chip ? [chip] : []),
+      ),
       ...(s.goal ? [h('div', { class: 'goal', text: `▸ ${s.goal}` })] : []),
-      h('div', { class: 'gain', text: `✦ ${s.effect}` }),
+      h('div', { class: 'ach-progress' }, h('div', { class: 'bar' }, fill), h('span', { class: 'level', text: s.label })),
+      h('div', { class: 'gain ach-reward', text: `✦ ${s.effect}` }),
     );
+    if (s.isNew) {
+      card.addEventListener('mouseenter', () => {
+        this.game.markSeen(s.def.id);
+        this.pinned.add(s.def.id);
+        card.classList.remove('new');
+        chip?.remove();
+      });
+    }
+    return card;
   }
 }

@@ -13,7 +13,6 @@ import { fmt } from './format';
 import { previousTable } from '../tables';
 import { Stage } from './stage/stage';
 import { HistoryChart } from './historyChart';
-import { AchievementsCard } from './achievementsPanel';
 import { perfBegin, perfEnd } from './perf';
 import { buyLabel, buyMode, buyModeSelector, onBuyModeChange } from './buyMode';
 
@@ -69,13 +68,11 @@ export class TablePanel {
   private canvasStage: Stage;
   /** Hosted by the App's activity card (History tab). */
   readonly history: HistoryChart;
-  private achievements: AchievementsCard;
 
   constructor(game: Game, id: TableId) {
     this.game = game;
     this.id = id;
     this.history = new HistoryChart(id);
-    this.achievements = new AchievementsCard(game, id);
     const def = game.def(id);
 
     // Locked view
@@ -213,28 +210,13 @@ export class TablePanel {
         ),
       ),
     );
-    const showSide = (mode: 'upgrades' | 'achievements'): void => {
-      toggleClass(upgrades, 'hidden', mode !== 'upgrades');
-      toggleClass(this.achievements.root, 'hidden', mode !== 'achievements');
-      toggleClass(upBtn, 'active', mode === 'upgrades');
-      toggleClass(achBtn, 'active', mode === 'achievements');
-    };
-    const upBtn = h('button', { class: 'btn small', text: 'Upgrades', onclick: () => showSide('upgrades') });
-    const achBtn = h('button', { class: 'btn small', text: 'Achievements', onclick: () => showSide('achievements') });
-    this.side = h(
-      'div',
-      { class: 'side-panel' },
-      h('div', { class: 'history-range side-tabs' }, upBtn, achBtn),
-      upgrades,
-      this.achievements.root,
-    );
-    showSide('upgrades');
+    this.side = h('div', { class: 'side-panel' }, upgrades);
 
     this.root = h('section', { class: 'panel' }, this.locked, this.body);
     onBuyModeChange(() => this.invalidate());
   }
 
-  /** Forces the next update to refresh the throttled parts (upgrade rows, achievements card). */
+  /** Forces the next update to refresh the throttled parts (upgrade rows). */
   invalidate(): void {
     this.slowDirty = true;
   }
@@ -381,7 +363,6 @@ export class TablePanel {
 
     this.canvasStage.setPlayers(1 + Math.floor((ts.levels.speed ?? 0) / 4));
     this.canvasStage.resume();
-    this.achievements.update();
     this.history.update(ts.history, ts.plays);
     this.canvasStage.setRecentSpins(ts.history.stats.slots.recent);
 

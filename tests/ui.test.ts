@@ -84,3 +84,37 @@ describe('achievements page', () => {
     expect(host.querySelectorAll('.ach-section .ach-card').length).toBe(grind);
   });
 });
+
+describe('achievement unlock indicator', () => {
+  it('badges the tab and card until the card is hovered', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const game = new Game(createInitialState(0), mulberry32(3));
+    const app = new App(host, game, { onImport() {}, onReset() {} });
+    const p = game.state.achievements.hotHand;
+    p.unlocked = true;
+    p.seen = false;
+    app.update();
+    const tab = Array.from(host.querySelectorAll('.tab')).find((t) => t.getAttribute('title') === 'Achievements') as HTMLButtonElement;
+    const badge = tab.querySelector('.tab-badge')!;
+    expect(badge.classList.contains('hidden')).toBe(false);
+    expect(badge.textContent).toBe('1');
+    tab.click();
+    app.update();
+    const card = host.querySelector('.ach-card.new')!;
+    expect(card.querySelector('.ach-new')).not.toBeNull();
+    const newBtn = Array.from(host.querySelectorAll('.ach-filters button')).find((b) => b.textContent?.startsWith('New (')) as HTMLButtonElement;
+    expect(newBtn.textContent).toBe('New (1)');
+    newBtn.click();
+    expect(host.querySelectorAll('.ach-section .ach-card').length).toBe(1);
+    card.dispatchEvent(new Event('mouseenter'));
+    expect(card.classList.contains('new')).toBe(false);
+    expect(p.seen).toBe(true);
+    tab.click();
+    app.update();
+    expect(host.querySelectorAll('.ach-section .ach-card').length).toBe(1); // stays listed under New
+    tab.click(); // resets the slow-update throttle
+    app.update();
+    expect(badge.classList.contains('hidden')).toBe(true);
+  });
+});

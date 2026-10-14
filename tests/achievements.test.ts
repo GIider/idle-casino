@@ -4,7 +4,7 @@ import { createInitialState, normalizeState } from '../src/core/state';
 import { exportSave, importSave } from '../src/core/save';
 import { mulberry32 } from '../src/core/rng';
 import { allUpgrades, estimateNetPerPlay } from '../src/core/economy';
-import { ACHIEVEMENTS, backfillAchievements, normalizeAchievements, observeRound, perkKey, perkLevels } from '../src/core/achievements';
+import { ACHIEVEMENTS, backfillAchievements, normalizeAchievements, observeRound, perkKey, perkLevels, unseenCount } from '../src/core/achievements';
 import { TABLES, TABLE_IDS } from '../src/tables';
 import type { PlayView } from '../src/core/types';
 import type { Outcome } from '../src/core/economy';
@@ -21,6 +21,21 @@ const outcome = (view: PlayView, bet = 10, payout = 0): Outcome => ({
 const heads = (h: boolean): Outcome => outcome({ kind: 'coin', heads: h });
 
 describe('achievements', () => {
+  it('flags new unlocks as unseen until marked, and legacy saves count as seen', () => {
+    const g = new Game(createInitialState(0), mulberry32(1));
+    const s = g.state;
+    const t = ACHIEVEMENTS.find((a) => a.id === 'hotHand')!.target;
+    for (let i = 0; i < t; i++) observeRound(s.achievements, 'coinflip', heads(true));
+    expect(s.achievements.hotHand.seen).toBe(false);
+    expect(unseenCount(s.achievements)).toBe(1);
+    const restored = normalizeAchievements(JSON.parse(JSON.stringify(s.achievements)));
+    expect(restored.hotHand.seen).toBe(false);
+    g.markSeen('hotHand');
+    expect(unseenCount(s.achievements)).toBe(0);
+    const legacy = normalizeAchievements({ hotHand: { count: 0, run: 0, best: 0, unlocked: true } });
+    expect(legacy.hotHand.seen).toBe(true);
+  });
+
   const target = (id: string) => ACHIEVEMENTS.find((a) => a.id === id)!.target;
 
   it('streaks unlock at the threshold and reset on a miss', () => {
