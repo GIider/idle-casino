@@ -56,7 +56,7 @@ export class TablePanel {
   private resultEl: HTMLElement;
   private netEl: HTMLElement;
   private noticeEl: HTMLElement;
-  private noticeTimer = 0;
+  private managerSeq = 0;
   private bigMin: HTMLElement;
   private bigMinOld: HTMLElement;
   private bigMax: HTMLElement;
@@ -128,7 +128,7 @@ export class TablePanel {
     this.netEl = h('div', { class: 'net', text: ' ' });
     this.canvasStage = new Stage(def.icon, id);
     this.resultEl.setAttribute('aria-live', 'polite');
-    this.noticeEl = h('div', { class: 'stage-notice hidden' });
+    this.noticeEl = h('div', { class: 'stage-notice' });
     this.stage = h('div', { class: 'stage' }, this.canvasStage.canvas, this.resultEl, this.netEl, this.noticeEl);
 
     this.bigMin = h('div', { class: 'big-value' });
@@ -256,10 +256,10 @@ export class TablePanel {
 
   /** Shows a popup over the animation stage. */
   showNotice(text: string, ms = 5000): void {
-    this.noticeEl.textContent = text;
-    this.noticeEl.classList.remove('hidden');
-    window.clearTimeout(this.noticeTimer);
-    this.noticeTimer = window.setTimeout(() => this.noticeEl.classList.add('hidden'), ms);
+    const el = h('div', { class: 'stage-toast', text });
+    this.noticeEl.append(el);
+    while (this.noticeEl.children.length > 4) this.noticeEl.firstElementChild!.remove();
+    window.setTimeout(() => el.remove(), ms);
   }
 
   update(): void {
@@ -335,6 +335,18 @@ export class TablePanel {
     toggleClass(this.cheapestBtn, 'hidden', game.casinoLevel('bulkbuy') < 1);
     setDisabled(this.cheapestBtn, !game.canBuyCheapest(id));
     const toggles = game.casinoLevel('policy') >= 1;
+    // Light up rows the Floor Manager just bought (only recent entries, so a freshly shown tab doesn't replay old ones).
+    for (const e of game.managerLog) {
+      if (e.table !== id || e.seq <= this.managerSeq) continue;
+      this.managerSeq = e.seq;
+      if (Date.now() - e.at > 1500) continue;
+      const row = this.rows.find((r) => r.def.id === e.upgradeId);
+      if (!row) continue;
+      row.root.classList.remove('manager-buy');
+      void row.root.offsetWidth; // restart the animation
+      row.root.classList.add('manager-buy');
+      window.setTimeout(() => row.root.classList.remove('manager-buy'), 1500);
+    }
     for (const row of this.rows) {
       toggleClass(row.auto, 'hidden', !toggles);
       const enabled = game.autoBuyEnabled(id, row.def.id);

@@ -29,7 +29,7 @@ export class App {
   private casinoFill!: HTMLElement;
   private toastEl: HTMLElement;
   private toastSeq = 0;
-  private toastTimer = 0;
+  private managerSeq = 0;
   private handlers: AppHandlers;
   private activityCard!: HTMLElement;
   private sides = new Map<TableId, HTMLElement>();
@@ -43,7 +43,7 @@ export class App {
     this.game = game;
     this.handlers = handlers;
 
-    this.toastEl = h('div', { class: 'toast hidden' });
+    this.toastEl = h('div', { class: 'toast-stack' });
 
     const header = h(
       'header',
@@ -152,10 +152,10 @@ export class App {
   }
 
   toast(text: string, ms = 5000): void {
-    this.toastEl.textContent = text;
-    this.toastEl.classList.remove('hidden');
-    window.clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => this.toastEl.classList.add('hidden'), ms);
+    const el = h('div', { class: 'toast', text });
+    this.toastEl.append(el);
+    while (this.toastEl.children.length > 5) this.toastEl.firstElementChild!.remove();
+    window.setTimeout(() => el.remove(), ms);
   }
 
   update(): void {
@@ -187,6 +187,17 @@ export class App {
     this.syncActivity();
     if (this.selected === 'casino' ? !casinoSeen : !g.tableVisible(this.selected)) this.select('coinflip');
     this.updateSelected();
+
+    const fresh = g.managerLog.filter((e) => e.seq > this.managerSeq);
+    if (fresh.length > 0) {
+      this.managerSeq = fresh[fresh.length - 1].seq;
+      const texts = fresh.length > 3 ? [`🤵 Floor Manager bought ${fresh.length} upgrades`] : fresh.map((e) => e.text);
+      for (const text of texts) {
+        // Over the animation stage of the table being watched; the casino tab has no stage, so it gets a page toast.
+        if (this.selected === 'casino') this.toast(text, 3000);
+        else this.panels.get(this.selected)!.showNotice(text, 3000);
+      }
+    }
 
     if (g.notice && g.notice.seq !== this.toastSeq) {
       this.toastSeq = g.notice.seq;

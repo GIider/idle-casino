@@ -389,21 +389,34 @@ small {
 }
 
 /* Toast */
-.toast {
+.toast-stack {
   position: fixed;
   left: 50%;
   bottom: 24px;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  width: max-content;
   max-width: min(90vw, 560px);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.toast {
+  animation: stage-toast-in 0.25s ease-out;
   background: #241446;
   border: 1px solid var(--cyan);
   padding: 12px 18px;
   border-radius: 10px;
   text-align: center;
-  z-index: 10;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
   .tab.affordable {
     animation: none;
   }
@@ -1006,22 +1019,31 @@ small {
   top: 8px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  width: max-content;
   max-width: calc(100% - 16px);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.stage-toast {
   background: #241446;
   border: 1px solid var(--cyan);
   border-radius: 10px;
   padding: 8px 14px;
-  z-index: 2;
-  pointer-events: none;
-  animation: notice-in 0.25s ease-out;
+  text-align: center;
+  animation: stage-toast-in 0.25s ease-out;
 }
 
-@keyframes notice-in {
-  from { opacity: 0; transform: translate(-50%, -8px); }
+@keyframes stage-toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stage-notice {
+  .stage-toast {
     animation: none;
   }
 }
@@ -1031,4 +1053,20 @@ small {
   font-size: 11px;
   opacity: 0.55;
   white-space: nowrap;
+}
+
+.upgrade.manager-buy {
+  animation: manager-buy 1.5s ease-out;
+}
+
+@keyframes manager-buy {
+  from { background: rgba(255, 210, 74, 0.45); box-shadow: inset 3px 0 0 var(--gold); }
+  to { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upgrade.manager-buy {
+    animation: none;
+    background: rgba(255, 210, 74, 0.25);
+  }
 }

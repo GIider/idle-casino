@@ -62,6 +62,9 @@ export class Game {
   notice: { text: string; seq: number } | null = null;
   /** Dev mode (`?cardcounting=1`): casino shop upgrades cost no chips. */
   freeCasinoShop = false;
+  /** Recent Floor Manager purchases (bounded); the UI toasts entries it has not shown yet, by `seq`. */
+  managerLog: { seq: number; text: string; table: TableId; upgradeId: string; at: number }[] = [];
+  private quiet = false;
   private seq = 0;
   private acc: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
   private managerClock: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
@@ -230,7 +233,14 @@ export class Game {
       const core = CORE_UPGRADES.includes(upg.id);
       if (!best || (core && !best.core) || (core === best.core && cost < best.cost)) best = { id: upg.id, cost, core };
     }
-    return best !== null && this.buyUpgrade(id, best.id);
+    if (best === null || !this.buyUpgrade(id, best.id)) return false;
+    if (!this.quiet) {
+      const name = allUpgrades(def).find((u) => u.id === best!.id)?.name ?? best.id;
+      const text = `🤵 Floor Manager bought ${name} Lv ${ts.levels[best.id] ?? 0} (${def.name})`;
+      this.managerLog.push({ seq: ++this.seq, text, table: id, upgradeId: best.id, at: Date.now() });
+      if (this.managerLog.length > 20) this.managerLog.shift();
+    }
+    return true;
   }
 
   /** One manager pass at a table: (Concierge, if enabled) prestige as soon as possible, otherwise buy an upgrade. */
@@ -454,8 +464,13 @@ export class Game {
     const interval = this.managerInterval();
     if (interval <= 0) return;
     const steps = Math.min(100, Math.floor(seconds / interval));
-    for (let i = 0; i < steps; i++) {
-      if (!this.managerStep(id)) break;
+    this.quiet = true;
+    try {
+      for (let i = 0; i < steps; i++) {
+        if (!this.managerStep(id)) break;
+      }
+    } finally {
+      this.quiet = false;
     }
   }
 

@@ -180,3 +180,18 @@ describe('blackjack card-count achievements', () => {
     expect(ach.winCards4.count).toBe(0);
   });
 });
+
+describe('manager purchase log', () => {
+  it('logs manager buys but not manual or offline purchases', () => {
+    const g = newGame();
+    const ts = g.state.tables.coinflip;
+    ts.wallet = 1e9;
+    g.buyUpgrade('coinflip', allUpgrades(TABLES.coinflip)[0].id);
+    expect(g.managerLog).toHaveLength(0);
+    expect(g.autoBuy('coinflip')).toBe(true);
+    expect(g.managerLog).toHaveLength(1);
+    expect(g.managerLog[0].text).toContain('Floor Manager bought');
+    for (let i = 0; i < 40; i++) g.autoBuy('coinflip');
+    expect(g.managerLog.length).toBeLessThanOrEqual(20);
+  });
+});
