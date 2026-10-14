@@ -337,11 +337,10 @@ function drawCoin(ctx: Ctx, w: number, ht: number, c: CoinStats): void {
 
   // Bead plate: fill the area left of the panel, picking the row count that gives the biggest beads.
   const areaW = panelX - pad - 10;
-  const total = Math.max(1, c.recent.length);
   let rowsN = 1;
   let cell = 0;
   for (let r = 1; r <= 8; r++) {
-    const size = Math.min(availH / r, areaW / Math.ceil(Math.max(total, 60) / r), 36);
+    const size = Math.min(availH / r, areaW / Math.ceil(60 / r), 36);
     if (size > cell) {
       cell = size;
       rowsN = r;
@@ -349,7 +348,10 @@ function drawCoin(ctx: Ctx, w: number, ht: number, c: CoinStats): void {
   }
   const gridH = cell * rowsN;
   const gy = top + Math.max(0, (availH - gridH) / 2);
-  c.recent.forEach((v, i) => {
+  // Use every column that fits: show the newest beads that fill the whole area.
+  const cols = Math.max(1, Math.floor(areaW / cell));
+  const shown = c.recent.slice(-cols * rowsN);
+  shown.forEach((v, i) => {
     const col = Math.floor(i / rowsN);
     const row = i % rowsN;
     const cx = pad + col * cell + cell / 2;

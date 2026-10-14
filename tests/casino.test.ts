@@ -13,7 +13,7 @@ import {
 } from '../src/core/economy';
 import { ascensionReward, ascensionThreshold } from '../src/core/casino';
 import { exportSave, importSave } from '../src/core/save';
-import { newHistory, normalizeHistory, recordView } from '../src/core/history';
+import { RECENT_COINS, newHistory, normalizeHistory, recordView } from '../src/core/history';
 
 const newGame = () => new Game(createInitialState(0), mulberry32(5));
 
@@ -56,8 +56,8 @@ describe('game-specific history stats', () => {
     const h = newHistory();
     for (const heads of [true, true, true, false, true]) recordView(h, { kind: 'coin', heads });
     expect(h.stats.coin).toMatchObject({ heads: 4, tails: 1, streak: 1, longest: 3 });
-    for (let i = 0; i < 200; i++) recordView(h, { kind: 'coin', heads: i % 2 === 0 });
-    expect(h.stats.coin.recent.length).toBe(60);
+    for (let i = 0; i < RECENT_COINS + 20; i++) recordView(h, { kind: 'coin', heads: i % 2 === 0 });
+    expect(h.stats.coin.recent.length).toBe(RECENT_COINS);
   });
 
   it('tallies slots, roulette and blackjack', () => {

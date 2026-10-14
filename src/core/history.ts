@@ -6,7 +6,7 @@ export const RATE_WINDOW_SECONDS = 5;
 
 export const SLOT_SYMBOLS = 6;
 export const POCKETS = 37;
-export const RECENT_COINS = 60;
+export const RECENT_COINS = 240;
 export const RECENT_POCKETS = 30;
 export const RECENT_SPINS = 20;
 export const RECENT_HANDS = 20;
