@@ -1,4 +1,5 @@
-import type { PlayView, Rng, TableDef, TableState, UpgradeDef } from './types';
+import type { PlayView, Rng, TableDef, TableId, TableState, UpgradeDef } from './types';
+import { TABLES, TABLE_IDS } from '../tables';
 import { NO_BONUS, type CasinoBonus } from './casino';
 import { CARD_SHARP_LUCK, DOUBLE_LUCK_FRACTION, HEAT_WAVE_CAP, RAISED_CEILING } from './achievements';
 
@@ -97,8 +98,17 @@ export const BAILOUT_BETS = 10;
  */
 export const CORE_UPGRADES = ['autobet', 'speed', 'payout', 'edge', 'loaded', 'dealer', 'streak', 'luck'];
 
+const upgradeCache = new Map<string, UpgradeDef[]>();
+
+/** The common upgrades (with this table's cross-table price components) followed by the table's own. */
 export function allUpgrades(def: TableDef): UpgradeDef[] {
-  return [...COMMON_UPGRADES, ...def.upgrades];
+  let list = upgradeCache.get(def.id);
+  if (!list) {
+    const common = COMMON_UPGRADES.map((u) => (def.commonTies?.[u.id] ? { ...u, ties: def.commonTies[u.id] } : u));
+    list = [...common, ...def.upgrades];
+    upgradeCache.set(def.id, list);
+  }
+  return list;
 }
 
 export function minBet(def: TableDef, prestige: number): number {
@@ -123,6 +133,57 @@ export function upgradeCost(
 ): number {
   const base = upg.baseCost * def.baseMinBet * UPGRADE_PRESTIGE_GROWTH ** prestige * upg.growth ** level;
   return Math.ceil(base * bonus.upgradeCost);
+}
+
+/** Units of `from`'s currency that are worth one unit of `own`'s currency (the product of the stake costs in between). */
+export function exchangeRate(own: TableId, from: TableId): number {
+  let rate = 1;
+  for (let i = TABLE_IDS.indexOf(from) + 1; i <= TABLE_IDS.indexOf(own); i++) rate *= TABLES[TABLE_IDS[i]].stakeCost ?? 1;
+  return rate;
+}
+
+/** Each table further back multiplies a cross-table price (in that table's units) by this: reaching far back is exponentially dearer. */
+export const TIE_DISTANCE_GROWTH = 5;
+
+export type Prestiges = Partial<Record<TableId, number>>;
+
+export interface UpgradePrice {
+  /** Price in the table's own currency. */
+  own: number;
+  /** Extra prices in earlier tables' currencies (only the components that apply at this level). */
+  ties: { from: TableId; amount: number }[];
+}
+
+/** Full price of one upgrade level: the own-currency cost plus every cross-table component. */
+export function upgradePrice(
+  def: TableDef,
+  upg: UpgradeDef,
+  prestiges: Prestiges,
+  level: number,
+  bonus: CasinoBonus = NO_BONUS,
+): UpgradePrice {
+  const own = upgradeCost(def, upg, prestiges[def.id] ?? 0, level, bonus);
+  const ties: UpgradePrice['ties'] = [];
+  for (const tie of upg.ties ?? []) {
+    if (level < (tie.fromLevel ?? 0) || tie.share <= 0) continue;
+    const scale = tie.scale ?? 'self';
+    const source = TABLES[tie.from];
+    // Priced in the source table's minimum bets: at its current minimum bet ('source'), its starting one ('self' and 'flat').
+    const unit = source.baseMinBet * (scale === 'source' ? MIN_BET_GROWTH ** (prestiges[tie.from] ?? 0) : 1);
+    const mine = scale === 'self' ? UPGRADE_PRESTIGE_GROWTH ** (prestiges[def.id] ?? 0) : 1;
+    const distance = TABLE_IDS.indexOf(def.id) - TABLE_IDS.indexOf(tie.from);
+    const far = TIE_DISTANCE_GROWTH ** Math.max(0, distance - 1);
+    const base = tie.share * upg.baseCost * unit * mine * far * (tie.growth ?? upg.growth) ** level;
+    ties.push({ from: tie.from, amount: Math.max(1, Math.ceil(base * bonus.upgradeCost)) });
+  }
+  return { own, ties };
+}
+
+/** A price as one number in the table's own currency, for ranking "cheapest" across components. */
+export function priceInOwn(def: TableDef, price: UpgradePrice): number {
+  let total = price.own;
+  for (const t of price.ties) total += t.amount / exchangeRate(def.id, t.from);
+  return total;
 }
 
 /** How many levels one click buys: at most `cap` levels, spending at most `fraction` of the wallet. */

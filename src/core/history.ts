@@ -30,13 +30,20 @@ export function newHistory(): History {
     clock: 0,
     rateFrom: [0, 0],
     stats: newStats(),
+    prestigeStats: newStats(),
+    lifetimeStats: newStats(),
   };
 }
 
-/** Tallies one round's structured view into the per-game stats. */
+/** Tallies one round's structured view into every stat scope (ascension, prestige, all time). */
 export function recordView(h: History, view: PlayView | undefined): void {
   if (!view) return;
-  const s = h.stats;
+  tally(h.stats, view);
+  tally(h.prestigeStats, view);
+  tally(h.lifetimeStats, view);
+}
+
+function tally(s: PlayStats, view: PlayView): void {
   switch (view.kind) {
     case 'coin': {
       const c = s.coin;
@@ -240,7 +247,11 @@ export function normalizeStats(raw: unknown): PlayStats {
 export function normalizeHistory(raw: unknown, plays: number, lifetimeProfit: number): History {
   const h = newHistory();
   const r = raw as Partial<History> | null;
-  h.stats = normalizeStats(r && typeof r === 'object' ? r.stats : null);
+  const obj = r && typeof r === 'object' ? r : null;
+  h.stats = normalizeStats(obj ? obj.stats : null);
+  // Saves from before the scope toggle seed the wider scopes from the stats they already have.
+  h.prestigeStats = obj?.prestigeStats ? normalizeStats(obj.prestigeStats) : normalizeStats(obj ? obj.stats : null);
+  h.lifetimeStats = obj?.lifetimeStats ? normalizeStats(obj.lifetimeStats) : normalizeStats(obj ? obj.stats : null);
   let hasRate = false;
   if (r && typeof r === 'object') {
     h.clock = typeof r.clock === 'number' && Number.isFinite(r.clock) ? Math.max(0, r.clock) : 0;

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { Game } from '../src/core/game';
+import { FEED_RESERVE_BETS, Game } from '../src/core/game';
 import { DEFAULT_FEED_SHARE, SAVE_VERSION, createInitialState, normalizeState } from '../src/core/state';
 import { DEV_SAVE_KEY, SAVE_KEY, clearSave, exportSave, importSave, loadGame, saveGame } from '../src/core/save';
 import { mulberry32 } from '../src/core/rng';
 import { STARTER_BETS, prestigeWallet } from '../src/core/state';
-import { prestigeThreshold, minBet, upgradeCost, allUpgrades } from '../src/core/economy';
+import { prestigeThreshold, minBet, upgradeCost, upgradePrice, allUpgrades } from '../src/core/economy';
 import { TABLES, TABLE_IDS } from '../src/tables';
 
 function game() {
@@ -234,5 +234,77 @@ describe('dev unlock', () => {
     }
     g.tick(10);
     expect(g.managerLog.length).toBeGreaterThan(0);
+  });
+});
+
+describe('cross-table upgrade prices', () => {
+  const mk = () => {
+    const g = new Game(createInitialState(0), mulberry32(1));
+    g.state.tables.slots.unlocked = true;
+    return g;
+  };
+  const speed = allUpgrades(TABLES.slots).find((u) => u.id === 'speed')!;
+
+  it('prices follow the tie shapes', () => {
+    const exp = upgradePrice(TABLES.slots, speed, {}, 0);
+    expect(exp.ties.length).toBe(1);
+    expect(exp.ties[0].from).toBe('coinflip');
+    expect(upgradePrice(TABLES.slots, speed, {}, 2).ties[0].amount).toBeGreaterThan(exp.ties[0].amount);
+    const auto = allUpgrades(TABLES.slots).find((u) => u.id === 'autobet')!;
+    // Only the large-bet levels draw on the earlier currency, and it follows that table's prestige.
+    expect(upgradePrice(TABLES.slots, auto, {}, 2).ties).toEqual([]);
+    const l3 = upgradePrice(TABLES.slots, auto, {}, 3).ties[0].amount;
+    expect(upgradePrice(TABLES.slots, auto, { coinflip: 1 }, 3).ties[0].amount).toBe(l3 * 3);
+    expect(upgradePrice(TABLES.slots, auto, { slots: 2 }, 3).ties[0].amount).toBe(l3);
+  });
+
+  it('buying spends every currency in the price', () => {
+    const g = mk();
+    const price = upgradePrice(TABLES.slots, speed, {}, 0);
+    g.table('coinflip').wallet = 1e9;
+    g.table('slots').wallet = price.own + 5;
+    expect(g.buyUpgrade('slots', 'speed')).toBe(true);
+    expect(g.table('slots').wallet).toBe(5);
+    expect(g.table('coinflip').wallet).toBe(1e9 - price.ties[0].amount);
+  });
+
+  it('is refused when only the earlier currency is short, and never dips into the Coin Flip bankroll', () => {
+    const g = mk();
+    const price = upgradePrice(TABLES.slots, speed, {}, 0);
+    g.table('slots').wallet = 1e9;
+    const reserve = TABLES.coinflip.baseMinBet * FEED_RESERVE_BETS;
+    g.table('coinflip').wallet = reserve + price.ties[0].amount - 1;
+    expect(g.buyUpgrade('slots', 'speed')).toBe(false);
+    g.table('coinflip').wallet = reserve + price.ties[0].amount;
+    expect(g.buyUpgrade('slots', 'speed')).toBe(true);
+    expect(g.table('coinflip').wallet).toBe(reserve);
+  });
+});
+
+describe('cross-table price distance', () => {
+  it('a currency from further back always costs more minimum bets than one from a closer table', () => {
+    for (const id of TABLE_IDS) {
+      for (const upg of allUpgrades(TABLES[id])) {
+        const ties = upg.ties ?? [];
+        const level = Math.max(0, ...ties.map((t) => t.fromLevel ?? 0));
+        const price = upgradePrice(TABLES[id], upg, {}, level).ties;
+        for (const a of price) {
+          for (const b of price) {
+            if (TABLE_IDS.indexOf(a.from) < TABLE_IDS.indexOf(b.from)) {
+              // Compared in minimum bets of the paying table, the unit prices are set in.
+              expect(a.amount / TABLES[a.from].baseMinBet, `${id}:${upg.id} ${a.from} vs ${b.from}`).toBeGreaterThan(b.amount / TABLES[b.from].baseMinBet);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('each table further back multiplies a price exponentially', () => {
+    const payout = allUpgrades(TABLES.blackjack).find((u) => u.id === 'cashback')!;
+    const probe = { ...payout, ties: [{ from: 'roulette' as const, share: 1, scale: 'flat' as const }, { from: 'slots' as const, share: 1, scale: 'flat' as const }, { from: 'coinflip' as const, share: 1, scale: 'flat' as const }] };
+    const [near, mid, far] = upgradePrice(TABLES.blackjack, probe, {}, 0).ties.map((t) => t.amount / TABLES[t.from].baseMinBet);
+    expect(mid / near).toBeCloseTo(far / mid, 5);
+    expect(mid / near).toBeGreaterThan(1);
   });
 });

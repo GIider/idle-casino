@@ -159,3 +159,47 @@ describe('ascension', () => {
     expect(normalizeState({ version: SAVE_VERSION, tables: {} }).casino.ascensions).toBe(0);
   });
 });
+
+describe('history scopes', () => {
+  const heads = { kind: 'coin', heads: true } as const;
+
+  it('tallies into ascension, prestige and all-time stats', () => {
+    const h = newHistory();
+    recordView(h, heads);
+    recordView(h, heads);
+    expect(h.stats.coin.heads).toBe(2);
+    expect(h.prestigeStats.coin.heads).toBe(2);
+    expect(h.lifetimeStats.coin.heads).toBe(2);
+  });
+
+  it('prestige resets only the prestige scope', () => {
+    const g = newGame();
+    const ts = g.table('coinflip');
+    recordView(ts.history, heads);
+    ts.profit = 1e15;
+    expect(g.prestige('coinflip')).toBe(true);
+    expect(ts.history.prestigeStats.coin.heads).toBe(0);
+    expect(ts.history.stats.coin.heads).toBe(1);
+    expect(ts.history.lifetimeStats.coin.heads).toBe(1);
+  });
+
+  it('ascension resets all but the all-time scope', () => {
+    const g = newGame();
+    recordView(g.table('coinflip').history, heads);
+    g.table('blackjack').wallet = ascensionThreshold(0) * 10;
+    expect(g.ascend()).toBe(true);
+    const hist = g.table('coinflip').history;
+    expect(hist.stats.coin.heads).toBe(0);
+    expect(hist.prestigeStats.coin.heads).toBe(0);
+    expect(hist.lifetimeStats.coin.heads).toBe(1);
+  });
+
+  it('seeds the wider scopes from stats in older saves', () => {
+    const src = newHistory();
+    recordView(src, heads);
+    const { prestigeStats, lifetimeStats, ...legacy } = src;
+    const h = normalizeHistory(legacy, 1, 0);
+    expect(h.prestigeStats.coin.heads).toBe(1);
+    expect(h.lifetimeStats.coin.heads).toBe(1);
+  });
+});

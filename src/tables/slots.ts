@@ -23,6 +23,15 @@ export const slots: TableDef = {
   baseMaxBet: 100,
   baseMaxPayout: 5000,
   baseWinBonus: 0.27,
+  commonTies: {
+    speed: [{ from: 'coinflip', share: 24, growth: 1.25 }],
+    autobet: [{ from: 'coinflip', share: 32, fromLevel: 3, scale: 'source' }],
+    payout: [{ from: 'coinflip', share: 20, scale: 'source' }],
+    dealer: [{ from: 'coinflip', share: 10, scale: 'flat' }],
+    streak: [{ from: 'coinflip', share: 8, growth: 1.4 }],
+    luck: [{ from: 'coinflip', share: 6, growth: 1.4 }],
+    cashback: [{ from: 'coinflip', share: 4, scale: 'flat' }],
+  },
   upgrades: [
     {
       id: 'loaded',
@@ -31,6 +40,7 @@ export const slots: TableDef = {
       baseCost: 40,
       growth: 1.8,
       maxLevel: 10,
+      ties: [{ from: 'coinflip', share: 12, growth: 1.1 }],
     },
   ],
   play(rng, levels) {

@@ -61,6 +61,8 @@ describe('Floor Manager', () => {
     g.table('blackjack').unlocked = true;
     const ts = g.table('blackjack');
     ts.wallet = 1e9;
+    // Earlier currencies pay the cross-table part of the prices.
+    for (const id of ['coinflip', 'slots', 'roulette'] as const) g.table(id).wallet = 1e12;
     // Pretend every core upgrade is maxed except luck, which costs more than a niche upgrade here.
     for (const u of allUpgrades(TABLES.blackjack)) ts.levels[u.id] = u.maxLevel;
     ts.levels.luck = 0;

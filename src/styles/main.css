@@ -1620,15 +1620,36 @@ a:focus-visible {
 /* Fixed-width cost button: its label changes every few ticks, and a width change re-wraps the description (rows jumped). */
 .btn.buy {
   flex: none;
-  width: 132px;
+  width: 148px;
   min-width: 0;
-  padding-inline: 8px;
-  font-size: 16px;
+  padding-inline: 6px;
+  font-size: 15px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.2;
+}
+
+.btn.buy .buy-line.tie {
+  font-size: 13px;
+  opacity: 0.9;
 }
 
 .upgrade-text {
   min-width: 0;
 }
+
+/* Gambling terms with a hover definition */
+.term {
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+/* Scope selector of the unique history cards sits on its own line under the title. */
+.history-scope-head { min-height: 0; margin-bottom: 4px; }

@@ -2,6 +2,7 @@ import type { TableId } from '../core/types';
 import type { Game } from '../core/game';
 import { achievementsFor, type AchievementDef } from '../core/achievements';
 import { TABLES, TABLE_IDS } from '../tables';
+import { annotate } from './glossary';
 import { h, setText, toggleClass } from './dom';
 import { achievementStatus, type AchievementStatus } from './achievementsPanel';
 
@@ -298,14 +299,14 @@ export class AchievementsPage {
         h(
           'div',
           { class: 'ach-name' },
-          h('strong', { text: s.def.perk.name }),
+          h('strong', {}, ...annotate(s.def.perk.name)),
           h('small', { class: 'ach-sub', text: `${withTable ? `${TABLES[s.def.table].name} · ` : ''}${s.def.kind}` }),
         ),
         ...(chip ? [chip] : []),
       ),
       ...(s.goal ? [h('div', { class: 'goal', text: `▸ ${s.goal}` })] : []),
       h('div', { class: 'ach-progress' }, h('div', { class: 'bar' }, fill), h('span', { class: 'level', text: s.label })),
-      h('div', { class: 'gain ach-reward', text: `✦ ${s.effect}` }),
+      h('div', { class: 'gain ach-reward' }, '✦ ', ...annotate(s.effect)),
     );
     if (s.isNew) {
       card.addEventListener('mouseenter', () => {

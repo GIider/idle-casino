@@ -58,6 +58,15 @@ export const blackjack: TableDef = {
   baseMaxBet: 2000,
   baseMaxPayout: 10000,
   baseWinBonus: 0.27,
+  commonTies: {
+    speed: [{ from: 'roulette', share: 24, growth: 1.25 }],
+    autobet: [{ from: 'roulette', share: 32, fromLevel: 3, scale: 'source' }],
+    payout: [{ from: 'roulette', share: 14, scale: 'source' }, { from: 'slots', share: 4, scale: 'source' }],
+    dealer: [{ from: 'slots', share: 2, scale: 'flat' }],
+    streak: [{ from: 'roulette', share: 8, growth: 1.4 }],
+    luck: [{ from: 'roulette', share: 6, growth: 1.4 }],
+    cashback: [{ from: 'coinflip', share: 0.16, scale: 'flat' }],
+  },
   upgrades: [
     {
       id: 'sleeve',
@@ -66,6 +75,7 @@ export const blackjack: TableDef = {
       baseCost: 150,
       growth: 1.8,
       maxLevel: 8,
+      ties: [{ from: 'roulette', share: 6 }, { from: 'slots', share: 1.5 }],
     },
     {
       id: 'insure',
@@ -74,6 +84,7 @@ export const blackjack: TableDef = {
       baseCost: 200,
       growth: 2,
       maxLevel: 5,
+      ties: [{ from: 'coinflip', share: 0.16, scale: 'flat' }],
     },
     {
       id: 'strategy',
@@ -82,6 +93,7 @@ export const blackjack: TableDef = {
       baseCost: 300,
       growth: 4,
       maxLevel: 2,
+      ties: [{ from: 'roulette', share: 5, growth: 1.5 }, { from: 'slots', share: 1.2 }],
     },
   ],
   play(rng, levels) {

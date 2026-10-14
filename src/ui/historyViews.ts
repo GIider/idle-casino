@@ -4,12 +4,13 @@ import { colorOf } from '../tables/roulette';
 import { COLORS, setupCanvas } from './stage/canvas';
 import { h, setText } from './dom';
 import { fmt } from './format';
+import { annotate, define, term } from './glossary';
 
 /** A slim row of "label n" chips; zero counters are hidden so only rewards actually hit show up. */
 function rewardStrip(items: [string, number][], empty: string): HTMLElement[] {
   const hit = items.filter(([, n]) => n > 0);
   if (hit.length === 0) return [h('span', { class: 'reward muted', text: empty })];
-  return hit.map(([label, n]) => h('span', { class: 'reward' }, h('b', { text: fmt(n) }), ` ${label}`));
+  return hit.map(([label, n]) => h('span', { class: 'reward' }, h('b', { text: fmt(n) }), ' ', ...annotate(label)));
 }
 
 function setClass(el: HTMLElement, cls: string): void {
@@ -47,7 +48,7 @@ export class SlotsCombosView {
     this.lastReels = h('div', { class: 'slots-last-reels' });
     this.lastTag = h('div', { class: 'slots-last-tag' });
     this.last = h('div', { class: 'slots-last' }, h('small', { text: 'Last spin' }), this.lastReels, this.lastTag);
-    const head = h('div', { class: 'slots-row head' }, h('span'), h('span', { text: 'Seen' }), h('span', { text: 'Triple' }), h('span', { text: 'Pair' }));
+    const head = h('div', { class: 'slots-row head' }, h('span'), h('span', { text: 'Seen' }), h('span', {}, term('Triple')), h('span', {}, term('Pair')));
     this.rows = SYMBOLS.map((sym) => {
       const seen = h('span', { class: 'slots-n seen' });
       const triple = h('span', { class: 'slots-n triple' });
@@ -64,8 +65,8 @@ export class SlotsCombosView {
       h(
         'span',
         { class: 'blip-legend' },
-        h('span', { class: 'legend-item' }, h('i', { class: 'blip triple' }), 'Triple'),
-        h('span', { class: 'legend-item' }, h('i', { class: 'blip pair' }), 'Pair'),
+        h('span', { class: 'legend-item' }, h('i', { class: 'blip triple' }), term('Triple')),
+        h('span', { class: 'legend-item' }, h('i', { class: 'blip pair' }), term('Pair')),
         h('span', { class: 'legend-item' }, h('i', { class: 'blip' }), 'None'),
       ),
     );
@@ -98,6 +99,7 @@ export class SlotsCombosView {
       setClass(this.last, `slots-last ${kind}`);
       setText(this.lastReels, latest.map((r) => SYMBOLS[r]).join(''));
       setText(this.lastTag, kind === 'triple' ? 'Triple!' : kind === 'pair' ? 'Pair' : 'No match');
+      this.lastTag.title = (kind === 'triple' ? define('triple') : kind === 'pair' ? define('pair') : '') ?? '';
     } else {
       setClass(this.last, 'slots-last');
       setText(this.lastReels, '');
@@ -146,7 +148,7 @@ export class BlackjackHandsView {
     this.rows = BJ_KEYS.map((k) => {
       const n = h('span', { class: 'slots-n' });
       const share = h('span', { class: 'slots-n seen' });
-      return { row: h('div', { class: `slots-row bj-row bj-${k}` }, h('span', { class: 'bj-row-name', text: BJ_NAMES[k] }), n, share), n, share };
+      return { row: h('div', { class: `slots-row bj-row bj-${k}` }, h('span', { class: 'bj-row-name' }, term(BJ_NAMES[k])), n, share), n, share };
     });
     this.blips = h('span', { class: 'blips' });
     this.root = h(
@@ -192,6 +194,7 @@ export class BlackjackHandsView {
       );
       setText(this.lastCards, `${handText(hand.player)}${hand.split ? ` | ${handText(hand.split)}` : ''}  ·  ${handText(hand.dealer)}`);
       setText(this.lastTag, BJ_NAMES[hand.outcome] + (badges ? ` · ${badges}` : ''));
+      this.lastTag.title = [hand.outcome, hand.doubled ? 'double' : '', hand.split ? 'split' : '', hand.surrendered ? 'surrender' : ''].map((k) => (k ? define(k) : '')).filter(Boolean).join('\n');
     } else {
       setClass(this.last, 'slots-last');
       this.lastLine.replaceChildren();

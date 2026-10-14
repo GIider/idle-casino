@@ -41,6 +41,19 @@ export function setText(el: HTMLElement, text: string): void {
   if (el.textContent !== text) el.textContent = text;
 }
 
+/** Shows `lines` as stacked rows inside `el`, touching the DOM only when they change. */
+export function setLines(el: HTMLElement, lines: string[]): void {
+  const key = lines.join('\n');
+  if (el.dataset.lines === key) return;
+  el.dataset.lines = key;
+  el.replaceChildren(...lines.map((text, i) => {
+    const row = document.createElement('span');
+    row.className = i === 0 ? 'buy-line' : 'buy-line tie';
+    row.textContent = text;
+    return row;
+  }));
+}
+
 export function setDisabled(el: HTMLButtonElement | HTMLInputElement | HTMLSelectElement, v: boolean): void {
   if (el.disabled !== v) el.disabled = v;
 }

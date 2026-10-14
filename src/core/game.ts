@@ -19,15 +19,17 @@ import {
   minBet,
   prestigeThreshold,
   resolvePlay,
-  upgradeCost,
   bulkPurchase,
+  upgradePrice,
+  priceInOwn,
+  type Prestiges,
   SINGLE_BUY,
   type BuyMode,
   type Outcome,
 } from './economy';
 import { START_MONEY, newTableState, prestigeWallet, starterWallet } from './state';
 import { observeRound, observeUpgrades, perkLevels, type AchievementDef } from './achievements';
-import { markPrestige, recordRate, recordSample, recordView, skipRate } from './history';
+import { markPrestige, newStats, recordRate, recordSample, recordView, skipRate } from './history';
 import {
   CASINO_UPGRADES,
   MANAGER_RESERVE_BETS,
@@ -43,6 +45,16 @@ import {
 export interface LastPlay {
   seq: number;
   outcome: Outcome;
+}
+
+export interface UpgradeQuote {
+  count: number;
+  /** Total in the table's own currency. */
+  cost: number;
+  /** Totals owed in earlier tables' currencies. */
+  ties: { from: TableId; amount: number }[];
+  nextCost: number;
+  nextTies: { from: TableId; amount: number }[];
 }
 
 export interface OfflineReport {
@@ -150,6 +162,26 @@ export class Game {
   /** Units of the stake wallet that a bet of `bet` costs. */
   stakePrice(id: TableId, bet: number): number {
     return previousTable(id) ? Math.ceil(bet * (TABLES[id].stakeCost ?? 1)) : bet;
+  }
+
+  /** Units of a table's wallet that upgrade prices of later tables may spend (the first table keeps its bet bankroll). */
+  spendable(id: TableId): number {
+    const ts = this.state.tables[id];
+    const reserve = previousTable(id) ? 0 : minBet(TABLES[id], ts.prestige) * FEED_RESERVE_BETS;
+    return Math.max(0, ts.wallet - reserve);
+  }
+
+  /** Whether the table's own wallet (after keeping `reserve`) and every earlier wallet can pay one price. */
+  private canPay(id: TableId, price: { own: number; ties: { from: TableId; amount: number }[] }, reserve = 0): boolean {
+    if (this.state.tables[id].wallet - price.own < reserve) return false;
+    return price.ties.every((t) => t.amount <= this.spendable(t.from));
+  }
+
+  /** Every table's prestige, which cross-table upgrade prices can scale with. */
+  prestiges(): Prestiges {
+    const out: Prestiges = {};
+    for (const id of TABLE_IDS) out[id] = this.state.tables[id].prestige;
+    return out;
   }
 
   /** Units of the previous table's currency this table is consuming per second at its current bet (0 at the first table or when starved). */
@@ -275,11 +307,13 @@ export class Game {
     // The reserve keeps the table betting, which only matters where the bet comes from its own wallet.
     const reserve = previousTable(id) ? 0 : minBet(def, ts.prestige) * MANAGER_RESERVE_BETS;
     let best: { id: string; cost: number; core: boolean } | null = null;
+    const prestiges = this.prestiges();
     for (const upg of allUpgrades(def)) {
       const level = ts.levels[upg.id] ?? 0;
       if (level >= upg.maxLevel) continue;
-      const cost = upgradeCost(def, upg, ts.prestige, level, this.bonus);
-      if (ts.wallet - cost < reserve) continue;
+      const price = upgradePrice(def, upg, prestiges, level, this.bonus);
+      if (!this.canPay(id, price, reserve)) continue;
+      const cost = priceInOwn(def, price);
       const core = CORE_UPGRADES.includes(upg.id);
       if (!best || (core && !best.core) || (core === best.core && cost < best.cost)) best = { id: upg.id, cost, core };
     }
@@ -376,25 +410,53 @@ export class Game {
     return this.state.tables[id].levels[upgradeId] ?? 0;
   }
 
-  /** What `mode` would buy of one table upgrade right now: levels, total cost, and the next single level's cost. */
-  quoteUpgrade(id: TableId, upgradeId: string, mode: BuyMode = SINGLE_BUY): { count: number; cost: number; nextCost: number } {
+  /**
+   * What `mode` would buy of one table upgrade right now: levels, total cost in the table's own currency, the
+   * totals owed in earlier tables' currencies, and the next single level's prices.
+   */
+  quoteUpgrade(id: TableId, upgradeId: string, mode: BuyMode = SINGLE_BUY): UpgradeQuote {
     const def = TABLES[id];
     const ts = this.state.tables[id];
     const upg = allUpgrades(def).find((u) => u.id === upgradeId);
-    if (!upg || !ts.unlocked) return { count: 0, cost: 0, nextCost: 0 };
+    if (!upg || !ts.unlocked) return { count: 0, cost: 0, ties: [], nextCost: 0, nextTies: [] };
     const level = ts.levels[upgradeId] ?? 0;
-    const costAt = (l: number): number => upgradeCost(def, upg, ts.prestige, l, this.bonus);
-    const { count, cost } = bulkPurchase(costAt, level, upg.maxLevel, ts.wallet * mode.fraction, mode.cap);
-    return { count, cost, nextCost: level < upg.maxLevel ? costAt(level) : 0 };
+    const prestiges = this.prestiges();
+    const priceAt = (l: number) => upgradePrice(def, upg, prestiges, l, this.bonus);
+    const owed = new Map<TableId, number>();
+    const room = new Map<TableId, number>();
+    let count = 0;
+    let cost = 0;
+    const budget = ts.wallet * mode.fraction;
+    while (count < mode.cap && level + count < upg.maxLevel) {
+      const price = priceAt(level + count);
+      if (cost + price.own > budget) break;
+      const short = price.ties.some((t) => {
+        if (!room.has(t.from)) room.set(t.from, this.spendable(t.from));
+        return (owed.get(t.from) ?? 0) + t.amount > room.get(t.from)!;
+      });
+      if (short) break;
+      cost += price.own;
+      for (const t of price.ties) owed.set(t.from, (owed.get(t.from) ?? 0) + t.amount);
+      count++;
+    }
+    const next = level < upg.maxLevel ? priceAt(level) : null;
+    return {
+      count,
+      cost,
+      ties: [...owed].map(([from, amount]) => ({ from, amount })),
+      nextCost: next?.own ?? 0,
+      nextTies: next?.ties ?? [],
+    };
   }
 
   buyUpgrade(id: TableId, upgradeId: string, mode: BuyMode = SINGLE_BUY): boolean {
     const def = TABLES[id];
     const ts = this.state.tables[id];
-    const { count, cost } = this.quoteUpgrade(id, upgradeId, mode);
+    const { count, cost, ties } = this.quoteUpgrade(id, upgradeId, mode);
     if (count <= 0) return false;
     this.tickCtx = this.tickCtx && {};
     ts.wallet -= cost;
+    for (const t of ties) this.state.tables[t.from].wallet -= t.amount;
     ts.levels[upgradeId] = (ts.levels[upgradeId] ?? 0) + count;
     this.announce(observeUpgrades(this.state.achievements, id, allUpgrades(def), ts.levels));
     return true;
@@ -405,11 +467,14 @@ export class Game {
     const def = TABLES[id];
     const ts = this.state.tables[id];
     let best: { id: string; cost: number } | null = null;
+    const prestiges = this.prestiges();
     for (const upg of allUpgrades(def)) {
       const level = ts.levels[upg.id] ?? 0;
       if (level >= upg.maxLevel) continue;
-      const cost = upgradeCost(def, upg, ts.prestige, level, this.bonus);
-      if (cost <= ts.wallet && (!best || cost < best.cost)) best = { id: upg.id, cost };
+      const price = upgradePrice(def, upg, prestiges, level, this.bonus);
+      if (!this.canPay(id, price)) continue;
+      const cost = priceInOwn(def, price);
+      if (!best || cost < best.cost) best = { id: upg.id, cost };
     }
     return best?.id ?? null;
   }
@@ -448,6 +513,7 @@ export class Game {
     this.tickCtx = this.tickCtx && {};
     const ts = this.state.tables[id];
     markPrestige(ts.history, ts.plays);
+    ts.history.prestigeStats = newStats();
     ts.prestige += 1;
     ts.levels = {};
     ts.profit = 0;
@@ -476,8 +542,10 @@ export class Game {
     casino.ascensions += 1;
     for (const id of TABLE_IDS) {
       const feedShare = this.state.tables[id].feedShare;
+      const lifetimeStats = this.state.tables[id].history.lifetimeStats;
       this.state.tables[id] = newTableState(TABLES[id]);
       this.state.tables[id].feedShare = feedShare;
+      this.state.tables[id].history.lifetimeStats = lifetimeStats;
       this.acc[id] = 0;
       this.managerClock[id] = 0;
       delete this.last[id];
@@ -585,6 +653,9 @@ export class Game {
 
   /** Dev tool: unlocks every table, grants the Floor Manager upgrades, funds every table to max out its upgrades, and reaches the ascension threshold. Leaves prestige, achievements and chips alone. */
   devUnlockAll(): void {
+    // Cross-table prices every table's upgrades will charge, per source wallet.
+    const owed: Partial<Record<TableId, number>> = {};
+    const prestiges = this.prestiges();
     for (const id of TABLE_IDS) {
       const def = TABLES[id];
       const ts = this.state.tables[id];
@@ -592,9 +663,18 @@ export class Game {
       // Enough to buy every remaining upgrade level at once, with the manager's bet reserve on top.
       let maxAll = minBet(def, ts.prestige) * MANAGER_RESERVE_BETS;
       for (const upg of allUpgrades(def)) {
-        for (let l = ts.levels[upg.id] ?? 0; l < upg.maxLevel; l++) maxAll += upgradeCost(def, upg, ts.prestige, l, this.bonus);
+        for (let l = ts.levels[upg.id] ?? 0; l < upg.maxLevel; l++) {
+          const price = upgradePrice(def, upg, prestiges, l, this.bonus);
+          maxAll += price.own;
+          for (const t of price.ties) owed[t.from] = (owed[t.from] ?? 0) + t.amount;
+        }
       }
       ts.wallet = Math.max(ts.wallet, def.baseMinBet * DEV_WALLET_BETS, maxAll);
+    }
+    // Source wallets also keep what their own upgrades and the first table's bankroll need.
+    for (const id of TABLE_IDS) {
+      const need = owed[id];
+      if (need) this.state.tables[id].wallet += need;
     }
     // Hand over the Floor Manager line so it can be exercised; table upgrades stay unbought for it to work through.
     for (const upg of CASINO_UPGRADES) {

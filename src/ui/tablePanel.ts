@@ -8,7 +8,7 @@ import {
   payoutMultiplier,
   prestigeThreshold,
 } from '../core/economy';
-import { h, setDisabled, setText, toggleClass } from './dom';
+import { h, setDisabled, setLines, setText, toggleClass } from './dom';
 import { fmt } from './format';
 import { previousTable } from '../tables';
 import { Stage } from './stage/stage';
@@ -16,7 +16,8 @@ import { HistoryChart } from './historyChart';
 import { perfBegin, perfEnd } from './perf';
 import { UPGRADE_ICONS, iconSvg } from '../assets';
 import { bonusLabel } from './upgradeBonus';
-import { buyLabel, buyMode, buyModeSelector, onBuyModeChange } from './buyMode';
+import { annotate } from './glossary';
+import { buyLines, buyMode, buyModeSelector, onBuyModeChange } from './buyMode';
 
 let iconSeq = 0;
 
@@ -189,7 +190,7 @@ export class TablePanel {
         'div',
         { class: 'upgrade' },
         upgradeIcon(u.id),
-        h('div', { class: 'upgrade-text' }, h('div', {}, h('strong', { text: u.name }), ' ', level), h('small', { text: u.description }), bonus),
+        h('div', { class: 'upgrade-text' }, h('div', {}, h('strong', {}, ...annotate(u.name)), ' ', level), h('small', {}, ...annotate(u.description)), bonus),
         button,
       );
       upgrades.append(root);
@@ -405,11 +406,13 @@ export class TablePanel {
       row.bonusNow.title = nowText;
       setText(row.bonusNext, maxed ? 'Max level reached' : `Next: ${bonusLabel(row.def.id, level + 1)}`);
       if (maxed) {
-        setText(row.button, 'Maxed');
+        setLines(row.button, ['Maxed']);
         setDisabled(row.button, true);
       } else {
         const q = game.quoteUpgrade(id, row.def.id, buyMode());
-        setText(row.button, buyLabel(q.count, q.cost, q.nextCost, fmt));
+        const ties = (q.count > 0 ? q.ties : q.nextTies).map((t) => ({ icon: game.def(t.from).currency.icon, amount: t.amount }));
+        setLines(row.button, buyLines(q.count, q.cost, q.nextCost, fmt, cur.icon, ties));
+        row.button.title = ties.length ? `Also costs ${(q.count > 0 ? q.ties : q.nextTies).map((t) => `${fmt(t.amount)} ${game.def(t.from).currency.name}`).join(' and ')}` : '';
         setDisabled(row.button, q.count <= 0);
       }
     }
@@ -423,7 +426,7 @@ export class TablePanel {
 
     this.canvasStage.setPlayers(1 + Math.floor((ts.levels.speed ?? 0) / 4));
     this.canvasStage.resume();
-    this.history.update(ts.history, ts.plays);
+    this.history.update(ts.history, ts.plays, game.state.casino.ascensions);
 
     const last = game.last[id];
     if (last && last.seq !== this.seenSeq) {

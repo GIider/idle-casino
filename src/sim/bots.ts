@@ -2,7 +2,7 @@ import { Game } from '../core/game';
 import { createInitialState } from '../core/state';
 import { mulberry32 } from '../core/rng';
 import { FINAL_TABLE, TABLES, TABLE_IDS } from '../tables';
-import { allUpgrades, prestigeThreshold, upgradeCost } from '../core/economy';
+import { allUpgrades, prestigeThreshold, priceInOwn, upgradePrice } from '../core/economy';
 import { CASINO_UPGRADES } from '../core/casino';
 import { ACHIEVEMENTS } from '../core/achievements';
 import type { TableId } from '../core/types';
@@ -89,6 +89,13 @@ export interface RunOptions {
   rng?: Rng;
 }
 
+/** When one upgrade (at one prestige of its table) first became affordable in every currency, was first bought, and was maxed. */
+export interface UpgradeTiming {
+  affordable: number | null;
+  first: number | null;
+  maxed: number | null;
+}
+
 export interface RunResult {
   bot: string;
   seed: number;
@@ -104,6 +111,13 @@ export interface RunResult {
   unlockedAt: Partial<Record<TableId, number>>;
   /** Achievement id -> minutes at which the achievement unlocked (a single entry). */
   achievementAt: Record<string, number[]>;
+  /** `table:upgrade:p<prestige>` -> timing in minutes. */
+  upgradeAt: Record<string, UpgradeTiming>;
+  /**
+   * `table:upgrade:<currency table>` -> number of checks where the table's own wallet could pay but that earlier
+   * currency was short; `table:upgrade:own` counts checks where the own wallet was the shortfall.
+   */
+  blocked: Record<string, number>;
   events: SimEvent[];
   samples: SimSample[];
 }
@@ -126,6 +140,8 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
   const samples: SimSample[] = [];
   const unlockedAt: RunResult['unlockedAt'] = {};
   const achievementAt: RunResult['achievementAt'] = {};
+  const upgradeAt: RunResult['upgradeAt'] = {};
+  const blocked: RunResult['blocked'] = {};
   const seenAt = new Set<string>(grantedAchievements);
   let ascendedAt: number | null = null;
   let shopCompleteAt: number | null = null;
@@ -210,18 +226,47 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
       events.push({ t, kind: 'ascend', label: 'ascend' });
       if (!opts.ignoreAscension) break;
     }
-    if (policy.buy === 'none') continue;
+    const track = (id: TableId): void => {
+      const ts = g.table(id);
+      const prestiges = g.prestiges();
+      for (const u of allUpgrades(TABLES[id])) {
+        const level = ts.levels[u.id] ?? 0;
+        const key = `${id}:${u.id}:p${ts.prestige}`;
+        const rec = (upgradeAt[key] ??= { affordable: null, first: null, maxed: null });
+        if (level > 0 && rec.first === null) rec.first = t;
+        if (level >= u.maxLevel && rec.maxed === null) rec.maxed = t;
+        if (level >= u.maxLevel) continue;
+        const price = upgradePrice(TABLES[id], u, prestiges, level, g.bonus);
+        const ownOk = price.own <= ts.wallet;
+        const short = price.ties.filter((x) => x.amount > g.spendable(x.from));
+        if (ownOk && short.length === 0) {
+          if (rec.affordable === null) rec.affordable = t;
+        } else if (rec.affordable === null) {
+          if (!ownOk) blocked[`${id}:${u.id}:own`] = (blocked[`${id}:${u.id}:own`] ?? 0) + 1;
+          else for (const x of short) blocked[`${id}:${u.id}:${x.from}`] = (blocked[`${id}:${u.id}:${x.from}`] ?? 0) + 1;
+        }
+      }
+    };
+    if (policy.buy === 'none') {
+      for (const id of TABLE_IDS) if (g.table(id).unlocked) track(id);
+      continue;
+    }
     for (const id of TABLE_IDS) {
       const ts = g.table(id);
       if (!ts.unlocked) continue;
+      track(id);
       for (let n = 0; n < 5; n++) {
         const options: { up: string; cost: number }[] = [];
+        const prestiges = g.prestiges();
         for (const u of allUpgrades(TABLES[id])) {
           if (skip.has(`${id}:${u.id}`) || skip.has(u.id)) continue;
           const lvl = ts.levels[u.id] ?? 0;
           if (lvl >= u.maxLevel) continue;
-          const cost = upgradeCost(TABLES[id], u, ts.prestige, lvl, g.bonus);
-          if (cost <= ts.wallet * policy.spendFraction) options.push({ up: u.id, cost });
+          const price = upgradePrice(TABLES[id], u, prestiges, lvl, g.bonus);
+          // The spend fraction models caution about the table's own wallet; earlier currencies just have to cover it.
+          if (price.own <= ts.wallet * policy.spendFraction && price.ties.every((x) => x.amount <= g.spendable(x.from))) {
+            options.push({ up: u.id, cost: priceInOwn(TABLES[id], price) });
+          }
         }
         if (options.length === 0) break;
         const rank = (up: string) => {
@@ -251,9 +296,10 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
         }
         if (!g.buyUpgrade(id, choice.up)) break;
       }
+      track(id);
     }
   }
-  return { bot: policy.id, seed, ascendedAt, shopCompleteAt, ascensionsToComplete, progress: progress(), unlockedAt, achievementAt, events, samples };
+  return { bot: policy.id, seed, ascendedAt, shopCompleteAt, ascensionsToComplete, progress: progress(), unlockedAt, achievementAt, upgradeAt, blocked, events, samples };
 }
 
 export interface BotSummary {
@@ -329,4 +375,59 @@ export function perkMarginals(policy: BotPolicy, seeds: number[], ids: string[],
     const granted = medianScore(runSeeds(policy, seeds, { maxMinutes: cap, grantedAchievements: [id] }), cap);
     return { id, base: granted, alt: locked, minutesSaved: locked - granted };
   });
+}
+
+export interface TimelineRow {
+  table: TableId;
+  upgrade: string;
+  /** Median minute the next level was first affordable in every currency at any prestige (null = never in most runs). */
+  affordable: number | null;
+  /** Median minute it was first bought / maxed at prestige 0. */
+  first: number | null;
+  maxed: number | null;
+  /** Median minute it was maxed at any prestige (prestiging wipes levels, so this is the earliest full set). */
+  maxedAny: number | null;
+  /** Earlier currency (or 'own') that was short most often before the upgrade became affordable. */
+  bottleneck: string;
+}
+
+const medianOrNull = (xs: (number | null)[]): number | null => {
+  const m = median(xs.map((x) => x ?? Infinity));
+  return Number.isFinite(m) ? m : null;
+};
+
+/** When every upgrade became buyable / was maxed for one strategy, aggregated over its seeds. */
+export function upgradeTimeline(runs: RunResult[]): TimelineRow[] {
+  const rows: TimelineRow[] = [];
+  for (const table of TABLE_IDS) {
+    for (const u of allUpgrades(TABLES[table])) {
+      const at = (r: RunResult, p: number) => r.upgradeAt[`${table}:${u.id}:p${p}`];
+      const earliest = (r: RunResult, field: 'affordable' | 'maxed'): number | null => {
+        const ts = Object.entries(r.upgradeAt)
+          .filter(([k, v]) => k.startsWith(`${table}:${u.id}:p`) && v[field] !== null)
+          .map(([, v]) => v[field] as number);
+        return ts.length ? Math.min(...ts) : null;
+      };
+      const blocks: Record<string, number> = {};
+      for (const r of runs) {
+        for (const [k, n] of Object.entries(r.blocked)) {
+          if (k.startsWith(`${table}:${u.id}:`)) {
+            const src = k.slice(`${table}:${u.id}:`.length);
+            blocks[src] = (blocks[src] ?? 0) + n;
+          }
+        }
+      }
+      const top = Object.entries(blocks).sort((a, b) => b[1] - a[1])[0];
+      rows.push({
+        table,
+        upgrade: u.id,
+        affordable: medianOrNull(runs.map((r) => earliest(r, 'affordable'))),
+        first: medianOrNull(runs.map((r) => at(r, 0)?.first ?? null)),
+        maxed: medianOrNull(runs.map((r) => at(r, 0)?.maxed ?? null)),
+        maxedAny: medianOrNull(runs.map((r) => earliest(r, 'maxed'))),
+        bottleneck: top ? top[0] : '-',
+      });
+    }
+  }
+  return rows;
 }

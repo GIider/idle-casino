@@ -44,6 +44,15 @@ export const roulette: TableDef = {
   baseMaxBet: 500,
   baseMaxPayout: 20000,
   baseWinBonus: 0.15,
+  commonTies: {
+    speed: [{ from: 'slots', share: 24, growth: 1.25 }],
+    autobet: [{ from: 'slots', share: 32, fromLevel: 3, scale: 'source' }],
+    payout: [{ from: 'slots', share: 12, scale: 'source' }, { from: 'coinflip', share: 3, scale: 'source' }],
+    dealer: [{ from: 'slots', share: 4 }, { from: 'coinflip', share: 1.5, scale: 'flat' }],
+    streak: [{ from: 'slots', share: 8, growth: 1.4 }],
+    luck: [{ from: 'slots', share: 6, growth: 1.4 }],
+    cashback: [{ from: 'coinflip', share: 0.8, scale: 'flat' }],
+  },
   upgrades: [
     {
       id: 'bet_dozen',
@@ -52,6 +61,7 @@ export const roulette: TableDef = {
       baseCost: 300,
       growth: 1,
       maxLevel: 1,
+      ties: [{ from: 'coinflip', share: 0.8, scale: 'flat' }],
     },
     {
       id: 'bet_number',
@@ -60,6 +70,7 @@ export const roulette: TableDef = {
       baseCost: 1500,
       growth: 1,
       maxLevel: 1,
+      ties: [{ from: 'slots', share: 0.3 }, { from: 'coinflip', share: 0.4, scale: 'flat' }],
     },
     {
       id: 'zero',
@@ -68,6 +79,7 @@ export const roulette: TableDef = {
       baseCost: 100,
       growth: 2.2,
       maxLevel: 4,
+      ties: [{ from: 'slots', share: 8, growth: 1.1 }],
     },
     {
       id: 'magnet',
@@ -76,6 +88,7 @@ export const roulette: TableDef = {
       baseCost: 400,
       growth: 4,
       maxLevel: 2,
+      ties: [{ from: 'slots', share: 16, growth: 1.1 }],
     },
   ],
   play(rng, levels) {

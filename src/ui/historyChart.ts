@@ -1,4 +1,4 @@
-import type { History, TableId } from '../core/types';
+import type { History, PlayStats, TableId } from '../core/types';
 import { BlackjackHandsView, GameHistoryView, SlotsCombosView, VIEW_LABELS } from './historyViews';
 import { COLORS, setupCanvas } from './stage/canvas';
 import { h, setText, toggleClass } from './dom';
@@ -6,6 +6,7 @@ import { fmt, fmtSigned } from './format';
 import { RANGES, visiblePoints, type Range } from './chartRange';
 import { perfBegin, perfEnd } from './perf';
 import { profile } from './quality';
+import { effectiveScope, historyScopeSelector } from './historyScope';
 
 type Mode = 'game' | 'combos';
 
@@ -28,6 +29,8 @@ export class HistoryChart {
   private tabs: Partial<Record<Mode, HTMLButtonElement>>;
   private mode: Mode;
   private history: History | null = null;
+  private ascensions = 0;
+  private scope: ReturnType<typeof historyScopeSelector>;
 
   constructor(id: TableId) {
     this.gameView = new GameHistoryView(id);
@@ -58,6 +61,10 @@ export class HistoryChart {
       this.draw();
     });
     const tabButtons = Object.values(this.tabs) as HTMLElement[];
+    this.scope = historyScopeSelector(() => {
+      this.viewKey = '';
+      if (this.history) this.refreshViews(this.history);
+    });
     const uniqueTitle = id === 'slots' ? 'Combos' : id === 'blackjack' ? 'Hands' : VIEW_LABELS[id];
     const income = h(
       'div',
@@ -79,6 +86,7 @@ export class HistoryChart {
         h('h3', { text: uniqueTitle }),
         tabButtons.length > 1 ? h('div', { class: 'history-range' }, ...tabButtons) : h('span'),
       ),
+      h('div', { class: 'history-head history-scope-head' }, this.scope.root),
       this.gameView.root,
       ...(this.combosView ? [this.combosView.root] : []),
     );
@@ -92,8 +100,18 @@ export class HistoryChart {
     if (this.combosView) toggleClass(this.combosView.root, 'hidden', mode !== 'combos');
     this.syncButtons();
     if (!this.history) return;
-    if (mode === 'combos') this.combosView?.update(this.history.stats, true);
-    else this.gameView.update(this.history.stats, true);
+    this.refreshViews(this.history, true);
+  }
+
+  private scoped(history: History): PlayStats {
+    const scope = effectiveScope(this.ascensions);
+    return scope === 'all' ? history.lifetimeStats : scope === 'prestige' ? history.prestigeStats : history.stats;
+  }
+
+  private refreshViews(history: History, force = true): void {
+    const stats = this.scoped(history);
+    if (this.mode === 'combos') this.combosView?.update(stats, force);
+    else this.gameView.update(stats, force);
   }
 
   private setRange(r: Range): void {
@@ -114,8 +132,13 @@ export class HistoryChart {
   private viewKey = '';
   private lastRefresh = 0;
 
-  update(history: History, plays: number): void {
+  update(history: History, plays: number, ascensions = 0): void {
     this.history = history;
+    if (ascensions !== this.ascensions) {
+      this.ascensions = ascensions;
+      this.scope.setAscensions(ascensions);
+      this.viewKey = '';
+    }
     const now = performance.now();
     if (this.key !== '' && now - this.lastRefresh < profile.historyRefreshMs) return;
     this.lastRefresh = now;
@@ -126,11 +149,10 @@ export class HistoryChart {
 
   private refresh(history: History, plays: number): void {
     // Stats only change when a round is played, so skip the (stringify-keyed) view diff otherwise.
-    const viewKey = `${plays}|${this.mode}|${this.canvas.clientWidth}x${this.canvas.clientHeight}`;
+    const viewKey = `${plays}|${this.mode}|${effectiveScope(this.ascensions)}|${this.canvas.clientWidth}x${this.canvas.clientHeight}`;
     if (viewKey !== this.viewKey) {
       this.viewKey = viewKey;
-      if (this.mode === 'combos') this.combosView?.update(history.stats);
-      else this.gameView.update(history.stats);
+      this.refreshViews(history, false);
     }
     const series = history.rate.points;
     const last = series[series.length - 1];

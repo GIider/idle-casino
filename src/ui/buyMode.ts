@@ -65,7 +65,27 @@ function modeTitle(m: ModeDef): string {
 }
 
 /** Button label: `×N · cost`, the next level's cost when nothing is affordable. */
-export function buyLabel(count: number, cost: number, nextCost: number, fmt: (n: number) => string, unit = ''): string {
+export function buyLabel(
+  count: number,
+  cost: number,
+  nextCost: number,
+  fmt: (n: number) => string,
+  unit = '',
+): string {
   const u = unit ? ` ${unit}` : '';
   return count > 0 ? `×${count} · ${fmt(cost)}${u}` : `${fmt(nextCost)}${u}`;
+}
+
+/** Button label as one line per currency (`×N · cost`, then each extra price), so no price is ever cut off. */
+export function buyLines(
+  count: number,
+  cost: number,
+  nextCost: number,
+  fmt: (n: number) => string,
+  /** The table's own currency icon, shown before the first price. */
+  icon: string,
+  extras: { icon: string; amount: number }[] = [],
+): string[] {
+  const head = count > 0 ? `×${count} · ${icon} ${fmt(cost)}` : `${icon} ${fmt(nextCost)}`;
+  return [head, ...extras.map((e) => `+ ${e.icon} ${fmt(e.amount)}`)];
 }

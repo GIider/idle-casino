@@ -39,8 +39,12 @@ export interface History extends Series {
   clock: number;
   /** [clock, lifetimeProfit] at the previous `rate` sample. */
   rateFrom: [number, number];
-  /** Per-game outcome tallies for the game-specific history views. */
+  /** Per-game outcome tallies for the game-specific history views (since the last ascension). */
   stats: PlayStats;
+  /** The same tallies since the last prestige of this table. */
+  prestigeStats: PlayStats;
+  /** The same tallies across all ascensions. */
+  lifetimeStats: PlayStats;
 }
 
 export interface CoinStats {
@@ -165,6 +169,20 @@ export type PlayView =
   | { kind: 'roulette'; pocket: number; bets: string[] }
   | { kind: 'blackjack'; player: number[]; dealer: number[]; outcome: 'natural' | 'bust' | 'win' | 'push' | 'lose'; insured: boolean; /** The second hand of a free split. */ split?: number[]; doubled?: boolean; surrendered?: boolean; charlie?: boolean };
 
+/** An extra price component paid in the currency of an earlier table. */
+export interface CostTie {
+  /** The earlier table whose currency pays. */
+  from: TableId;
+  /** Level-0 price as a share of the upgrade's own-currency price, valued at the chain's exchange rate. */
+  share: number;
+  /** Per-level multiplier of this component (default: the upgrade's own growth). */
+  growth?: number;
+  /** The component only applies when buying this level (0-based) or later. */
+  fromLevel?: number;
+  /** Prestige scaling: ×3 per prestige of this table (default), per prestige of `from`, or none. */
+  scale?: 'self' | 'source' | 'flat';
+}
+
 export interface UpgradeDef {
   id: string;
   name: string;
@@ -173,6 +191,8 @@ export interface UpgradeDef {
   baseCost: number;
   growth: number;
   maxLevel: number;
+  /** Extra price components paid in earlier tables' currencies. */
+  ties?: CostTie[];
 }
 
 export interface TableDef {
@@ -196,5 +216,7 @@ export interface TableDef {
   /** Built-in winnings bonus (0.1 = +10%): lets a table grow on its own wallet before any upgrades. */
   baseWinBonus: number;
   upgrades: UpgradeDef[];
+  /** Cross-table price components for the common upgrades, by upgrade id. */
+  commonTies?: Record<string, CostTie[]>;
   play(rng: Rng, levels: Record<string, number>): PlayResult;
 }
