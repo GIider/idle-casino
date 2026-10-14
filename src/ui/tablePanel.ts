@@ -203,11 +203,9 @@ export class TablePanel {
       h(
         'div',
         { class: 'col main' },
-        h('div', { class: 'card play-card' }, this.stage),
         h(
           'div',
-          { class: 'card header-card hero' },
-          h('div', { class: 'hero-head' }, h('h2', { text: `${def.icon} ${def.name}` }), prestigeWrap),
+          { class: 'card bank-card' },
           h(
             'div',
             { class: 'hero-bank', title: `${def.currency.name} (${def.name})` },
@@ -216,6 +214,12 @@ export class TablePanel {
             this.moneyEl,
             this.rateEl,
           ),
+        ),
+        h('div', { class: 'card play-card' }, this.stage),
+        h(
+          'div',
+          { class: 'card header-card hero' },
+          h('div', { class: 'hero-head' }, h('h2', { text: `${def.icon} ${def.name}` }), prestigeWrap),
           h('p', { text: def.blurb }),
           bigStats,
           h(

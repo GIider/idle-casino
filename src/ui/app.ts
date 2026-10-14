@@ -10,7 +10,6 @@ import { cycleQuality } from './quality';
 import { CROSS_PRESTIGE_BONUS } from '../core/economy';
 import { previousTable } from '../tables';
 
-const RECENT_MAX = 12;
 
 export interface AppHandlers {
   onImport(text: string): void;
@@ -32,15 +31,9 @@ export class App {
   private toastSeq = 0;
   private toastTimer = 0;
   private handlers: AppHandlers;
-  private recentEl: HTMLElement;
   private activityCard!: HTMLElement;
-  private recent: { id: TableId; net: number; at: number }[] = [];
-  private recentKey = '\0';
-  private lastSeq: Partial<Record<TableId, number>> = {};
   private sides = new Map<TableId, HTMLElement>();
   private qualityBtn: HTMLButtonElement;
-  private activityMode: 'wins' | 'history' = 'wins';
-  private activityBtns!: Record<'wins' | 'history', HTMLButtonElement>;
   private histories = new Map<TableId, HTMLElement>();
   private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; name: HTMLElement; fill: HTMLElement }>();
   private chips = new Map<TableId, HTMLElement>();
@@ -83,11 +76,6 @@ export class App {
 
     const main = h('main', { class: 'mainview' });
     const side = h('aside', { class: 'rightcol' });
-    this.activityBtns = {
-      wins: h('button', { class: 'btn small', text: 'Recent wins', onclick: () => this.setActivity('wins') }),
-      history: h('button', { class: 'btn small', text: 'History', onclick: () => this.setActivity('history') }),
-    };
-    this.recentEl = h('div', { class: 'recent-list' });
     for (const id of TABLE_IDS) {
       const panel = new TablePanel(game, id);
       this.panels.set(id, panel);
@@ -137,8 +125,6 @@ export class App {
     this.activityCard = h(
       'div',
       { class: 'card activity' },
-      h('div', { class: 'history-range' }, this.activityBtns.wins, this.activityBtns.history),
-      this.recentEl,
       ...this.histories.values(),
     );
     side.append(this.activityCard);
@@ -177,7 +163,6 @@ export class App {
     const now = performance.now();
     if (now - this.slowAt >= 250) {
       this.slowAt = now;
-      this.updateRecent(g);
       this.updateTiles(g);
       const ready = TABLE_IDS.some((id) => g.canPrestige(id));
       const title = `${ready ? '● ' : ''}Idle Casino`;
@@ -210,22 +195,11 @@ export class App {
     }
   }
 
-  private setActivity(mode: 'wins' | 'history'): void {
-    this.activityMode = mode;
-    this.syncActivity();
-    this.updateSelected();
-  }
-
   private syncActivity(): void {
-    // Nothing to show on a table's unlock screen.
+    // Nothing to show on a table's unlock screen or the casino tab.
     const onLockedTable = this.selected !== 'casino' && !this.game.table(this.selected).unlocked;
-    toggleClass(this.activityCard, 'hidden', onLockedTable);
-    const history = this.activityMode === 'history' && this.selected !== 'casino';
-    toggleClass(this.recentEl, 'hidden', history);
-    for (const [id, el] of this.histories) toggleClass(el, 'hidden', !history || id !== this.selected);
-    toggleClass(this.activityBtns.wins, 'active', !history);
-    toggleClass(this.activityBtns.history, 'active', history);
-    toggleClass(this.activityBtns.history, 'hidden', this.selected === 'casino');
+    toggleClass(this.activityCard, 'hidden', onLockedTable || this.selected === 'casino');
+    for (const [id, el] of this.histories) toggleClass(el, 'hidden', id !== this.selected);
   }
 
   private updateTiles(g: Game): void {
@@ -273,37 +247,6 @@ export class App {
             : `Unlock: ${fmt(TABLES[id].unlockCost)}`,
       );
     }
-  }
-
-  private updateRecent(g: Game): void {
-    let changed = false;
-    for (const id of TABLE_IDS) {
-      const last = g.last[id];
-      if (!last || last.seq === this.lastSeq[id]) continue;
-      const first = this.lastSeq[id] === undefined;
-      this.lastSeq[id] = last.seq;
-      if (first || last.outcome.net <= 0) continue;
-      this.recent.unshift({ id, net: last.outcome.net, at: performance.now() });
-      changed = true;
-    }
-    if (this.recent.length > RECENT_MAX) this.recent.length = RECENT_MAX;
-    const now = performance.now();
-    const rows = this.recent.map((r) => `${TABLES[r.id].name}|${fmt(r.net)}|${Math.floor((now - r.at) / 10000)}`);
-    const key = rows.join(',');
-    if (!changed && key === this.recentKey) return;
-    this.recentKey = key;
-    this.recentEl.replaceChildren(
-      ...(this.recent.length
-        ? this.recent.map((r) =>
-            h(
-              'div',
-              { class: 'recent-row' },
-              h('span', { text: `${TABLES[r.id].icon} ${TABLES[r.id].name}` }),
-              h('span', { class: 'amt', text: `+${fmt(r.net)} ${TABLES[r.id].currency.name}` }),
-            ),
-          )
-        : [h('small', { text: 'No wins yet.' })]),
-    );
   }
 
   private doExport(): void {
