@@ -20,4 +20,15 @@ describe('chart range', () => {
     expect(visiblePoints(series(5), 'm3').length).toBe(5);
     expect(visiblePoints([], 'm3')).toEqual([]);
   });
+
+  it('starts at the last leading zero instead of showing zeros in the past', () => {
+    const data: [number, number][] = [[0, 0], [10, 0], [20, 0], [30, 5], [40, 0], [50, 7]];
+    expect(visiblePoints(data, 'all')).toEqual([[20, 0], [30, 5], [40, 0], [50, 7]]);
+    expect(visiblePoints(data, 'm3')).toEqual([[20, 0], [30, 5], [40, 0], [50, 7]]);
+  });
+
+  it('leaves an all-zero series alone', () => {
+    const data: [number, number][] = [[0, 0], [10, 0]];
+    expect(visiblePoints(data, 'all').length).toBeGreaterThan(0);
+  });
 });
