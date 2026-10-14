@@ -45,7 +45,7 @@ export function recordView(h: History, view: PlayView | undefined): void {
       const dir = view.heads ? 1 : -1;
       c.streak = Math.sign(c.streak) === dir ? c.streak + dir : dir;
       c.longest = Math.max(c.longest, Math.abs(c.streak));
-      c.recent.push(view.heads ? 1 : 0);
+      c.recent.push(view.special === 'gold' ? 2 : view.special === 'edge' ? 3 : view.special === 'ride' ? 4 : view.heads ? 1 : 0);
       if (c.recent.length > RECENT_COINS) c.recent.shift();
       break;
     }
@@ -169,7 +169,7 @@ export function normalizeStats(raw: unknown): PlayStats {
     s.coin.tails = count(r.coin.tails);
     s.coin.streak = typeof r.coin.streak === 'number' && Number.isFinite(r.coin.streak) ? Math.trunc(r.coin.streak) : 0;
     s.coin.longest = Math.max(count(r.coin.longest), Math.abs(s.coin.streak));
-    s.coin.recent = recent(r.coin.recent, RECENT_COINS, 1);
+    s.coin.recent = recent(r.coin.recent, RECENT_COINS, 4);
   }
   if (r.slots && typeof r.slots === 'object') {
     s.slots.symbols = counts(r.slots.symbols, SLOT_SYMBOLS);

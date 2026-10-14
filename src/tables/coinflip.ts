@@ -35,12 +35,12 @@ export const coinflip: TableDef = {
     const gold = levels.perk_collect_coinflip ? GOLD_COIN_CHANCE[levels.perk_collect_coinflip - 1] : 0;
     // Gold Coin (capstone): a rare jackpot flip.
     if (gold > 0 && rng() < gold) {
-      return { mult: GOLD_COIN_MULT, detail: '🪙 Gold coin!', view: { kind: 'coin', heads: true } };
+      return { mult: GOLD_COIN_MULT, detail: '🪙 Gold coin!', view: { kind: 'coin', heads: true, special: 'gold' } };
     }
     // Edge Landing: the coin stands on its rim.
     const edge = levels.perk_coldComfort ? EDGE_CHANCE[levels.perk_coldComfort - 1] : 0;
     if (edge > 0 && rng() < edge) {
-      return { mult: EDGE_MULT, detail: '🪙 Landed on its edge!', view: { kind: 'coin', heads: true } };
+      return { mult: EDGE_MULT, detail: '🪙 Landed on its edge!', view: { kind: 'coin', heads: true, special: 'edge' } };
     }
     let heads = rng() < chance;
     let mult = heads ? 2 : 0;
@@ -52,7 +52,7 @@ export const coinflip: TableDef = {
       heads = rng() < chance;
       mult = heads ? mult * 2 : 0;
     }
-    const view = { kind: 'coin' as const, heads };
+    const view = { kind: 'coin' as const, heads, ...(heads && rode > 0 ? { special: 'ride' as const } : {}) };
     const ride = rode > 0 ? (heads ? ` — rode ${rode}× to ${mult}×!` : ' — lost the ride') : '';
     // Pity Flip: tails may earn a free play.
     const pity = levels.perk_tailsCollector ? PITY_CHANCE[levels.perk_tailsCollector - 1] : 0;

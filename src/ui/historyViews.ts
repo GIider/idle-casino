@@ -192,6 +192,8 @@ export class GameHistoryView {
 
 type Ctx = CanvasRenderingContext2D;
 
+const COIN_SPECIAL_LABELS = ['G', 'E', 'R'];
+
 function drawCoin(ctx: Ctx, w: number, ht: number, c: CoinStats): void {
   ctx.clearRect(0, 0, w, ht);
   const n = c.heads + c.tails;
@@ -233,6 +235,17 @@ function drawCoin(ctx: Ctx, w: number, ht: number, c: CoinStats): void {
     ctx.arc(cx, cy, cell / 2 - 2, 0, Math.PI * 2);
     ctx.fillStyle = v ? COLORS.gold : COLORS.pink;
     ctx.fill();
+    if (v >= 2) {
+      // Special payout: ringed bead with a letter (G gold coin, E edge landing, R ridden win).
+      ctx.strokeStyle = COLORS.fg;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = COLORS.bg;
+      ctx.font = `700 ${Math.max(8, cell * 0.5)}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(COIN_SPECIAL_LABELS[v - 2], cx, cy + 1);
+      ctx.textAlign = 'left';
+    }
   });
   if (c.recent.length === 0) {
     ctx.fillStyle = COLORS.muted;

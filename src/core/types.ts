@@ -47,7 +47,7 @@ export interface CoinStats {
   /** Signed run length: positive = current heads streak, negative = tails streak. */
   streak: number;
   longest: number;
-  /** Most recent flips, oldest first (1 = heads). */
+  /** Most recent flips, oldest first (0 = tails, 1 = heads, 2 = gold coin, 3 = edge landing, 4 = ridden win). */
   recent: number[];
 }
 
@@ -143,7 +143,7 @@ export interface PlayResult {
 }
 
 export type PlayView =
-  | { kind: 'coin'; heads: boolean }
+  | { kind: 'coin'; heads: boolean; /** Special payout that decided the flip. */ special?: 'gold' | 'edge' | 'ride' }
   | { kind: 'slots'; reels: number[] }
   | { kind: 'roulette'; pocket: number; bets: string[] }
   | { kind: 'blackjack'; player: number[]; dealer: number[]; outcome: 'natural' | 'bust' | 'win' | 'push' | 'lose'; insured: boolean; /** The second hand of a free split. */ split?: number[]; doubled?: boolean; surrendered?: boolean };
