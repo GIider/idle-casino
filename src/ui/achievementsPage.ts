@@ -81,12 +81,12 @@ export class AchievementsPage {
     toggleClass(this.root, 'hidden', hidden);
   }
 
-  /** Unlocked / total achievements across every discovered table. */
+  /** Unlocked / total achievements across every unlocked table. */
   totals(): { earned: number; total: number } {
     let earned = 0;
     let total = 0;
     for (const id of TABLE_IDS) {
-      if (!this.game.tableVisible(id)) continue;
+      if (!this.game.state.tables[id].unlocked) continue;
       for (const def of achievementsFor(id)) {
         const s = achievementStatus(this.game, def);
         if (s.unlocked) earned++;
@@ -98,7 +98,7 @@ export class AchievementsPage {
 
   update(): void {
     const g = this.game;
-    const visible = TABLE_IDS.filter((id) => g.tableVisible(id));
+    const visible = TABLE_IDS.filter((id) => g.state.tables[id].unlocked);
     if (this.tableFilter !== 'all' && !visible.includes(this.tableFilter)) this.tableFilter = 'all';
 
     const all = new Map<TableId, AchievementStatus[]>();

@@ -56,7 +56,7 @@ describe('dev button', () => {
 });
 
 describe('achievements page', () => {
-  it('lists every achievement of discovered tables and filters by status', () => {
+  it('lists achievements only for unlocked tables and filters by status', () => {
     const host = document.createElement('div');
     document.body.append(host);
     const game = new Game(createInitialState(0), mulberry32(3));
@@ -64,7 +64,7 @@ describe('achievements page', () => {
     const tab = Array.from(host.querySelectorAll('.tab')).find((t) => t.getAttribute('title') === 'Achievements') as HTMLButtonElement;
     tab.click();
     app.update();
-    const visible = TABLE_IDS.filter((id) => game.tableVisible(id));
+    const visible = TABLE_IDS.filter((id) => game.table(id).unlocked);
     const expected = visible.reduce((n, id) => n + achievementsFor(id).length, 0);
     const titles = host.querySelectorAll('.ach-section .ach-card');
     expect(titles.length).toBe(expected);
