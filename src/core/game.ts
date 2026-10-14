@@ -154,10 +154,7 @@ export class Game {
   feedable(id: TableId): number {
     const prev = previousTable(id);
     if (!prev) return 0;
-    const upstream = this.state.tables[prev];
-    // Only the first table bets from its own wallet, so only it needs a bankroll kept back.
-    const reserve = previousTable(prev) ? 0 : minBet(TABLES[prev], upstream.prestige) * FEED_RESERVE_BETS;
-    return Math.max(0, upstream.wallet - reserve) * this.state.tables[id].feedShare;
+    return this.spendable(prev) * this.state.tables[id].feedShare;
   }
 
   /** Units of the stake wallet that a bet of `bet` costs. */
@@ -167,9 +164,12 @@ export class Game {
 
   /** Units of a table's wallet that upgrade prices of later tables may spend (the first table keeps its bet bankroll). */
   spendable(id: TableId): number {
-    const ts = this.state.tables[id];
-    const reserve = previousTable(id) ? 0 : minBet(TABLES[id], ts.prestige) * FEED_RESERVE_BETS;
-    return Math.max(0, ts.wallet - reserve);
+    return Math.max(0, this.state.tables[id].wallet - this.reserve(id));
+  }
+
+  /** Units of a table's wallet kept back as its bet bankroll: only the first table bets from its own wallet. */
+  reserve(id: TableId): number {
+    return previousTable(id) ? 0 : minBet(TABLES[id], this.state.tables[id].prestige) * FEED_RESERVE_BETS;
   }
 
   /** Whether the table's own wallet (after keeping `reserve`) and every earlier wallet can pay one price. */

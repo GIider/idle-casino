@@ -373,7 +373,11 @@ export class TablePanel {
         const pct = Math.round(ts.feedShare * 100);
         if (document.activeElement !== this.feedInput) this.feedInput.value = String(pct);
         const price = game.stakePrice(id, curBet);
-        setText(this.feedLabel, curBet > 0 && game.stakeBudget(id) >= curBet ? `${pct}% · ${prev.icon} ${fmt(price)}/bet` : `${pct}% · starved`);
+        const affordable = curBet > 0 && game.stakeBudget(id) >= curBet;
+        // Starved with a fed share that would cover a bet means the upstream bankroll reserve is what is in the way.
+        const reserve = game.reserve(previousTable(id)!);
+        const held = !affordable && game.state.tables[previousTable(id)!].wallet * ts.feedShare >= price;
+        setText(this.feedLabel, affordable ? `${pct}% · ${prev.icon} ${fmt(price)}/bet` : held ? `${pct}% · starved · ${prev.icon} ${fmt(reserve)} held back` : `${pct}% · starved`);
       }
       // Ghost holds the widest candidate so toggling a preview never changes the tile's width.
       setText(this.bigBetGhost, line(Math.max(shownBet, curBet), Math.max(shownMax, curMax)));
