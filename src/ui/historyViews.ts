@@ -279,34 +279,86 @@ function drawSlots(ctx: Ctx, w: number, ht: number, s: SlotsStats): void {
 
 function drawRoulette(ctx: Ctx, w: number, ht: number, r: RouletteStats): void {
   ctx.clearRect(0, 0, w, ht);
+  const total = r.pockets.reduce((a, b) => a + b, 0);
   const max = Math.max(1, ...r.pockets);
   const pad = 6;
-  const cw = (w - pad * 2) / r.pockets.length;
-  const chartH = ht - 46;
-  r.pockets.forEach((n, i) => {
+  const n = r.pockets.length;
+  const cw = (w - pad * 2) / n;
+  const top = 16; // room for the caption and the hottest bar's count
+  const labelH = 14; // pocket numbers under the bars
+  const chipsH = 26;
+  const chartH = Math.max(20, ht - top - labelH - chipsH);
+  const base = top + chartH;
+  const hot = total > 0 ? r.pockets.indexOf(max) : -1;
+
+  ctx.font = '10px system-ui, sans-serif';
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = COLORS.muted;
+  ctx.fillText(total > 0 ? `Hits per number · ${fmt(total)} spins` : 'Hits per number', pad, 10);
+
+  r.pockets.forEach((count, i) => {
     const x = pad + i * cw;
     ctx.fillStyle = POCKET_COLORS[colorOf(i)];
-    ctx.globalAlpha = 0.25;
-    ctx.fillRect(x + 0.5, 6, cw - 1, chartH);
-    ctx.globalAlpha = 1;
-    const bh = (n / max) * chartH;
-    ctx.fillRect(x + 0.5, 6 + chartH - bh, cw - 1, bh);
+    ctx.globalAlpha = 0.18;
+    ctx.fillRect(x + 0.5, top, cw - 1, chartH);
+    ctx.globalAlpha = i === hot ? 1 : 0.8;
+    const bh = (count / max) * chartH;
+    ctx.fillRect(x + 0.5, base - bh, cw - 1, bh);
   });
+  ctx.globalAlpha = 1;
+
+  // Even share: where every bar would sit if the wheel were perfectly flat.
+  if (total > 0) {
+    const avgY = base - (total / n / max) * chartH;
+    ctx.strokeStyle = COLORS.fg;
+    ctx.globalAlpha = 0.7;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(pad, avgY);
+    ctx.lineTo(w - pad, avgY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = COLORS.muted;
+    ctx.fillText('even share', w - pad, Math.max(avgY - 3, top + 9));
+  }
+
+  // Count on the hottest bar.
+  if (hot >= 0) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = COLORS.fg;
+    ctx.font = '600 10px system-ui, sans-serif';
+    const hx = Math.min(w - pad - 8, Math.max(pad + 8, pad + hot * cw + cw / 2));
+    ctx.fillText(`${max}×`, hx, top - 3);
+  }
+
+  // Pocket numbers: all of them when they fit, otherwise every few.
+  const step = cw >= 15 ? 1 : cw >= 9 ? 2 : 3;
+  ctx.font = `${cw >= 15 ? 10 : 9}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  for (let i = 0; i < n; i++) {
+    if (i % step !== 0 && i !== hot) continue;
+    ctx.fillStyle = i === hot ? COLORS.fg : COLORS.muted;
+    ctx.fillText(String(i), pad + i * cw + cw / 2, base + 11);
+  }
+
   // Last pockets as chips along the bottom.
   const chip = Math.min(20, (w - pad * 2) / Math.max(1, r.recent.length));
   ctx.font = `${Math.max(8, chip * 0.55)}px system-ui, sans-serif`;
-  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   r.recent.forEach((p, i) => {
     const cx = pad + i * chip + chip / 2;
     ctx.fillStyle = POCKET_COLORS[colorOf(p)];
     ctx.beginPath();
-    ctx.arc(cx, ht - 16, chip / 2 - 1, 0, Math.PI * 2);
+    ctx.arc(cx, ht - 12, chip / 2 - 1, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = COLORS.bg;
-    ctx.fillText(String(p), cx, ht - 15);
+    ctx.fillText(String(p), cx, ht - 11);
   });
   ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
 }
 
 function drawBlackjack(ctx: Ctx, w: number, ht: number, b: BlackjackStats): void {
