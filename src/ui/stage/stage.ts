@@ -4,6 +4,7 @@ import { COLORS, prefersReducedMotion, roundRect, setupCanvas } from './canvas';
 import { Fx } from './fx';
 import { createScene, drawSlotsBackdrop, type Scene } from './scenes';
 import { probeFrame } from '../quality';
+import { perfBegin, perfEnd } from '../perf';
 
 const MAX_SEATS = 16;
 /** How long a settled result stays up before the lane may show the next round (ms). */
@@ -39,6 +40,8 @@ export class Stage {
   private seenSeq = -1;
   private dirty = true;
   private bg: HTMLCanvasElement | null = null;
+  /** Past slot spins pre-drawn once per spin/size; blitted each frame instead of re-laid-out. */
+  private backdrop: { canvas: HTMLCanvasElement; key: string } | null = null;
   private id: TableId;
   private recentSlots: number[][] = [];
   /** `recentSlots` without the newest spin, as the backdrop draws it. */
@@ -162,10 +165,18 @@ export class Stage {
   private frame = (now: number): void => {
     this.raf = 0;
     if (!this.canvas.isConnected) return;
+    if (document.hidden) {
+      // Background tab: stop the loop; resume() restarts it on the next visible update.
+      this.dirty = true;
+      return;
+    }
     probeFrame(now - this.last);
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
-    if (!this.render(performance.now(), dt)) {
+    const t0 = perfBegin();
+    const drew = this.render(performance.now(), dt);
+    perfEnd(`stage.${this.id}`, t0);
+    if (!drew) {
       // Hidden or no 2D context: skip effects and wait for resume()/resize.
       this.dirty = true;
       return;
@@ -180,7 +191,10 @@ export class Stage {
     const { ctx, w, h } = s;
 
     ctx.drawImage(this.background(w, h, this.canvas.width / w), 0, 0, w, h);
-    if (this.id === 'slots') drawSlotsBackdrop(ctx, w, h, this.backdropSlots);
+    if (this.id === 'slots' && this.backdropSlots.length > 0) {
+      const scale = this.canvas.width / w;
+      ctx.drawImage(this.backdropLayer(w, h, scale), 0, 0, w, h);
+    }
 
     const n = this.laneCount();
     this.fitLanes(n);
@@ -258,6 +272,24 @@ export class Stage {
       this.bg = c;
     }
     return this.bg;
+  }
+
+  private backdropLayer(w: number, h: number, scale: number): HTMLCanvasElement {
+    const last = this.backdropSlots[this.backdropSlots.length - 1];
+    const key = `${w}x${h}@${scale}|${this.backdropSlots.length}|${last?.join(',')}`;
+    if (!this.backdrop || this.backdrop.key !== key) {
+      const c = this.backdrop?.canvas ?? document.createElement('canvas');
+      c.width = Math.round(w * scale);
+      c.height = Math.round(h * scale);
+      const x = c.getContext('2d');
+      if (x) {
+        x.setTransform(scale, 0, 0, scale, 0, 0);
+        x.fillStyle = COLORS.fg;
+        drawSlotsBackdrop(x, w, h, this.backdropSlots);
+      }
+      this.backdrop = { canvas: c, key };
+    }
+    return this.backdrop.canvas;
   }
 
   private drawSeats(ctx: CanvasRenderingContext2D, w: number, h: number, dt: number): void {

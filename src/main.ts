@@ -4,6 +4,7 @@ import { clearSave, freshGame, importSave, loadGame, saveGame } from './core/sav
 import { normalizeState } from './core/state';
 import { App } from './ui/app';
 import { applyQuality } from './ui/quality';
+import { mountPerfOverlay, perfBegin, perfEnd } from './ui/perf';
 import { fmt, fmtDuration } from './ui/format';
 
 applyQuality();
@@ -51,13 +52,17 @@ setInterval(() => {
   const now = performance.now();
   const dt = (now - lastTick) / 1000;
   lastTick = now;
+  const t0 = perfBegin();
   if (dt > 5) {
     // The tab was suspended; treat the gap like time spent away.
     game.applyOffline(dt);
   } else {
     game.tick(dt);
   }
+  perfEnd('game.tick', t0);
+  const t1 = perfBegin();
   app.update();
+  perfEnd('app.update', t1);
 }, TICK_MS);
 
 setInterval(() => saveGame(game.state), 5000);
@@ -67,3 +72,4 @@ document.addEventListener('visibilitychange', () => {
 });
 
 start();
+mountPerfOverlay();

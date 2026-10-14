@@ -12,76 +12,55 @@ function rewardStrip(items: [string, number][], empty: string): HTMLElement[] {
   return hit.map(([label, n]) => h('span', { class: 'reward' }, h('b', { text: fmt(n) }), ` ${label}`));
 }
 
+function setClass(el: HTMLElement, cls: string): void {
+  if (el.className !== cls) el.className = cls;
+}
+
+/** Reuses `host`'s children as colored blips, touching only the ones whose class/title changed. */
+function syncBlips(host: HTMLElement, items: { cls: string; title: string }[]): void {
+  items.forEach((it, i) => {
+    let el = host.children[i] as HTMLElement | undefined;
+    if (!el) {
+      el = h('span');
+      host.append(el);
+    }
+    setClass(el, `blip ${it.cls}`);
+    if (el.title !== it.title) el.title = it.title;
+  });
+  while (host.children.length > items.length) host.lastElementChild!.remove();
+}
+
 /** Slots-only: last spin up front, a stable per-symbol triples/pairs table, and a short ribbon of recent outcomes. */
 export class SlotsCombosView {
   readonly root: HTMLElement;
   private strip: HTMLElement;
+  private stripKey = '';
   private last: HTMLElement;
-  private table: HTMLElement;
-  private ribbon: HTMLElement;
+  private lastReels: HTMLElement;
+  private lastTag: HTMLElement;
+  private rows: { row: HTMLElement; seen: HTMLElement; triple: HTMLElement; pair: HTMLElement }[];
+  private blips: HTMLElement;
   private key = '';
 
   constructor() {
     this.strip = h('div', { class: 'reward-strip' });
-    this.last = h('div', { class: 'slots-last' });
-    this.table = h('div', { class: 'slots-table' });
-    this.ribbon = h('div', { class: 'slots-ribbon' });
-    this.root = h(
-      'div',
-      { class: 'combo-view hidden' },
-      this.strip,
-      h('div', { class: 'slots-body' }, this.last, this.table),
-      this.ribbon,
-    );
-  }
-
-  update(stats: PlayStats, force = false): void {
-    const s = stats.slots;
-    const key = JSON.stringify([s.recent, s.symbols, s.tripleBy, s.pairBy, s.cascades, s.freeSpins, s.scatters]);
-    if (!force && key === this.key) return;
-    this.key = key;
-    this.strip.replaceChildren(
-      ...rewardStrip(
-        [
-          ['cascades', s.cascades],
-          ['free spins', s.freeSpins],
-          ['scatter 7s', s.scatters],
-        ],
-        'No bonus rewards hit yet',
-      ),
-    );
-    const kindOf = (r: number[]) => (r[0] === r[1] && r[1] === r[2] ? 'triple' : r[0] === r[1] || r[1] === r[2] || r[0] === r[2] ? 'pair' : 'miss');
-    const latest = s.recent[s.recent.length - 1];
-    if (latest) {
-      const kind = kindOf(latest);
-      this.last.className = `slots-last ${kind}`;
-      this.last.replaceChildren(
-        h('small', { text: 'Last spin' }),
-        h('div', { class: 'slots-last-reels', text: latest.map((r) => SYMBOLS[r]).join('') }),
-        h('div', { class: 'slots-last-tag', text: kind === 'triple' ? 'Triple!' : kind === 'pair' ? 'Pair' : 'No match' }),
-      );
-    } else {
-      this.last.className = 'slots-last';
-      this.last.replaceChildren(h('small', { text: 'Last spin' }), h('div', { class: 'slots-last-tag', text: 'No spins yet' }));
-    }
-    // One row per symbol: share of all reel stops, plus how often it made a triple and a pair.
-    const seenTotal = s.symbols.reduce((a, b) => a + b, 0);
+    this.lastReels = h('div', { class: 'slots-last-reels' });
+    this.lastTag = h('div', { class: 'slots-last-tag' });
+    this.last = h('div', { class: 'slots-last' }, h('small', { text: 'Last spin' }), this.lastReels, this.lastTag);
     const head = h('div', { class: 'slots-row head' }, h('span'), h('span', { text: 'Seen' }), h('span', { text: 'Triple' }), h('span', { text: 'Pair' }));
-    const rows = SYMBOLS.map((sym, i) =>
-      h(
-        'div',
-        { class: `slots-row${s.tripleBy[i] > 0 ? ' hit' : ''}` },
-        h('span', { class: 'slots-sym', text: sym }),
-        h('span', { class: 'slots-n seen', text: pct(s.symbols[i], seenTotal) }),
-        h('span', { class: 'slots-n triple', text: fmt(s.tripleBy[i]) }),
-        h('span', { class: 'slots-n pair', text: fmt(s.pairBy[i]) }),
-      ),
-    );
-    this.table.replaceChildren(head, ...rows);
-    // Ribbon: last 20 outcomes, oldest to newest (right), one colored block each.
-    this.ribbon.replaceChildren(
+    this.rows = SYMBOLS.map((sym) => {
+      const seen = h('span', { class: 'slots-n seen' });
+      const triple = h('span', { class: 'slots-n triple' });
+      const pair = h('span', { class: 'slots-n pair' });
+      return { row: h('div', { class: 'slots-row' }, h('span', { class: 'slots-sym', text: sym }), seen, triple, pair), seen, triple, pair };
+    });
+    const table = h('div', { class: 'slots-table' }, head, ...this.rows.map((r) => r.row));
+    this.blips = h('span', { class: 'blips' });
+    const ribbon = h(
+      'div',
+      { class: 'slots-ribbon' },
       h('small', { text: 'Recent' }),
-      ...s.recent.map((r) => h('span', { class: `blip ${kindOf(r)}`, title: r.map((x) => SYMBOLS[x]).join(' ') })),
+      this.blips,
       h(
         'span',
         { class: 'blip-legend' },
@@ -90,6 +69,50 @@ export class SlotsCombosView {
         h('span', { class: 'legend-item' }, h('i', { class: 'blip' }), 'None'),
       ),
     );
+    this.root = h('div', { class: 'combo-view hidden' }, this.strip, h('div', { class: 'slots-body' }, this.last, table), ribbon);
+  }
+
+  update(stats: PlayStats, force = false): void {
+    const s = stats.slots;
+    const key = JSON.stringify([s.recent, s.symbols, s.tripleBy, s.pairBy, s.cascades, s.freeSpins, s.scatters]);
+    if (!force && key === this.key) return;
+    this.key = key;
+    const stripKey = `${s.cascades}|${s.freeSpins}|${s.scatters}`;
+    if (stripKey !== this.stripKey) {
+      this.stripKey = stripKey;
+      this.strip.replaceChildren(
+        ...rewardStrip(
+          [
+            ['cascades', s.cascades],
+            ['free spins', s.freeSpins],
+            ['scatter 7s', s.scatters],
+          ],
+          'No bonus rewards hit yet',
+        ),
+      );
+    }
+    const kindOf = (r: number[]) => (r[0] === r[1] && r[1] === r[2] ? 'triple' : r[0] === r[1] || r[1] === r[2] || r[0] === r[2] ? 'pair' : 'miss');
+    const latest = s.recent[s.recent.length - 1];
+    if (latest) {
+      const kind = kindOf(latest);
+      setClass(this.last, `slots-last ${kind}`);
+      setText(this.lastReels, latest.map((r) => SYMBOLS[r]).join(''));
+      setText(this.lastTag, kind === 'triple' ? 'Triple!' : kind === 'pair' ? 'Pair' : 'No match');
+    } else {
+      setClass(this.last, 'slots-last');
+      setText(this.lastReels, '');
+      setText(this.lastTag, 'No spins yet');
+    }
+    // One row per symbol: share of all reel stops, plus how often it made a triple and a pair.
+    const seenTotal = s.symbols.reduce((a, b) => a + b, 0);
+    this.rows.forEach((r, i) => {
+      setClass(r.row, `slots-row${s.tripleBy[i] > 0 ? ' hit' : ''}`);
+      setText(r.seen, pct(s.symbols[i], seenTotal));
+      setText(r.triple, fmt(s.tripleBy[i]));
+      setText(r.pair, fmt(s.pairBy[i]));
+    });
+    // Ribbon: last 20 outcomes, oldest to newest (right), one colored block each.
+    syncBlips(this.blips, s.recent.map((r) => ({ cls: kindOf(r), title: r.map((x) => SYMBOLS[x]).join(' ') })));
   }
 }
 
@@ -105,17 +128,34 @@ const handTotal = (cards: number[]) => {
 export class BlackjackHandsView {
   readonly root: HTMLElement;
   private strip: HTMLElement;
+  private stripKey = '';
   private last: HTMLElement;
-  private table: HTMLElement;
-  private ribbon: HTMLElement;
+  private lastLine: HTMLElement;
+  private lastCards: HTMLElement;
+  private lastTag: HTMLElement;
+  private rows: { row: HTMLElement; n: HTMLElement; share: HTMLElement }[];
+  private blips: HTMLElement;
   private key = '';
 
   constructor() {
     this.strip = h('div', { class: 'reward-strip' });
-    this.last = h('div', { class: 'slots-last' });
-    this.table = h('div', { class: 'slots-table' });
-    this.ribbon = h('div', { class: 'slots-ribbon' });
-    this.root = h('div', { class: 'combo-view hidden' }, this.strip, h('div', { class: 'slots-body' }, this.last, this.table), this.ribbon);
+    this.lastLine = h('div', { class: 'bj-last-line' });
+    this.lastCards = h('div', { class: 'bj-last-cards' });
+    this.lastTag = h('div', { class: 'slots-last-tag' });
+    this.last = h('div', { class: 'slots-last' }, h('small', { text: 'Last hand' }), this.lastLine, this.lastCards, this.lastTag);
+    this.rows = BJ_KEYS.map((k) => {
+      const n = h('span', { class: 'slots-n' });
+      const share = h('span', { class: 'slots-n seen' });
+      return { row: h('div', { class: `slots-row bj-row bj-${k}` }, h('span', { class: 'bj-row-name', text: BJ_NAMES[k] }), n, share), n, share };
+    });
+    this.blips = h('span', { class: 'blips' });
+    this.root = h(
+      'div',
+      { class: 'combo-view hidden' },
+      this.strip,
+      h('div', { class: 'slots-body' }, this.last, h('div', { class: 'slots-table' }, ...this.rows.map((r) => r.row))),
+      h('div', { class: 'slots-ribbon' }, h('small', { text: 'Recent' }), this.blips),
+    );
   }
 
   update(stats: PlayStats, force = false): void {
@@ -123,52 +163,50 @@ export class BlackjackHandsView {
     const key = JSON.stringify(s);
     if (!force && key === this.key) return;
     this.key = key;
-    this.strip.replaceChildren(
-      ...rewardStrip(
-        [
-          ['charlies', s.charlie],
-          ['doubles', s.doubled],
-          ['splits', s.split],
-          ['surrenders', s.surrendered],
-          ['insured', s.insured],
-        ],
-        'No bonus rewards hit yet',
-      ),
-    );
+    const stripKey = `${s.charlie}|${s.doubled}|${s.split}|${s.surrendered}|${s.insured}`;
+    if (stripKey !== this.stripKey) {
+      this.stripKey = stripKey;
+      this.strip.replaceChildren(
+        ...rewardStrip(
+          [
+            ['charlies', s.charlie],
+            ['doubles', s.doubled],
+            ['splits', s.split],
+            ['surrenders', s.surrendered],
+            ['insured', s.insured],
+          ],
+          'No bonus rewards hit yet',
+        ),
+      );
+    }
     const total = BJ_KEYS.reduce((a, k) => a + s[k], 0);
     const hand = s.recent[s.recent.length - 1];
     if (hand) {
       const tot = (cards: number[]) => String(handTotal(cards));
       const badges = [hand.doubled ? 'Double' : '', hand.split ? 'Split' : '', hand.surrendered ? 'Surrender' : ''].filter(Boolean).join(' · ');
-      this.last.className = `slots-last bj-${hand.outcome}`;
-      this.last.replaceChildren(
-        h('small', { text: 'Last hand' }),
-        h('div', { class: 'bj-last-line' }, h('b', { text: hand.split ? `${tot(hand.player)} | ${tot(hand.split)}` : tot(hand.player) }), h('span', { class: 'bj-vs', text: ' vs ' }), h('span', { text: tot(hand.dealer) })),
-        h('div', { class: 'bj-last-cards', text: `${handText(hand.player)}${hand.split ? ` | ${handText(hand.split)}` : ''}  ·  ${handText(hand.dealer)}` }),
-        h('div', { class: 'slots-last-tag', text: BJ_NAMES[hand.outcome] + (badges ? ` · ${badges}` : '') }),
+      setClass(this.last, `slots-last bj-${hand.outcome}`);
+      this.lastLine.replaceChildren(
+        h('b', { text: hand.split ? `${tot(hand.player)} | ${tot(hand.split)}` : tot(hand.player) }),
+        h('span', { class: 'bj-vs', text: ' vs ' }),
+        h('span', { text: tot(hand.dealer) }),
       );
+      setText(this.lastCards, `${handText(hand.player)}${hand.split ? ` | ${handText(hand.split)}` : ''}  ·  ${handText(hand.dealer)}`);
+      setText(this.lastTag, BJ_NAMES[hand.outcome] + (badges ? ` · ${badges}` : ''));
     } else {
-      this.last.className = 'slots-last';
-      this.last.replaceChildren(h('small', { text: 'Last hand' }), h('div', { class: 'slots-last-tag', text: 'No hands yet' }));
+      setClass(this.last, 'slots-last');
+      this.lastLine.replaceChildren();
+      setText(this.lastCards, '');
+      setText(this.lastTag, 'No hands yet');
     }
     // One row per outcome: count and share of all hands, with a bar behind it.
-    const rows = BJ_KEYS.map((k) => {
+    BJ_KEYS.forEach((k, i) => {
+      const r = this.rows[i];
       const share = total > 0 ? s[k] / total : 0;
-      const row = h(
-        'div',
-        { class: `slots-row bj-row bj-${k}` },
-        h('span', { class: 'bj-row-name', text: BJ_NAMES[k] }),
-        h('span', { class: 'slots-n', text: fmt(s[k]) }),
-        h('span', { class: 'slots-n seen', text: pct(s[k], total) }),
-      );
-      row.style.setProperty('--share', `${(share * 100).toFixed(1)}%`);
-      return row;
+      setText(r.n, fmt(s[k]));
+      setText(r.share, pct(s[k], total));
+      r.row.style.setProperty('--share', `${(share * 100).toFixed(1)}%`);
     });
-    this.table.replaceChildren(...rows);
-    this.ribbon.replaceChildren(
-      h('small', { text: 'Recent' }),
-      ...s.recent.map((r) => h('span', { class: `blip bj-${r.outcome}`, title: `${BJ_NAMES[r.outcome]}: ${handText(r.player)} vs ${handText(r.dealer)}` })),
-    );
+    syncBlips(this.blips, s.recent.map((r) => ({ cls: `bj-${r.outcome}`, title: `${BJ_NAMES[r.outcome]}: ${handText(r.player)} vs ${handText(r.dealer)}` })));
   }
 }
 

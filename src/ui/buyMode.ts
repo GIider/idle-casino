@@ -32,6 +32,12 @@ export function buyMode(): ModeDef {
   return current;
 }
 
+/** Runs `fn` whenever the shared buy mode changes; returns an unsubscribe function. */
+export function onBuyModeChange(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
 /** A segmented ×1 / ×10 / 50% / Max selector; every instance stays in sync. */
 export function buyModeSelector(): HTMLElement {
   const buttons = BUY_MODES.map((m) => h('button', { class: 'btn small', text: m.label, title: modeTitle(m), onclick: () => select(m) }));

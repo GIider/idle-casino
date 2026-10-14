@@ -122,7 +122,7 @@ export class App {
     this.casinoName = h('strong', { text: 'Casino' });
     this.casinoTab = h(
       'button',
-      { class: 'tab tile', title: 'Casino', onclick: () => this.select('casino') },
+      { class: 'tab tile casino-tile', title: 'Casino', onclick: () => this.select('casino') },
       this.casinoIcon,
       h('div', { class: 'bar tile-bar' }, (this.casinoFill = h('div', { class: 'bar-fill' }))),
       this.casinoName,
@@ -160,6 +160,7 @@ export class App {
     toggleClass(this.achTab, 'active', id === 'achievements');
     toggleClass(this.casinoTab, 'active', id === 'casino');
     this.slowAt = 0;
+    this.panels.get(id as TableId)?.invalidate();
     this.updateSelected();
   }
 

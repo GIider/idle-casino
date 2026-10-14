@@ -4,6 +4,7 @@ import { COLORS, setupCanvas } from './stage/canvas';
 import { h, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
 import { RANGES, visiblePoints, type Range } from './chartRange';
+import { perfBegin, perfEnd } from './perf';
 
 type Mode = 'game' | 'combos';
 
@@ -110,9 +111,21 @@ export class HistoryChart {
   }
 
   private viewKey = '';
+  private lastRefresh = 0;
+  /** Income and outcome cards repaint at most this often (ms); plays arrive far faster at high speed. */
+  private static readonly REFRESH_MS = 250;
 
   update(history: History, plays: number): void {
     this.history = history;
+    const now = performance.now();
+    if (this.key !== '' && now - this.lastRefresh < HistoryChart.REFRESH_MS) return;
+    this.lastRefresh = now;
+    const t0 = perfBegin();
+    this.refresh(history, plays);
+    perfEnd('history', t0);
+  }
+
+  private refresh(history: History, plays: number): void {
     // Stats only change when a round is played, so skip the (stringify-keyed) view diff otherwise.
     const viewKey = `${plays}|${this.mode}|${this.canvas.clientWidth}x${this.canvas.clientHeight}`;
     if (viewKey !== this.viewKey) {

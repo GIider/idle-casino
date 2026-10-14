@@ -1083,6 +1083,7 @@ small {
 .slots-n.seen { color: var(--muted); }
 .slots-ribbon { display: flex; align-items: center; gap: 3px; flex: none; }
 .slots-ribbon small { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; margin-right: 4px; }
+.blips { display: contents; }
 .blip { flex: 1 1 0; max-width: 18px; height: 10px; border-radius: 3px; background: var(--line); }
 .blip.pair { background: var(--cyan); }
 .blip.triple { background: var(--gold); }
@@ -1167,6 +1168,8 @@ small {
 .tiles > .tab.tile > .tile-wallet.hidden { display: none; }
 .tiles > .tab.tile > .tile-rate { grid-area: sub; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .tiles > .tab.tile > .tile-bar { grid-area: bar; width: 100%; order: 0; margin: 4px 0 0; height: 5px; }
+/* The casino tile's status ("Ascend ★", chip count) goes on its own row so it never squeezes the name. */
+.tiles > .tab.tile.casino-tile > small:not(.tile-rate) { grid-area: sub; justify-self: start; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .tile-wallet .money { font-size: 17px; }
 .tile.active .tile-wallet .money { font-size: 17px; }
 

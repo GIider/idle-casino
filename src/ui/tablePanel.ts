@@ -14,7 +14,11 @@ import { previousTable } from '../tables';
 import { Stage } from './stage/stage';
 import { HistoryChart } from './historyChart';
 import { AchievementsCard } from './achievementsPanel';
-import { buyLabel, buyMode, buyModeSelector } from './buyMode';
+import { perfBegin, perfEnd } from './perf';
+import { buyLabel, buyMode, buyModeSelector, onBuyModeChange } from './buyMode';
+
+/** Upgrade quotes refresh at most this often (ms) unless something invalidates them. */
+const SLOW_MS = 250;
 
 interface UpgradeRow {
   def: UpgradeDef;
@@ -63,6 +67,8 @@ export class TablePanel {
   private prestigeBar: HTMLElement;
   private prestigeBtn: HTMLButtonElement;
   private seenSeq = 0;
+  private slowAt = 0;
+  private slowDirty = true;
   private canvasStage: Stage;
   /** Hosted by the App's activity card (History tab). */
   readonly history: HistoryChart;
@@ -136,7 +142,11 @@ export class TablePanel {
     const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }), buyModeSelector(), this.cheapestBtn);
     for (const u of allUpgrades(def)) {
       const level = h('span', { class: 'level' });
-      const button = h('button', { class: 'btn buy', onclick: () => game.buyUpgrade(id, u.id, buyMode()) });
+      const button = h('button', { class: 'btn buy', onclick: () => {
+          game.buyUpgrade(id, u.id, buyMode());
+          this.invalidate();
+        },
+      });
       const root = h(
         'div',
         { class: 'upgrade' },
@@ -162,6 +172,7 @@ export class TablePanel {
           )
         ) {
           game.prestige(id);
+          this.invalidate();
         }
       },
     });
@@ -169,6 +180,7 @@ export class TablePanel {
     const prestigeWrap = h('span', { class: 'prestige-wrap' }, this.prestigeBtn);
     const setPreview = (on: boolean): void => {
       this.previewing = on;
+      this.invalidate();
       this.update();
     };
     prestigeWrap.addEventListener('mouseenter', () => setPreview(true));
@@ -225,6 +237,12 @@ export class TablePanel {
     showSide('upgrades');
 
     this.root = h('section', { class: 'panel' }, this.locked, this.body);
+    onBuyModeChange(() => this.invalidate());
+  }
+
+  /** Forces the next update to refresh the throttled parts (upgrade rows, achievements card). */
+  invalidate(): void {
+    this.slowDirty = true;
   }
 
   /** Highlights an upgrade row that was just bought. */
@@ -239,6 +257,7 @@ export class TablePanel {
   private buyCheapest(): void {
     const levels = this.rows.map((r) => this.game.upgradeLevel(this.id, r.def.id));
     this.game.buyCheapest(this.id);
+    this.invalidate();
     this.rows.forEach((r, i) => {
       if (this.game.upgradeLevel(this.id, r.def.id) > levels[i]) this.flashRow(r);
     });
@@ -253,6 +272,12 @@ export class TablePanel {
   }
 
   update(): void {
+    const t0 = perfBegin();
+    this.render();
+    perfEnd(`panel.${this.id}`, t0);
+  }
+
+  private render(): void {
     const { game, id } = this;
     const def = game.def(id);
     const ts = game.table(id);
@@ -326,7 +351,13 @@ export class TablePanel {
       if (!row) continue;
       this.flashRow(row);
     }
-    for (const row of this.rows) {
+    const nowMs = performance.now();
+    const slow = this.slowDirty || nowMs - this.slowAt >= SLOW_MS;
+    if (slow) {
+      this.slowDirty = false;
+      this.slowAt = nowMs;
+    }
+    for (const row of slow ? this.rows : []) {
       const level = ts.levels[row.def.id] ?? 0;
       const maxed = level >= row.def.maxLevel;
       setText(row.level, `Lv ${level}/${row.def.maxLevel}`);
