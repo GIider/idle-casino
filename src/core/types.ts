@@ -141,6 +141,10 @@ export interface CasinoState {
   /** Chips earned over all ascensions. */
   totalChips: number;
   ascensions: number;
+  /** Seconds played in total, kept across ascensions. */
+  playTime: number;
+  /** Seconds since the last ascension (or since the start). */
+  runTime: number;
   levels: Record<string, number>;
 }
 

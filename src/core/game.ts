@@ -233,6 +233,8 @@ export class Game {
 
   /** Advances every unlocked table by `dt` seconds of play. */
   tick(dt: number): void {
+    this.state.casino.playTime += dt;
+    this.state.casino.runTime += dt;
     this.tickCtx = {};
     try {
       this.tickInner(dt);
@@ -540,6 +542,7 @@ export class Game {
     casino.chips += reward;
     casino.totalChips += reward;
     casino.ascensions += 1;
+    casino.runTime = 0;
     for (const id of TABLE_IDS) {
       const feedShare = this.state.tables[id].feedShare;
       const lifetimeStats = this.state.tables[id].history.lifetimeStats;
@@ -613,6 +616,8 @@ export class Game {
     const cap = OFFLINE_CAP_SECONDS + bonus.offlineHours * 3600;
     const efficiency = Math.min(1, OFFLINE_EFFICIENCY + bonus.offlineEfficiency);
     const effective = Math.min(Math.max(seconds, 0), cap);
+    this.state.casino.playTime += Math.max(seconds, 0);
+    this.state.casino.runTime += Math.max(seconds, 0);
     for (const id of TABLE_IDS) {
       const def = TABLES[id];
       const ts = this.state.tables[id];

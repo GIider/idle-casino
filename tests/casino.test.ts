@@ -148,14 +148,16 @@ describe('ascension', () => {
 
   it('round-trips and sanitizes casino state in saves', () => {
     const g = newGame();
-    g.state.casino = { chips: 7, totalChips: 12, ascensions: 2, levels: { manager: 1, overtime: 9999 } };
+    g.state.casino = { chips: 7, totalChips: 12, ascensions: 2, playTime: 90, runTime: 30, levels: { manager: 1, overtime: 9999 } };
     const loaded = importSave(exportSave(g.state));
     expect(loaded.casino.chips).toBe(7);
     expect(loaded.casino.ascensions).toBe(2);
+    expect(loaded.casino.playTime).toBe(90);
+    expect(loaded.casino.runTime).toBe(30);
     expect(loaded.casino.levels.manager).toBe(1);
     expect(loaded.casino.levels.overtime).toBe(2);
     const junk = normalizeState({ version: SAVE_VERSION, tables: {}, casino: { chips: 'x', levels: 3 } });
-    expect(junk.casino).toEqual({ chips: 0, totalChips: 0, ascensions: 0, levels: {} });
+    expect(junk.casino).toEqual({ chips: 0, totalChips: 0, ascensions: 0, playTime: 0, runTime: 0, levels: {} });
     expect(normalizeState({ version: SAVE_VERSION, tables: {} }).casino.ascensions).toBe(0);
   });
 });
@@ -201,5 +203,25 @@ describe('history scopes', () => {
     const h = normalizeHistory(legacy, 1, 0);
     expect(h.prestigeStats.coin.heads).toBe(1);
     expect(h.lifetimeStats.coin.heads).toBe(1);
+  });
+});
+
+describe('run timers', () => {
+  it('accumulates play time and run time on tick and offline', () => {
+    const g = newGame();
+    g.tick(1.5);
+    g.applyOffline(100);
+    expect(g.state.casino.playTime).toBeCloseTo(101.5);
+    expect(g.state.casino.runTime).toBeCloseTo(101.5);
+  });
+
+  it('resets run time but keeps play time on ascend', () => {
+    const g = newGame();
+    g.state.casino.playTime = 500;
+    g.state.casino.runTime = 200;
+    g.canAscend = () => true;
+    expect(g.ascend()).toBe(true);
+    expect(g.state.casino.runTime).toBe(0);
+    expect(g.state.casino.playTime).toBe(500);
   });
 });

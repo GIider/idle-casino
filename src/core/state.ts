@@ -41,7 +41,7 @@ export function newTableState(def: TableDef): TableState {
 }
 
 export function newCasinoState(): CasinoState {
-  return { chips: 0, totalChips: 0, ascensions: 0, levels: {} };
+  return { chips: 0, totalChips: 0, ascensions: 0, playTime: 0, runTime: 0, levels: {} };
 }
 
 export function createInitialState(now = Date.now()): GameState {
@@ -114,6 +114,8 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
     state.casino.chips = Math.floor(num(c.chips, 0));
     state.casino.totalChips = Math.max(state.casino.chips, Math.floor(num(c.totalChips, 0)));
     state.casino.ascensions = Math.floor(num(c.ascensions, 0));
+    state.casino.playTime = num(c.playTime, 0, 0);
+    state.casino.runTime = Math.min(state.casino.playTime, num(c.runTime, 0, 0));
     if (c.levels && typeof c.levels === 'object') {
       for (const upg of CASINO_UPGRADES) {
         state.casino.levels[upg.id] = Math.min(upg.maxLevel, Math.floor(num(c.levels[upg.id], 0)));

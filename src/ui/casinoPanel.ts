@@ -8,7 +8,7 @@ import {
   type CasinoUpgradeDef,
 } from '../core/casino';
 import { h, setDisabled, setFill, setText, toggleClass } from './dom';
-import { fmt } from './format';
+import { fmt, fmtDuration } from './format';
 import { buyLabel, buyMode, buyModeSelector } from './buyMode';
 
 interface Row {
@@ -28,6 +28,9 @@ export class CasinoPanel {
   private rows: Row[] = [];
   private maxedEl!: HTMLElement;
   private bonusEl: HTMLElement;
+  private playTimeEl: HTMLElement;
+  private runTimeEl: HTMLElement;
+  private runTimeRow: HTMLElement;
 
   constructor(private game: Game) {
     this.chipsEl = h('div', { class: 'chips', text: '0' });
@@ -50,6 +53,9 @@ export class CasinoPanel {
     });
 
     this.bonusEl = h('p', { class: 'auto-info' });
+    this.playTimeEl = h('span', { text: '0s' });
+    this.runTimeEl = h('span', { text: '0s' });
+    this.runTimeRow = h('span', {}, ' · This run: ', this.runTimeEl);
     this.maxedEl = h('span', { class: 'maxed-count', title: 'Upgrades at max level' });
     const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }), this.maxedEl, buyModeSelector());
     for (const def of CASINO_UPGRADES) {
@@ -80,6 +86,7 @@ export class CasinoPanel {
             h('h2', { text: '🏛 The Casino' }),
             h('p', { text: 'Ascend to reset the whole floor for casino chips, then spend them on upgrades that apply to every table, forever.' }),
             h('div', { class: 'stats' }, h('span', { text: 'Chips: ' }), this.chipsEl),
+            h('div', { class: 'stats' }, h('span', { text: 'Total runtime: ' }), this.playTimeEl, this.runTimeRow),
           ),
           h(
             'div',
@@ -100,6 +107,10 @@ export class CasinoPanel {
     const { game } = this;
     const casino = game.state.casino;
     setText(this.chipsEl, `${fmt(casino.chips)} (${fmt(casino.totalChips)} earned · ${casino.ascensions} ascensions)`);
+
+    setText(this.playTimeEl, fmtDuration(casino.playTime));
+    setText(this.runTimeEl, fmtDuration(casino.runTime));
+    toggleClass(this.runTimeRow, 'hidden', casino.ascensions < 1);
 
     setText(
       this.bonusEl,
