@@ -31,10 +31,8 @@ export class App {
   private toastSeq = 0;
   private managerSeq = 0;
   private handlers: AppHandlers;
-  private activityCard!: HTMLElement;
   private sides = new Map<TableId, HTMLElement>();
   private qualityBtn: HTMLButtonElement;
-  private histories = new Map<TableId, HTMLElement>();
   private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; name: HTMLElement; fill: HTMLElement }>();
   private chips = new Map<TableId, HTMLElement>();
   private slowAt = 0;
@@ -81,7 +79,6 @@ export class App {
       this.panels.set(id, panel);
       main.append(panel.root);
       this.sides.set(id, panel.side);
-      this.histories.set(id, panel.history.root);
       side.append(panel.side);
     }
 
@@ -122,12 +119,6 @@ export class App {
     main.prepend(yourCasino);
     main.append(this.casinoPanel.root);
 
-    this.activityCard = h(
-      'div',
-      { class: 'card activity' },
-      ...this.histories.values(),
-    );
-    side.append(this.activityCard);
     host.replaceChildren(header, h('div', { class: 'shell' }, main, side), this.toastEl);
     this.select(this.selected);
   }
@@ -142,7 +133,6 @@ export class App {
     this.casinoPanel.setHidden(id !== 'casino');
     toggleClass(this.casinoTab, 'active', id === 'casino');
     this.slowAt = 0;
-    this.syncActivity();
     this.updateSelected();
   }
 
@@ -184,7 +174,6 @@ export class App {
     toggleClass(this.casinoTab, 'hidden-feature', !casinoSeen);
     this.casinoTab.disabled = !casinoSeen;
     this.casinoTab.title = casinoSeen ? 'Casino' : '';
-    this.syncActivity();
     if (this.selected === 'casino' ? !casinoSeen : !g.tableVisible(this.selected)) this.select('coinflip');
     this.updateSelected();
 
@@ -204,13 +193,6 @@ export class App {
       if (this.selected === 'casino') this.toast(g.notice.text);
       else this.panels.get(this.selected)!.showNotice(g.notice.text);
     }
-  }
-
-  private syncActivity(): void {
-    // Nothing to show on a table's unlock screen or the casino tab.
-    const onLockedTable = this.selected !== 'casino' && !this.game.table(this.selected).unlocked;
-    toggleClass(this.activityCard, 'hidden', onLockedTable || this.selected === 'casino');
-    for (const [id, el] of this.histories) toggleClass(el, 'hidden', id !== this.selected);
   }
 
   private updateTiles(g: Game): void {

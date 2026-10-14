@@ -897,11 +897,18 @@ small {
   color: var(--gold);
 }
 
-/* Activity card keeps a fixed footprint. */
-.activity {
-  height: 320px;
-  overflow: hidden;
+/* Chart sits beside the game info under the stage. */
+.below-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  flex: none;
 }
+.below-stage > * { min-width: 0; }
+@media (max-width: 720px) {
+  .below-stage { grid-template-columns: 1fr; }
+}
+.activity { overflow: hidden; }
 
 .side-panel > .card.upgrades > h3,
 .side-panel > .achievements > h3 {
@@ -999,16 +1006,13 @@ small {
   .tiles > .tab.tile small { font-size: 11px; }
   .tiles > .tab.tile .tile-rate { flex: 0 0 100%; }
   .rightcol { gap: 8px; }
-  .activity { flex: 0 0 auto; max-height: 30%; overflow: auto; }
 }
 @media (min-width: 721px) and (max-height: 760px) {
   .stat-tile.big { padding: 4px 10px; }
   .hero .stats-grid { display: none; }
-  .activity { max-height: 22%; }
 }
 @media (min-width: 721px) and (max-height: 640px) {
   .hero-bank .rate, .kv-grid .kv:nth-child(n+4) { display: none; }
-  .activity { display: none; }
 }
 
 .kv small.kv-old { font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: 0; text-decoration: line-through; }
