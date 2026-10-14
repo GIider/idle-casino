@@ -490,7 +490,7 @@ export class Game {
     return report;
   }
 
-  /** Dev tool: unlocks every table, maxes every upgrade and fills wallets. Leaves prestige, achievements and chips alone. */
+  /** Dev tool: unlocks every table, maxes every upgrade, fills wallets and reaches the ascension threshold. Leaves prestige, achievements and chips alone. */
   devUnlockAll(): void {
     for (const id of TABLE_IDS) {
       const def = TABLES[id];
@@ -500,6 +500,10 @@ export class Game {
       for (const upg of allUpgrades(def)) ts.levels[upg.id] = upg.maxLevel;
       this.announce(observeUpgrades(this.state.achievements, id, allUpgrades(def), ts.levels));
     }
+    const final = this.state.tables[FINAL_TABLE];
+    const need = ascensionThreshold(this.state.casino.ascensions);
+    final.wallet = Math.max(final.wallet, need);
+    final.peakWallet = Math.max(final.peakWallet, need);
   }
 
   /** Estimated net per second at the current settings (for display). */

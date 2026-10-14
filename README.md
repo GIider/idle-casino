@@ -46,7 +46,7 @@ Game logic lives in `src/core` and `src/tables` (no DOM); the UI is in `src/ui`.
 
 
 ## Dev
-Open the game with `?cardcounting=1` to show an *Unlock everything* button (unlocks every table, maxes all upgrades, fills wallets).
+Open the game with `?cardcounting=1` for dev mode: every table is unlocked, all upgrades maxed, wallets filled, enough Markers to ascend, and casino shop upgrades are free. It uses its own separate save, so your regular save is untouched.
 
 Open it with `?perf=1` to show a profiling overlay (`src/ui/perf.ts`): fps plus, per measured step (`game.tick`, `app.update`, each table's stage canvas, panel and history refresh), calls/s, average and max ms, and total ms per second. The header's *Quality* button cycles auto / high / low graphics; low drops decorative effects.
 

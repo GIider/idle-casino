@@ -480,10 +480,6 @@ small {
   background: linear-gradient(90deg, var(--green), var(--cyan));
 }
 
-.btn.dev {
-  border-color: var(--gold);
-  color: var(--gold);
-}
 
 /* ---- Dashboard shell ---- */
 .top {

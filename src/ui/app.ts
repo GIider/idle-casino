@@ -1,7 +1,7 @@
 import type { TableId } from '../core/types';
 import type { Game } from '../core/game';
 import { TABLES, TABLE_IDS } from '../tables';
-import { exportSave } from '../core/save';
+import { devMode, exportSave } from '../core/save';
 import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt } from './format';
 import { TablePanel } from './tablePanel';
@@ -76,13 +76,10 @@ export class App {
         h('button', { class: 'btn small', text: 'Export', onclick: () => this.doExport() }),
         h('button', { class: 'btn small', text: 'Import', onclick: () => this.doImport() }),
         h('button', { class: 'btn small danger', text: 'Reset', onclick: () => this.doReset() }),
-        ...(new URLSearchParams(window.location.search).get('cardcounting') === '1'
-          ? [h('button', { class: 'btn small dev', text: '🛠 Unlock everything', onclick: () => game.devUnlockAll() })]
-          : []),
       ),
     );
 
-    game.freeCasinoShop = new URLSearchParams(window.location.search).get('cardcounting') === '1';
+    game.freeCasinoShop = devMode();
 
     const main = h('main', { class: 'mainview' });
     const side = h('aside', { class: 'rightcol' });

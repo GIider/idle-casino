@@ -39,18 +39,18 @@ describe('UI smoke', () => {
   });
 });
 
-describe('dev button', () => {
-  it('only shows with ?cardcounting=1 and unlocks everything', () => {
+describe('dev mode', () => {
+  it('has no unlock button and devUnlockAll unlocks everything and allows ascending', () => {
     window.history.pushState({}, '', '/?cardcounting=1');
     const host = document.createElement('div');
     document.body.append(host);
     const game = new Game(createInitialState(0), mulberry32(3));
-    const app = new App(host, game, { onImport() {}, onReset() {} });
-    const btn = Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.includes('Unlock everything'))!;
-    expect(btn).toBeDefined();
-    btn.click();
-    app.update();
+    new App(host, game, { onImport() {}, onReset() {} });
+    expect(Array.from(host.querySelectorAll('button')).some((b) => b.textContent?.includes('Unlock everything'))).toBe(false);
+    expect(game.freeCasinoShop).toBe(true);
+    game.devUnlockAll();
     expect(game.table('blackjack').unlocked).toBe(true);
+    expect(game.canAscend()).toBe(true);
     window.history.pushState({}, '', '/');
   });
 });

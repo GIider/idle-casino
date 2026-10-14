@@ -2,6 +2,17 @@ import type { GameState } from './types';
 import { createInitialState, normalizeState } from './state';
 
 export const SAVE_KEY = 'idle-casino-save';
+/** Dev mode keeps its own save so it never touches the regular one. */
+export const DEV_SAVE_KEY = 'idle-casino-save-dev';
+
+/** Dev mode: the page was opened with `?cardcounting=1`. */
+export function devMode(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('cardcounting') === '1';
+  } catch {
+    return false;
+  }
+}
 
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -13,21 +24,21 @@ function defaultStore(): Store | null {
   }
 }
 
-export function saveGame(state: GameState, store: Store | null = defaultStore()): boolean {
+export function saveGame(state: GameState, store: Store | null = defaultStore(), key = SAVE_KEY): boolean {
   if (!store) return false;
   try {
     state.lastSaved = Date.now();
-    store.setItem(SAVE_KEY, JSON.stringify(state));
+    store.setItem(key, JSON.stringify(state));
     return true;
   } catch {
     return false;
   }
 }
 
-export function loadGame(store: Store | null = defaultStore()): GameState | null {
+export function loadGame(store: Store | null = defaultStore(), key = SAVE_KEY): GameState | null {
   if (!store) return null;
   try {
-    const text = store.getItem(SAVE_KEY);
+    const text = store.getItem(key);
     if (!text) return null;
     return normalizeState(JSON.parse(text));
   } catch {
@@ -35,9 +46,9 @@ export function loadGame(store: Store | null = defaultStore()): GameState | null
   }
 }
 
-export function clearSave(store: Store | null = defaultStore()): void {
+export function clearSave(store: Store | null = defaultStore(), key = SAVE_KEY): void {
   try {
-    store?.removeItem(SAVE_KEY);
+    store?.removeItem(key);
   } catch {
     /* ignore */
   }

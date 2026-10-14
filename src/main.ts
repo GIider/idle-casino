@@ -1,7 +1,8 @@
 import './styles/main.css';
 import { Game } from './core/game';
-import { clearSave, freshGame, importSave, loadGame, saveGame } from './core/save';
+import { DEV_SAVE_KEY, SAVE_KEY, clearSave, devMode, freshGame, importSave, loadGame, saveGame } from './core/save';
 import { normalizeState } from './core/state';
+import type { GameState } from './core/types';
 import { App } from './ui/app';
 import { applyQuality, profile } from './ui/quality';
 import { mountPerfOverlay, perfBegin, perfEnd } from './ui/perf';
@@ -12,21 +13,25 @@ const host = document.querySelector<HTMLDivElement>('#app')!;
 const TICK_MS = 100;
 const OFFLINE_THRESHOLD_SECONDS = 30;
 
+const KEY = devMode() ? DEV_SAVE_KEY : SAVE_KEY;
+const persist = (state: GameState): boolean => saveGame(state, undefined, KEY);
+
 let game: Game;
 let app: App;
 let lastTick = performance.now();
 
-function start(state = loadGame() ?? freshGame(), offline = true): void {
+function start(state = loadGame(undefined, KEY) ?? freshGame(), offline = true): void {
   game = new Game(normalizeState(state));
+  if (devMode()) game.devUnlockAll();
   app = new App(host, game, {
     onImport(text) {
       const imported = importSave(text);
-      saveGame(imported);
+      persist(imported);
       start(imported, false);
       app.toast('Save imported.');
     },
     onReset() {
-      clearSave();
+      clearSave(undefined, KEY);
       start(freshGame(), false);
     },
   });
@@ -70,10 +75,10 @@ setInterval(() => {
   }
 }, TICK_MS);
 
-setInterval(() => saveGame(game.state), 5000);
-window.addEventListener('beforeunload', () => saveGame(game.state));
+setInterval(() => persist(game.state), 5000);
+window.addEventListener('beforeunload', () => persist(game.state));
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') saveGame(game.state);
+  if (document.visibilityState === 'hidden') persist(game.state);
 });
 
 start();
