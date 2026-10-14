@@ -61,7 +61,7 @@ describe('achievements page', () => {
     document.body.append(host);
     const game = new Game(createInitialState(0), mulberry32(3));
     const app = new App(host, game, { onImport() {}, onReset() {} });
-    const tab = Array.from(host.querySelectorAll('.tab')).find((t) => t.textContent?.includes('Achievements')) as HTMLButtonElement;
+    const tab = Array.from(host.querySelectorAll('.tab')).find((t) => t.getAttribute('title') === 'Achievements') as HTMLButtonElement;
     tab.click();
     app.update();
     const visible = TABLE_IDS.filter((id) => game.tableVisible(id));
