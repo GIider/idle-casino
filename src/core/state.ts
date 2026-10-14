@@ -1,5 +1,5 @@
 import type { CasinoState, GameState, TableDef, TableId, TableState } from './types';
-import { CASINO_UPGRADES, LEGACY_UPGRADES, casinoUpgradeCost, curveCost } from './casino';
+import { CASINO_UPGRADES, LEGACY_UPGRADES, curveCost } from './casino';
 import { TABLES, TABLE_IDS } from '../tables';
 import { newHistory, normalizeHistory } from './history';
 import { backfillAchievements, newAchievements, normalizeAchievements, observeUpgrades } from './achievements';
@@ -38,7 +38,7 @@ export function newTableState(def: TableDef): TableState {
 }
 
 export function newCasinoState(): CasinoState {
-  return { chips: 0, totalChips: 0, ascensions: 0, levels: {}, autoPrestige: false, autoOff: [] };
+  return { chips: 0, totalChips: 0, ascensions: 0, levels: {}, autoPrestige: false };
 }
 
 export function createInitialState(now = Date.now()): GameState {
@@ -65,16 +65,9 @@ function migrateShop(raw: Record<string, unknown>, levels: Record<string, number
   if (manager > 1) {
     levels.manager = 1;
     levels.overtime = Math.max(levels.overtime ?? 0, Math.min(manager - 1, 2));
-    if (manager >= 3) levels.policy = 1;
     if (manager >= 4) levels.concierge = 1;
   }
   for (const [id, curve] of Object.entries(LEGACY_UPGRADES)) refund += curveCost(curve, 0, old(id));
-  // Levels beyond the new caps are refunded at the (unchanged) cost curve.
-  for (const id of ['payout', 'offline']) {
-    const upg = CASINO_UPGRADES.find((u) => u.id === id)!;
-    const extra = old(id);
-    for (let l = upg.maxLevel; l < extra; l++) refund += casinoUpgradeCost(upg, l);
-  }
   return refund;
 }
 
@@ -124,9 +117,6 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
       state.casino.chips += migrateShop(c.levels, state.casino.levels);
     }
     state.casino.autoPrestige = c.autoPrestige === true;
-    if (Array.isArray(c.autoOff)) {
-      state.casino.autoOff = c.autoOff.filter((k: unknown): k is string => typeof k === 'string').slice(0, 64);
-    }
   }
   // Saves from before achievements get their grind counts seeded from lifetime play stats.
   state.achievements = r.achievements ? normalizeAchievements(r.achievements) : backfillAchievements(state);

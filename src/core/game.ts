@@ -195,21 +195,6 @@ export class Game {
     return managerInterval(this.casinoLevel('manager'), this.casinoLevel('overtime'));
   }
 
-  /** Whether the Floor Manager may buy this upgrade (it is on unless switched off at manager level 3+). */
-  autoBuyEnabled(id: TableId, upgradeId: string): boolean {
-    return !this.state.casino.autoOff.includes(`${id}:${upgradeId}`);
-  }
-
-  /** Switches the Floor Manager's buying of one upgrade on or off. */
-  setAutoBuy(id: TableId, upgradeId: string, on: boolean): void {
-    if (this.casinoLevel('policy') < 1) return;
-    const off = this.state.casino.autoOff;
-    const key = `${id}:${upgradeId}`;
-    const at = off.indexOf(key);
-    if (on && at >= 0) off.splice(at, 1);
-    if (!on && at < 0) off.push(key);
-  }
-
   setAutoPrestige(on: boolean): void {
     if (this.casinoLevel('concierge') < 1) return;
     this.state.casino.autoPrestige = on;
@@ -227,7 +212,7 @@ export class Game {
     let best: { id: string; cost: number; core: boolean } | null = null;
     for (const upg of allUpgrades(def)) {
       const level = ts.levels[upg.id] ?? 0;
-      if (level >= upg.maxLevel || !this.autoBuyEnabled(id, upg.id)) continue;
+      if (level >= upg.maxLevel) continue;
       const cost = upgradeCost(def, upg, ts.prestige, level, this.bonus);
       if (ts.wallet - cost < reserve) continue;
       const core = CORE_UPGRADES.includes(upg.id);

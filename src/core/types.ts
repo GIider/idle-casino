@@ -119,8 +119,6 @@ export interface CasinoState {
   levels: Record<string, number>;
   /** Floor Manager (level 4): prestige a table automatically as soon as it can. */
   autoPrestige: boolean;
-  /** Upgrades the Floor Manager must not buy, keyed `table:upgradeId`. */
-  autoOff: string[];
 }
 
 export interface GameState {

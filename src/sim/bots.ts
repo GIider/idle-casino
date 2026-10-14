@@ -3,6 +3,7 @@ import { createInitialState } from '../core/state';
 import { mulberry32 } from '../core/rng';
 import { FINAL_TABLE, TABLES, TABLE_IDS } from '../tables';
 import { allUpgrades, prestigeThreshold, upgradeCost } from '../core/economy';
+import { CASINO_UPGRADES } from '../core/casino';
 import { ACHIEVEMENTS, maxTier } from '../core/achievements';
 import type { TableId } from '../core/types';
 import type { Rng } from '../core/types';
@@ -83,6 +84,8 @@ export interface RunOptions {
   grantedAchievements?: string[];
   /** Keep playing past the ascension threshold (for achievement timing). */
   ignoreAscension?: boolean;
+  /** Ascend whenever possible and spend the chips on the shop, stopping once every casino upgrade is maxed. */
+  untilShopComplete?: boolean;
   rng?: Rng;
 }
 
@@ -91,6 +94,10 @@ export interface RunResult {
   seed: number;
   /** Minutes until the ascension threshold was met, or null if not reached within the cap. */
   ascendedAt: number | null;
+  /** Minutes until every casino shop upgrade was maxed (needs `untilShopComplete`), or null. */
+  shopCompleteAt: number | null;
+  /** Ascensions it took to max the shop, or null. */
+  ascensionsToComplete: number | null;
   /** Final log10 progress toward ascension. */
   progress: number;
   /** Minutes at which each table unlocked. */
@@ -102,7 +109,7 @@ export interface RunResult {
 }
 
 /** Reference thresholds from the balance targets. */
-export const TARGET_MINUTES = { greedy: 60, worst: 90 };
+export const TARGET_MINUTES = { greedy: 60, worst: 90, shop: 240 };
 
 export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
   const { seed = 1, maxMinutes = 150, sampleSec = 10, skipUpgrades = [], lockedAchievements = [], grantedAchievements = [] } = opts;
@@ -121,6 +128,8 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
   const achievementAt: RunResult['achievementAt'] = {};
   const tierSeen: Record<string, number> = {};
   let ascendedAt: number | null = null;
+  let shopCompleteAt: number | null = null;
+  let ascensionsToComplete: number | null = null;
 
   const holdPerks = () => {
     for (const id of locked) {
@@ -177,6 +186,26 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
         events.push({ t, kind: 'prestige', label: `${id} → p${g.table(id).prestige}` });
       }
     }
+    if (g.canAscend() && opts.untilShopComplete) {
+      if (ascendedAt === null) ascendedAt = t;
+      g.ascend();
+      events.push({ t, kind: 'ascend', label: `ascend #${g.state.casino.ascensions}` });
+      // Cheapest first, repeatedly, so prerequisites open up as chips allow.
+      for (let bought = true; bought; ) {
+        bought = false;
+        const open = CASINO_UPGRADES.filter((u) => g.casinoLevel(u.id) < u.maxLevel)
+          .map((u) => ({ u, q: g.quoteCasinoUpgrade(u.id) }))
+          .filter((x) => x.q.count > 0)
+          .sort((a, b) => a.q.cost - b.q.cost);
+        if (open.length && g.buyCasinoUpgrade(open[0].u.id)) bought = true;
+      }
+      if (CASINO_UPGRADES.every((u) => g.casinoLevel(u.id) >= u.maxLevel)) {
+        shopCompleteAt = t;
+        ascensionsToComplete = g.state.casino.ascensions;
+        break;
+      }
+      continue;
+    }
     if (g.canAscend() && ascendedAt === null) {
       ascendedAt = t;
       events.push({ t, kind: 'ascend', label: 'ascend' });
@@ -225,7 +254,7 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
       }
     }
   }
-  return { bot: policy.id, seed, ascendedAt, progress: progress(), unlockedAt, achievementAt, events, samples };
+  return { bot: policy.id, seed, ascendedAt, shopCompleteAt, ascensionsToComplete, progress: progress(), unlockedAt, achievementAt, events, samples };
 }
 
 export interface BotSummary {

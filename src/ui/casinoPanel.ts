@@ -3,10 +3,8 @@ import { TABLES, FINAL_TABLE } from '../tables';
 import {
   ASCENSION_WINNINGS_BONUS,
   CASINO_UPGRADES,
-  MANAGER_RESERVE_BETS,
   ascensionMultiplier,
   ascensionThreshold,
-  managerInterval,
   type CasinoUpgradeDef,
 } from '../core/casino';
 import { h, setDisabled, setText, toggleClass } from './dom';
@@ -28,7 +26,6 @@ export class CasinoPanel {
   private ascendBtn: HTMLButtonElement;
   private rows: Row[] = [];
   private bonusEl: HTMLElement;
-  private managerEl: HTMLElement;
   private autoPrestige: HTMLLabelElement;
   private autoPrestigeBox: HTMLInputElement;
 
@@ -53,7 +50,6 @@ export class CasinoPanel {
     });
 
     this.bonusEl = h('p', { class: 'auto-info' });
-    this.managerEl = h('p', { class: 'auto-info' });
     this.autoPrestigeBox = h('input', {
       type: 'checkbox',
       onchange: () => game.setAutoPrestige(this.autoPrestigeBox.checked),
@@ -65,7 +61,7 @@ export class CasinoPanel {
       ' Auto-prestige tables as soon as they can',
     );
 
-    const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }), buyModeSelector());
+    const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }), buyModeSelector(), this.autoPrestige);
     for (const def of CASINO_UPGRADES) {
       const level = h('span', { class: 'level' });
       const button = h('button', { class: 'btn buy', onclick: () => game.buyCasinoUpgrade(def.id, buyMode()) });
@@ -105,7 +101,6 @@ export class CasinoPanel {
             h('div', { class: 'bar' }, this.ascendBar),
             this.ascendBtn,
           ),
-          h('div', { class: 'card' }, h('h3', { text: 'Floor Manager' }), this.managerEl, this.autoPrestige),
         ),
         h('div', { class: 'col side' }, shop),
       ),
@@ -120,14 +115,6 @@ export class CasinoPanel {
     setText(
       this.bonusEl,
       `Ascension bonus: winnings ×${fmt(ascensionMultiplier(casino.ascensions), 2)} on every table (×${fmt(ascensionMultiplier(casino.ascensions + 1), 2)} after the next ascension).`,
-    );
-    const manager = game.casinoLevel('manager');
-    const interval = managerInterval(manager, game.casinoLevel('overtime'));
-    setText(
-      this.managerEl,
-      interval > 0
-        ? `Buys core upgrades first (cheapest first), then the rest, at every table every ${interval}s, keeping ${MANAGER_RESERVE_BETS} minimum bets in reserve.`
-        : 'Buy the Floor Manager in the shop below to have upgrades purchased for you.',
     );
     toggleClass(this.autoPrestige, 'hidden', game.casinoLevel('concierge') < 1);
     if (this.autoPrestigeBox.checked !== casino.autoPrestige) this.autoPrestigeBox.checked = casino.autoPrestige;

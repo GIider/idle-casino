@@ -71,18 +71,6 @@ describe('Floor Manager', () => {
     expect(ts.levels.sleeve).toBe(0);
   });
 
-  it('honors per-upgrade switches only with Purchasing Policy', () => {
-    const g = newGame();
-    g.table('coinflip').wallet = 1e6;
-    g.state.casino.levels.manager = 1;
-    g.setAutoBuy('coinflip', 'luck', false);
-    expect(g.autoBuyEnabled('coinflip', 'luck')).toBe(true);
-    g.state.casino.levels.policy = 1;
-    for (const u of allUpgrades(TABLES.coinflip)) g.setAutoBuy('coinflip', u.id, u.id === 'speed');
-    g.autoBuy('coinflip');
-    expect(g.table('coinflip').levels).toEqual({ speed: 1 });
-  });
-
   it('auto-prestiges only with Concierge when enabled', () => {
     const g = newGame();
     const ts = g.table('coinflip');
@@ -104,12 +92,9 @@ describe('Floor Manager', () => {
   it('normalizes saved manager settings', () => {
     const g = newGame();
     g.state.casino.autoPrestige = true;
-    g.state.casino.autoOff = ['coinflip:luck'];
     const raw = JSON.parse(JSON.stringify(g.state));
-    raw.casino.autoOff = ['coinflip:luck', 5, 'x'];
     const back = normalizeState(raw);
     expect(back.casino.autoPrestige).toBe(true);
-    expect(back.casino.autoOff).toEqual(['coinflip:luck', 'x']);
   });
 });
 
@@ -119,8 +104,7 @@ describe('ascension multiplier', () => {
     expect(g.bonus.payout).toBe(1);
     g.state.casino.ascensions = 3;
     expect(g.bonus.payout).toBeCloseTo(ASCENSION_WINNINGS_BONUS ** 3);
-    g.state.casino.levels.payout = 2;
-    expect(casinoBonus(g.state.casino).payout).toBeCloseTo(1.2 * ascensionMultiplier(3));
+    expect(casinoBonus(g.state.casino).payout).toBeCloseTo(ascensionMultiplier(3));
   });
 });
 

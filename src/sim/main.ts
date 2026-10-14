@@ -42,6 +42,7 @@ function renderChips(): void {
 }
 renderChips();
 
+const shopMode = () => $<HTMLInputElement>('shop').checked;
 const runBtn = $<HTMLButtonElement>('run');
 const exportBtn = $<HTMLButtonElement>('export');
 const statusEl = $('status');
@@ -60,7 +61,7 @@ runBtn.onclick = () => {
   const seedCount = Math.min(20, Math.max(1, Number($<HTMLInputElement>('seeds').value) | 0));
   runCap = Math.max(10, Number($<HTMLInputElement>('cap').value) || 120);
   const queue: SimRequest[] = bots.flatMap((b) =>
-    Array.from({ length: seedCount }, (_, i) => ({ bot: b.id, seed: i + 1, options: { maxMinutes: runCap } })),
+    Array.from({ length: seedCount }, (_, i) => ({ bot: b.id, seed: i + 1, options: { maxMinutes: runCap, untilShopComplete: shopMode() } })),
   );
   const total = queue.length;
   let done = 0;
@@ -268,15 +269,20 @@ function drawSummary(): void {
     const cls = id === 'never-prestige' ? 'muted' : med <= limit ? 'ok' : 'bad';
     const reached = runs.filter((r) => r.ascendedAt !== null).length;
     const f = (v: number) => (Number.isFinite(v) ? v.toFixed(1) : '–');
+    const shopRuns = runs.map((r) => r.shopCompleteAt ?? Infinity);
+    const shopMed = median(shopRuns);
+    const shopCell = shopMode()
+      ? `<td class="${shopMed <= TARGET_MINUTES.shop ? 'ok' : 'bad'}" title="median ascensions: ${f(median(runs.map((r) => r.ascensionsToComplete ?? Infinity)))}">${f(shopMed)} (${runs.filter((r) => r.shopCompleteAt !== null).length}/${runs.length})</td>`
+      : '';
     const unlock = (tb: 'slots' | 'roulette' | 'blackjack') => {
       const xs = runs.map((r) => r.unlockedAt[tb]).filter((v): v is number => v !== undefined);
       return xs.length ? f(median(xs)) : '–';
     };
     return `<tr title="${botLabel(id)}; limit ${limit} min"><td><i class="chip" style="padding:0;border:0"><i style="background:${botColor(id)}"></i></i> ${id}</td>
       <td>${reached}/${runs.length}</td><td>${f(t[0])}</td><td class="${cls}">${f(med)}</td><td>${f(t[t.length - 1])}</td>
-      <td class="muted">${unlock('slots')} / ${unlock('roulette')} / ${unlock('blackjack')}</td></tr>`;
+      ${shopCell}<td class="muted">${unlock('slots')} / ${unlock('roulette')} / ${unlock('blackjack')}</td></tr>`;
   });
-  $('summary').innerHTML = `<div class="scroll"><table><thead><tr><th>Bot</th><th>Ascended</th><th>Min</th><th>Median</th><th>Max</th><th>Unlocks S / R / B</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  $('summary').innerHTML = `<div class="scroll"><table><thead><tr><th>Bot</th><th>Ascended</th><th>Min</th><th>Median</th><th>Max</th>${shopMode() ? '<th>Shop complete</th>' : ''}<th>Unlocks S / R / B</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
 }
 
 function drawDetail(): void {
@@ -425,7 +431,7 @@ if (params.has('autorun')) {
     runCap = Math.max(10, Number($<HTMLInputElement>('cap').value) || 120);
     const n = Math.max(1, Number($<HTMLInputElement>('seeds').value) | 0);
     for (const b of BOTS.filter((x) => enabled.has(x.id))) {
-      results.set(b.id, Array.from({ length: n }, (_, i) => runBot(b, { seed: i + 1, maxMinutes: runCap, ignoreAscension: true })));
+      results.set(b.id, Array.from({ length: n }, (_, i) => runBot(b, { seed: i + 1, maxMinutes: runCap, ignoreAscension: true, untilShopComplete: shopMode() })));
     }
     exportBtn.disabled = false;
     statusEl.textContent = 'Done (inline run)';

@@ -25,25 +25,16 @@ export const CASINO_UPGRADES: CasinoUpgradeDef[] = [
     id: 'overtime',
     name: 'Overtime Shifts',
     description: 'The Floor Manager buys every 5s (Lv1), then every 2s (Lv2)',
-    baseCost: 3,
-    growth: 2.3,
-    maxLevel: 2,
-    requires: { id: 'manager', level: 1 },
-  },
-  {
-    id: 'policy',
-    name: 'Purchasing Policy',
-    description: 'Per-upgrade switches on every table: choose what the Floor Manager may buy',
-    baseCost: 5,
+    baseCost: 1,
     growth: 1,
-    maxLevel: 1,
+    maxLevel: 2,
     requires: { id: 'manager', level: 1 },
   },
   {
     id: 'concierge',
     name: 'Concierge',
     description: 'The Floor Manager prestiges a table as soon as it can (switchable)',
-    baseCost: 12,
+    baseCost: 2,
     growth: 1,
     maxLevel: 1,
     requires: { id: 'manager', level: 1 },
@@ -55,30 +46,6 @@ export const CASINO_UPGRADES: CasinoUpgradeDef[] = [
     baseCost: 1,
     growth: 1,
     maxLevel: 1,
-  },
-  {
-    id: 'payout',
-    name: 'House Edge Trimmed',
-    description: '+10% winnings on every table, per level',
-    baseCost: 2,
-    growth: 1.7,
-    maxLevel: 10,
-  },
-  {
-    id: 'seed',
-    name: 'Seed Capital',
-    description: 'Start every ascension with +250 Pennies, and table upgrades are 3% cheaper, per level',
-    baseCost: 2,
-    growth: 1.6,
-    maxLevel: 10,
-  },
-  {
-    id: 'offline',
-    name: 'Night Shift',
-    description: 'Offline earnings are 5% more efficient and last 1 hour longer, per level',
-    baseCost: 3,
-    growth: 1.7,
-    maxLevel: 10,
   },
 ];
 
@@ -128,16 +95,9 @@ export const ASCEND_BASE_THRESHOLD = 5e8;
 export const ASCEND_THRESHOLD_GROWTH = 5;
 
 export function casinoBonus(casino: CasinoState): CasinoBonus {
-  const lv = (id: string) => casino.levels[id] ?? 0;
   return {
-    payout: (1 + 0.1 * lv('payout')) * ascensionMultiplier(casino.ascensions),
-    luck: 0,
-    speed: 1,
-    upgradeCost: 1 - 0.03 * lv('seed'),
-    prestigeCost: 1,
-    offlineEfficiency: 0.05 * lv('offline'),
-    offlineHours: lv('offline'),
-    startCash: 250 * lv('seed'),
+    ...NO_BONUS,
+    payout: ascensionMultiplier(casino.ascensions),
   };
 }
 
@@ -168,6 +128,10 @@ export const LEGACY_UPGRADES: Record<string, { baseCost: number; growth: number 
   upgradeDiscount: { baseCost: 4, growth: 1.8 },
   prestigeDiscount: { baseCost: 5, growth: 1.9 },
   startCash: { baseCost: 1, growth: 1.5 },
+  policy: { baseCost: 5, growth: 1 },
+  payout: { baseCost: 2, growth: 1.7 },
+  seed: { baseCost: 2, growth: 1.6 },
+  offline: { baseCost: 3, growth: 1.7 },
 };
 
 /** Chips spent on levels `from` (inclusive) up to `to` (exclusive) of a cost curve. */

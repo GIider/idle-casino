@@ -21,9 +21,6 @@ interface UpgradeRow {
   root: HTMLElement;
   level: HTMLElement;
   button: HTMLButtonElement;
-  /** Floor Manager switch (Purchasing Policy): whether the manager may buy this upgrade. */
-  auto: HTMLLabelElement;
-  autoBox: HTMLInputElement;
 }
 
 export class TablePanel {
@@ -150,20 +147,14 @@ export class TablePanel {
     for (const u of allUpgrades(def)) {
       const level = h('span', { class: 'level' });
       const button = h('button', { class: 'btn buy', onclick: () => game.buyUpgrade(id, u.id, buyMode()) });
-      const autoBox = h('input', {
-        type: 'checkbox',
-        onchange: () => game.setAutoBuy(id, u.id, autoBox.checked),
-      });
-      const auto = h('label', { class: 'auto-buy hidden', title: 'Let the Floor Manager buy this upgrade' }, autoBox, ' auto');
       const root = h(
         'div',
         { class: 'upgrade' },
         h('div', { class: 'upgrade-text' }, h('div', {}, h('strong', { text: u.name }), ' ', level), h('small', { text: u.description })),
-        auto,
         button,
       );
       upgrades.append(root);
-      this.rows.push({ def: u, root, level, button, auto, autoBox });
+      this.rows.push({ def: u, root, level, button });
     }
 
     // Prestige
@@ -358,7 +349,6 @@ export class TablePanel {
 
     toggleClass(this.cheapestBtn, 'hidden', game.casinoLevel('bulkbuy') < 1);
     setDisabled(this.cheapestBtn, !game.canBuyCheapest(id));
-    const toggles = game.casinoLevel('policy') >= 1;
     // Light up rows the Floor Manager just bought (only recent entries, so a freshly shown tab doesn't replay old ones).
     for (const e of game.managerLog) {
       if (e.table !== id || e.seq <= this.managerSeq) continue;
@@ -369,9 +359,6 @@ export class TablePanel {
       this.flashRow(row);
     }
     for (const row of this.rows) {
-      toggleClass(row.auto, 'hidden', !toggles);
-      const enabled = game.autoBuyEnabled(id, row.def.id);
-      if (row.autoBox.checked !== enabled) row.autoBox.checked = enabled;
       const level = ts.levels[row.def.id] ?? 0;
       const maxed = level >= row.def.maxLevel;
       setText(row.level, `Lv ${level}/${row.def.maxLevel}`);
