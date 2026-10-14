@@ -60,6 +60,8 @@ export const slots: TableDef = {
     }
     let mult = line(reels);
     const notes: string[] = [];
+    let cascaded = false;
+    let freed = false;
     // Cascade: a three of a kind chains into free spins until one misses.
     const cascade = levels.perk_tripleCrown ? CASCADE_SPINS[levels.perk_tripleCrown - 1] : 0;
     if (cascade > 0 && isTriple(reels)) {
@@ -68,12 +70,14 @@ export const slots: TableDef = {
         mult += line(extra);
         if (!isTriple(extra)) break;
         notes.push('cascade');
+        cascaded = true;
       }
     }
     // Free Spins: a 2x+ win earns spins that pay in full.
     const free = levels.perk_hotStreak ? FREE_SPINS[levels.perk_hotStreak - 1] : 0;
     if (free > 0 && mult >= 2) {
       for (let i = 0; i < free; i++) mult += line(spin());
+      freed = true;
       notes.push(`${free} free spin${free > 1 ? 's' : ''}`);
     }
     // Scatter Sevens: every seven anywhere pays.
@@ -84,6 +88,6 @@ export const slots: TableDef = {
       notes.push(`${sevens}× scatter`);
     }
     const detail = reels.map((r) => SYMBOLS[r]).join(' ') + (notes.length ? ` (${notes.join(', ')})` : '');
-    return { mult, detail, view: { kind: 'slots', reels } };
+    return { mult, detail, view: { kind: 'slots', reels, cascade: cascaded, freeSpins: freed, scatter: scatter > 0 && sevens > 0 } };
   },
 };

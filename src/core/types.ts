@@ -47,6 +47,10 @@ export interface CoinStats {
   /** Signed run length: positive = current heads streak, negative = tails streak. */
   streak: number;
   longest: number;
+  /** Rounds decided by a gold coin, an edge landing, a ridden win. */
+  gold: number;
+  edge: number;
+  ride: number;
   /** Most recent flips, oldest first (0 = tails, 1 = heads, 2 = gold coin, 3 = edge landing, 4 = ridden win). */
   recent: number[];
 }
@@ -59,6 +63,13 @@ export interface SlotsStats {
   /** Rounds with exactly two matching reels. */
   pairs: number;
   rounds: number;
+  /** Triples and pairs by matching symbol. */
+  tripleBy: number[];
+  pairBy: number[];
+  /** Rounds that chained a cascade, earned free spins, or paid scatter sevens. */
+  cascades: number;
+  freeSpins: number;
+  scatters: number;
   /** The last few spins' reels, oldest first. */
   recent: number[][];
 }
@@ -76,6 +87,12 @@ export interface BlackjackStats {
   push: number;
   lose: number;
   bust: number;
+  /** Hands won by a double, a split, a surrender, a Charlie, or saved by insurance. */
+  doubled: number;
+  split: number;
+  surrendered: number;
+  charlie: number;
+  insured: number;
   /** The last few hands, oldest first. */
   recent: BlackjackHand[];
 }
@@ -142,9 +159,9 @@ export interface PlayResult {
 
 export type PlayView =
   | { kind: 'coin'; heads: boolean; /** Special payout that decided the flip. */ special?: 'gold' | 'edge' | 'ride' }
-  | { kind: 'slots'; reels: number[] }
+  | { kind: 'slots'; reels: number[]; cascade?: boolean; freeSpins?: boolean; scatter?: boolean }
   | { kind: 'roulette'; pocket: number; bets: string[] }
-  | { kind: 'blackjack'; player: number[]; dealer: number[]; outcome: 'natural' | 'bust' | 'win' | 'push' | 'lose'; insured: boolean; /** The second hand of a free split. */ split?: number[]; doubled?: boolean; surrendered?: boolean };
+  | { kind: 'blackjack'; player: number[]; dealer: number[]; outcome: 'natural' | 'bust' | 'win' | 'push' | 'lose'; insured: boolean; /** The second hand of a free split. */ split?: number[]; doubled?: boolean; surrendered?: boolean; charlie?: boolean };
 
 export interface UpgradeDef {
   id: string;

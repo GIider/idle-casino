@@ -934,13 +934,22 @@ small {
 .kv-value { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
 .kv-value.gain { font-size: 15px; }
 
-.combo-list { display: flex; flex-direction: column; gap: 4px; }
-.combo { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; }
-.combo-reels { font-size: 20px; letter-spacing: .15em; }
-.combo-tag { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.combo-view { display: flex; flex-direction: column; gap: 6px; height: 130px; overflow: hidden; }
+.reward-strip { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--muted); }
+.reward b { color: var(--gold); font-variant-numeric: tabular-nums; }
+.reward.muted { color: var(--muted); }
+.combo-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 4px; align-content: start; }
+.combo-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
+.slots-list { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.slots-list .combo-reels { font-size: 14px; letter-spacing: 0; }
+.combo-list .history-info { grid-column: 1 / -1; }
+.combo { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 2px 6px; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.combo-reels { font-size: 15px; letter-spacing: .1em; white-space: nowrap; }
+.combo-tag { font-size: 11px; letter-spacing: .05em; color: var(--muted); }
+.combo.pair { border-color: var(--cyan); }
 .combo.pair .combo-tag { color: var(--cyan); }
 .combo.triple { border-color: var(--gold); }
-.combo.triple .combo-tag { color: var(--gold); font-weight: 800; }
+.combo.triple { box-shadow: 0 0 6px rgba(255, 200, 80, .4); }
 
 .big-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .stat-tile.big { padding: 12px 14px; transition: box-shadow .15s, border-color .15s; }
@@ -957,12 +966,13 @@ small {
 .bar-wrap .bar { height: 18px; }
 .bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px #000; pointer-events: none; }
 
-.bj-hand { font-size: 14px; }
+.bj-hand { font-size: 13px; white-space: nowrap; }
+.bj-list { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
 .bj-vs { color: var(--muted); }
 .combo.bj-natural, .combo.bj-win { border-color: var(--green); }
-.combo.bj-natural .combo-tag { color: var(--gold); font-weight: 800; }
-.combo.bj-win .combo-tag { color: var(--green); }
-.combo.bj-lose .combo-tag, .combo.bj-bust .combo-tag { color: var(--red); }
+.combo.bj-natural { border-color: var(--gold); }
+.combo.bj-push { border-color: var(--cyan); }
+.combo.bj-lose, .combo.bj-bust { border-color: var(--red); }
 
 .bank-card { flex: none; padding: 8px 14px; }
 .bank-card { flex: none; padding: 10px 14px; }
@@ -1099,3 +1109,34 @@ small {
 @keyframes rainbow-shift { to { background-position: 200% 0; } }
 :root[data-quality='low'] .tab.tile.maxed::after { animation: none; }
 @media (prefers-reduced-motion: reduce) { .tab.tile.maxed::after { animation: none; } }
+
+/* History fills whatever height the grid row gives the card. */
+.activity { display: flex; flex-direction: column; }
+.activity .card.history { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.activity .history-view, .activity .history-profit { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+.activity .history-view.hidden, .activity .history-profit.hidden, .activity .combo-view.hidden { display: none; }
+.activity .history .history-canvas { height: auto; flex: 1 1 0; min-height: 130px; }
+.activity .combo-view { flex: 1 1 0; height: auto; min-height: 130px; }
+
+/* Slots combos: last spin | per-symbol table, ribbon beneath */
+.slots-body { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px; }
+.slots-last { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg2); padding: 6px; }
+.slots-last small { color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-size: 10px; }
+.slots-last-reels { font-size: 30px; letter-spacing: .05em; white-space: nowrap; }
+.slots-last-tag { font-size: 13px; font-weight: 800; color: var(--muted); }
+.slots-last.pair { border-color: var(--cyan); }
+.slots-last.pair .slots-last-tag { color: var(--cyan); }
+.slots-last.triple { border-color: var(--gold); box-shadow: 0 0 10px rgba(255, 200, 80, .35); }
+.slots-last.triple .slots-last-tag { color: var(--gold); }
+.slots-table { display: flex; flex-direction: column; justify-content: space-between; min-height: 0; }
+.slots-row { display: grid; grid-template-columns: 2.2em 1fr 1fr; align-items: center; font-variant-numeric: tabular-nums; font-size: 13px; }
+.slots-row.head { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.slots-row span:nth-child(n+2) { text-align: right; }
+.slots-sym { font-size: 16px; }
+.slots-n.triple { color: var(--gold); font-weight: 700; }
+.slots-n.pair { color: var(--cyan); }
+.slots-ribbon { display: flex; align-items: center; gap: 3px; flex: none; }
+.slots-ribbon small { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; margin-right: 4px; }
+.blip { flex: 1 1 0; max-width: 18px; height: 10px; border-radius: 3px; background: var(--line); }
+.blip.pair { background: var(--cyan); }
+.blip.triple { background: var(--gold); }

@@ -113,7 +113,7 @@ export class HistoryChart {
     }
     const series = history.rate.points;
     const last = series[series.length - 1];
-    const key = `${last?.[0]}|${last?.[1]}|${series.length}|${plays}|${this.range}|${this.canvas.clientWidth}`;
+    const key = `${last?.[0]}|${last?.[1]}|${series.length}|${plays}|${this.range}|${this.canvas.clientWidth}x${this.canvas.clientHeight}`;
     if (key === this.key) return;
     this.key = key;
     this.data = series.slice();

@@ -99,3 +99,19 @@ describe('income series', () => {
     expect(importSave(exportSave(g.state)).tables.coinflip.history.rate).toEqual(ts.history.rate);
   });
 });
+
+describe('reward counters', () => {
+  it('records unique rewards and loads old saves with zeros', async () => {
+    const { recordView, newHistory, normalizeStats } = await import('../src/core/history');
+    const hist = newHistory();
+    recordView(hist, { kind: 'coin', heads: true, special: 'gold' });
+    recordView(hist, { kind: 'slots', reels: [4, 4, 4], cascade: true, freeSpins: true, scatter: true });
+    recordView(hist, { kind: 'blackjack', player: [10, 5, 6], dealer: [10, 7], outcome: 'win', insured: false, doubled: true, charlie: true });
+    expect(hist.stats.coin.gold).toBe(1);
+    expect(hist.stats.slots).toMatchObject({ cascades: 1, freeSpins: 1, scatters: 1 });
+    expect(hist.stats.blackjack).toMatchObject({ doubled: 1, charlie: 1, split: 0 });
+    const old = normalizeStats({ coin: { heads: 2, tails: 1, recent: [] } });
+    expect(old.coin.gold).toBe(0);
+    expect(old.blackjack.charlie).toBe(0);
+  });
+});

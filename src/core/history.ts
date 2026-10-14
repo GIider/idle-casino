@@ -8,16 +8,16 @@ export const SLOT_SYMBOLS = 6;
 export const POCKETS = 37;
 export const RECENT_COINS = 60;
 export const RECENT_POCKETS = 30;
-export const RECENT_SPINS = 12;
+export const RECENT_SPINS = 20;
 export const RECENT_HANDS = 12;
 const BJ_OUTCOMES = ['natural', 'win', 'push', 'lose', 'bust'];
 
 export function newStats(): PlayStats {
   return {
-    coin: { heads: 0, tails: 0, streak: 0, longest: 0, recent: [] },
-    slots: { symbols: new Array(SLOT_SYMBOLS).fill(0), triples: 0, pairs: 0, rounds: 0, recent: [] },
+    coin: { heads: 0, tails: 0, streak: 0, longest: 0, gold: 0, edge: 0, ride: 0, recent: [] },
+    slots: { symbols: new Array(SLOT_SYMBOLS).fill(0), triples: 0, pairs: 0, rounds: 0, tripleBy: new Array(SLOT_SYMBOLS).fill(0), pairBy: new Array(SLOT_SYMBOLS).fill(0), cascades: 0, freeSpins: 0, scatters: 0, recent: [] },
     roulette: { pockets: new Array(POCKETS).fill(0), recent: [] },
-    blackjack: { natural: 0, win: 0, push: 0, lose: 0, bust: 0, recent: [] },
+    blackjack: { natural: 0, win: 0, push: 0, lose: 0, bust: 0, doubled: 0, split: 0, surrendered: 0, charlie: 0, insured: 0, recent: [] },
   };
 }
 
@@ -45,6 +45,9 @@ export function recordView(h: History, view: PlayView | undefined): void {
       const dir = view.heads ? 1 : -1;
       c.streak = Math.sign(c.streak) === dir ? c.streak + dir : dir;
       c.longest = Math.max(c.longest, Math.abs(c.streak));
+      if (view.special === 'gold') c.gold++;
+      else if (view.special === 'edge') c.edge++;
+      else if (view.special === 'ride') c.ride++;
       c.recent.push(view.special === 'gold' ? 2 : view.special === 'edge' ? 3 : view.special === 'ride' ? 4 : view.heads ? 1 : 0);
       if (c.recent.length > RECENT_COINS) c.recent.shift();
       break;
@@ -54,8 +57,17 @@ export function recordView(h: History, view: PlayView | undefined): void {
       sl.rounds++;
       for (const r of view.reels) if (r >= 0 && r < SLOT_SYMBOLS) sl.symbols[r]++;
       const [a, b, c] = view.reels;
-      if (a === b && b === c) sl.triples++;
-      else if (a === b || b === c || a === c) sl.pairs++;
+      if (a === b && b === c) {
+        sl.triples++;
+        if (a >= 0 && a < SLOT_SYMBOLS) sl.tripleBy[a]++;
+      } else if (a === b || b === c || a === c) {
+        sl.pairs++;
+        const m = a === b || a === c ? a : b;
+        if (m >= 0 && m < SLOT_SYMBOLS) sl.pairBy[m]++;
+      }
+      if (view.cascade) sl.cascades++;
+      if (view.freeSpins) sl.freeSpins++;
+      if (view.scatter) sl.scatters++;
       sl.recent.push([...view.reels]);
       if (sl.recent.length > RECENT_SPINS) sl.recent.shift();
       break;
@@ -68,7 +80,13 @@ export function recordView(h: History, view: PlayView | undefined): void {
       break;
     }
     case 'blackjack':
-      s.blackjack[view.outcome]++;
+      const bj = s.blackjack;
+      bj[view.outcome]++;
+      if (view.doubled) bj.doubled++;
+      if (view.split) bj.split++;
+      if (view.surrendered) bj.surrendered++;
+      if (view.charlie) bj.charlie++;
+      if (view.insured) bj.insured++;
       s.blackjack.recent.push({
         player: [...view.player],
         dealer: [...view.dealer],
@@ -169,6 +187,9 @@ export function normalizeStats(raw: unknown): PlayStats {
     s.coin.tails = count(r.coin.tails);
     s.coin.streak = typeof r.coin.streak === 'number' && Number.isFinite(r.coin.streak) ? Math.trunc(r.coin.streak) : 0;
     s.coin.longest = Math.max(count(r.coin.longest), Math.abs(s.coin.streak));
+    s.coin.gold = count(r.coin.gold);
+    s.coin.edge = count(r.coin.edge);
+    s.coin.ride = count(r.coin.ride);
     s.coin.recent = recent(r.coin.recent, RECENT_COINS, 4);
   }
   if (r.slots && typeof r.slots === 'object') {
@@ -176,6 +197,11 @@ export function normalizeStats(raw: unknown): PlayStats {
     s.slots.triples = count(r.slots.triples);
     s.slots.pairs = count(r.slots.pairs);
     s.slots.rounds = count(r.slots.rounds);
+    s.slots.tripleBy = counts(r.slots.tripleBy, SLOT_SYMBOLS);
+    s.slots.pairBy = counts(r.slots.pairBy, SLOT_SYMBOLS);
+    s.slots.cascades = count(r.slots.cascades);
+    s.slots.freeSpins = count(r.slots.freeSpins);
+    s.slots.scatters = count(r.slots.scatters);
     if (Array.isArray(r.slots.recent)) {
       s.slots.recent = r.slots.recent
         .map((x: unknown) => recent(x, 3, SLOT_SYMBOLS - 1))
@@ -189,6 +215,7 @@ export function normalizeStats(raw: unknown): PlayStats {
   }
   if (r.blackjack && typeof r.blackjack === 'object') {
     for (const k of ['natural', 'win', 'push', 'lose', 'bust'] as const) s.blackjack[k] = count(r.blackjack[k]);
+    for (const k of ['doubled', 'split', 'surrendered', 'charlie', 'insured'] as const) s.blackjack[k] = count(r.blackjack[k]);
     if (Array.isArray(r.blackjack.recent)) {
       const cards = (x: unknown) => recent(x, 12, 10).filter((c) => c >= 1);
       for (const x of r.blackjack.recent as any[]) {

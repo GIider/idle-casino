@@ -254,7 +254,7 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   // Charlie: enough cards without busting wins on the spot.
   const charlie = levels.perk_winCards4 ? CHARLIE_CARDS[levels.perk_winCards4 - 1] : 0;
   if (charlie > 0 && player.length >= charlie) {
-    return done({ mult: CHARLIE_MULT, detail: `🃏 Charlie! ${player.length} cards, ${p}`, view: view('win') });
+    return done({ mult: CHARLIE_MULT, detail: `🃏 Charlie! ${player.length} cards, ${p}`, view: { ...view('win'), charlie: true } as PlayView });
   }
 
   const d = dealerPlay(p);
