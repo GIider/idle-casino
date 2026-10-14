@@ -94,7 +94,6 @@ export class TablePanel {
       { class: 'locked' },
       h('div', { class: 'big-icon', text: def.icon }),
       h('h2', { text: def.name }),
-      h('p', { text: def.blurb }),
       meter,
       this.unlockBtn,
       this.unlockNote,
