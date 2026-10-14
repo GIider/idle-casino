@@ -7,12 +7,13 @@ import {
   ascensionThreshold,
   type CasinoUpgradeDef,
 } from '../core/casino';
-import { h, setDisabled, setText, toggleClass } from './dom';
+import { h, setDisabled, setFill, setText, toggleClass } from './dom';
 import { fmt } from './format';
 import { buyLabel, buyMode, buyModeSelector } from './buyMode';
 
 interface Row {
   def: CasinoUpgradeDef;
+  root: HTMLElement;
   level: HTMLElement;
   button: HTMLButtonElement;
 }
@@ -25,6 +26,7 @@ export class CasinoPanel {
   private ascendBar: HTMLElement;
   private ascendBtn: HTMLButtonElement;
   private rows: Row[] = [];
+  private maxedEl!: HTMLElement;
   private bonusEl: HTMLElement;
 
   constructor(private game: Game) {
@@ -48,19 +50,19 @@ export class CasinoPanel {
     });
 
     this.bonusEl = h('p', { class: 'auto-info' });
-    const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }), buyModeSelector());
+    this.maxedEl = h('span', { class: 'maxed-count', title: 'Upgrades at max level' });
+    const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }), this.maxedEl, buyModeSelector());
     for (const def of CASINO_UPGRADES) {
       const level = h('span', { class: 'level' });
       const button = h('button', { class: 'btn buy', onclick: () => game.buyCasinoUpgrade(def.id, buyMode()) });
-      shop.append(
-        h(
-          'div',
-          { class: 'upgrade' },
-          h('div', { class: 'upgrade-text' }, h('div', {}, h('strong', { text: def.name }), ' ', level), h('small', { text: def.description })),
-          button,
-        ),
+      const root = h(
+        'div',
+        { class: 'upgrade' },
+        h('div', { class: 'upgrade-text' }, h('div', {}, h('strong', { text: def.name }), ' ', level), h('small', { text: def.description })),
+        button,
       );
-      this.rows.push({ def, level, button });
+      shop.append(root);
+      this.rows.push({ def, root, level, button });
     }
 
     this.root = h(
@@ -116,9 +118,12 @@ export class CasinoPanel {
     this.ascendBar.style.transform = `scaleX(${game.ascensionProgress()})`;
     setDisabled(this.ascendBtn, !game.canAscend());
 
+    let maxedCount = 0;
     for (const row of this.rows) {
       const level = game.casinoLevel(row.def.id);
+      if (level >= row.def.maxLevel) maxedCount++;
       setText(row.level, `Lv ${level}/${row.def.maxLevel}`);
+      setFill(row.root, level, row.def.maxLevel);
       if (level >= row.def.maxLevel) {
         setText(row.button, 'Maxed');
         setDisabled(row.button, true);
@@ -130,6 +135,7 @@ export class CasinoPanel {
         setDisabled(row.button, q.count <= 0);
       }
     }
+    setText(this.maxedEl, `${maxedCount} / ${this.rows.length}`);
   }
 
   setHidden(hidden: boolean): void {

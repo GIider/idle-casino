@@ -61,3 +61,14 @@ export function setDisabled(el: HTMLButtonElement | HTMLInputElement | HTMLSelec
 export function toggleClass(el: HTMLElement, cls: string, on: boolean): void {
   if (el.classList.contains(cls) !== on) el.classList.toggle(cls, on);
 }
+
+/** Sets a row's `--fill` (0..1) and the `started`/`maxed` classes, touching the DOM only when the level changed. */
+export function setFill(el: HTMLElement, level: number, maxLevel: number): void {
+  const ratio = maxLevel > 0 ? Math.max(0, Math.min(1, level / maxLevel)) : 0;
+  const key = String(ratio);
+  if (el.dataset.fill === key) return;
+  el.dataset.fill = key;
+  el.style.setProperty('--fill', key);
+  toggleClass(el, 'started', level > 0);
+  toggleClass(el, 'maxed', level >= maxLevel);
+}

@@ -1397,6 +1397,48 @@ body {
   border-top: 1px solid var(--line);
 }
 
+/* Fill state: the row fills left to right with level / maxLevel (--fill set in JS) */
+.upgrade {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.upgrade::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 180, 0, 0.1), rgba(255, 200, 60, 0.26));
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left;
+  transition: transform 0.3s;
+}
+
+.upgrade.started::before {
+  box-shadow: inset -2px 0 0 var(--gold);
+}
+
+.upgrade.maxed {
+  border-color: var(--green);
+}
+
+.upgrade.maxed::before {
+  background: linear-gradient(90deg, rgba(60, 200, 120, 0.16), rgba(60, 200, 120, 0.3));
+  box-shadow: none;
+}
+
+:root[data-quality='low'] .upgrade::before {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upgrade::before {
+    transition: none;
+  }
+}
+
 .upgrade-text {
   flex: 1;
 }
@@ -1653,3 +1695,18 @@ a:focus-visible {
 
 /* Scope selector of the unique history cards sits on its own line under the title. */
 .history-scope-head { min-height: 0; margin-bottom: 4px; }
+
+/* "x / y" maxed-upgrades counter, top right of the upgrade pane */
+.card.upgrades {
+  position: relative;
+}
+
+.maxed-count {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}

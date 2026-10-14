@@ -8,7 +8,7 @@ import {
   payoutMultiplier,
   prestigeThreshold,
 } from '../core/economy';
-import { h, setDisabled, setLines, setText, toggleClass } from './dom';
+import { h, setDisabled, setFill, setLines, setText, toggleClass } from './dom';
 import { fmt } from './format';
 import { previousTable } from '../tables';
 import { Stage } from './stage/stage';
@@ -76,6 +76,7 @@ export class TablePanel {
   private feedLabel: HTMLElement | null = null;
   private winTile: HTMLElement;
   private previewing = false;
+  private maxedEl!: HTMLElement;
   private rows: UpgradeRow[] = [];
   private cheapestBtn: HTMLButtonElement;
   private barLabel: HTMLElement;
@@ -175,7 +176,8 @@ export class TablePanel {
       title: 'Keep buying the cheapest affordable upgrade until your wallet runs out',
       onclick: () => this.buyCheapest(),
     });
-    const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }), buyModeSelector(), this.cheapestBtn);
+    this.maxedEl = h('span', { class: 'maxed-count', title: 'Upgrades at max level' });
+    const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }), this.maxedEl, buyModeSelector(), this.cheapestBtn);
     for (const u of allUpgrades(def)) {
       const level = h('span', { class: 'level' });
       const bonusNow = h('span', { class: 'bonus-now' });
@@ -397,10 +399,13 @@ export class TablePanel {
       if (!row) continue;
       this.flashRow(row);
     }
+    let maxedCount = 0;
     for (const row of slow ? this.rows : []) {
       const level = ts.levels[row.def.id] ?? 0;
       const maxed = level >= row.def.maxLevel;
+      if (maxed) maxedCount++;
       setText(row.level, `Lv ${level}/${row.def.maxLevel}`);
+      setFill(row.root, level, row.def.maxLevel);
       const nowText = bonusLabel(row.def.id, level);
       setText(row.bonusNow, nowText);
       row.bonusNow.title = nowText;
@@ -416,6 +421,7 @@ export class TablePanel {
         setDisabled(row.button, q.count <= 0);
       }
     }
+    if (slow) setText(this.maxedEl, `${maxedCount} / ${this.rows.length}`);
 
     const threshold = prestigeThreshold(def, ts.prestige, game.bonus);
     const progress = Math.max(0, Math.min(1, ts.profit / threshold));
