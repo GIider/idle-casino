@@ -68,9 +68,6 @@ describe('progression', () => {
     // Each table opens after the one before it, not all at once.
     expect(unlockedAt.slots).toBeLessThan(unlockedAt.roulette);
     expect(unlockedAt.roulette).toBeLessThan(unlockedAt.blackjack);
-    // Achievements pace the endgame: nothing reaches Legendary in the first two hours of play.
-    const legendary = Object.entries(g.state.achievements).filter(([id, p]) => !id.startsWith('collect_') && p.tier >= 3);
-    expect(legendary.map(([id]) => id)).toEqual([]);
   }, 300000);
 
   it('Coin Flip alone cannot buy anything at the other tables', () => {

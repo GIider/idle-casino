@@ -26,7 +26,7 @@ import {
   type Outcome,
 } from './economy';
 import { START_MONEY, newTableState, prestigeWallet, starterWallet } from './state';
-import { observeRound, observeUpgrades, perkLevels, RARITIES, type AchievementDef } from './achievements';
+import { observeRound, observeUpgrades, perkLevels, type AchievementDef } from './achievements';
 import { markPrestige, recordRate, recordSample, recordView, skipRate } from './history';
 import {
   CASINO_UPGRADES,
@@ -99,17 +99,9 @@ export class Game {
     return { ...this.state.tables[id].levels, ...perkLevels(this.state.achievements, id) };
   }
 
-  private announce(gained: { def: AchievementDef; tier: number }[]): void {
+  private announce(gained: AchievementDef[]): void {
     if (gained.length === 0) return;
-    this.say(
-      gained
-        .map(({ def: a, tier }) =>
-          a.kind === 'grind'
-            ? `🏆 ${a.perk.name}! ${a.perk.describe(tier)}`
-            : `🏆 ${a.perk.name} — ${RARITIES[tier - 1]}! ${a.perk.describe(tier)}`,
-        )
-        .join(' · '),
-    );
+    this.say(gained.map((a) => `🏆 ${a.perk.name}! ${a.perk.describe()}`).join(' · '));
   }
 
   private say(text: string): void {

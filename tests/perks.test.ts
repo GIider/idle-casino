@@ -41,9 +41,8 @@ describe('coin flip perks', () => {
   it('Heat Wave raises the streak cap and softens losses; Raised Ceiling lifts the payout cap', () => {
     expect(streakCap({})).toBe(10);
     expect(streakCap({ perk_hotHand: 2 })).toBe(20);
-    expect(nextStreak(10, -1, { perk_hotHand: 3 })).toBe(5);
     expect(nextStreak(10, -1, { perk_hotHand: 2 })).toBe(0);
-    expect(maxPayout(coin, 0, { perk_ceilingBreaker: 3 })).toBe(maxPayout(coin, 0) * 2);
+    expect(maxPayout(coin, 0, { perk_ceilingBreaker: 1 })).toBe(maxPayout(coin, 0) * 1.5);
   });
 });
 
@@ -61,7 +60,7 @@ describe('slots perks', () => {
       const reels = (r.view as Extract<PlayView, { kind: 'slots' }>).reels;
       return reels.filter((x) => x === 4).length === 1 && new Set(reels).size === 3;
     };
-    expect(find('slots', { perk_sevenHeaven: 3 }, sevens).mult).toBe(1);
+    expect(find('slots', { perk_sevenHeaven: 3 }, sevens).mult).toBe(0.5);
   });
 });
 
@@ -100,7 +99,7 @@ describe('blackjack perks', () => {
     const natural = (x: Round) => bj(x).dealer.length === 2 && bj(x).outcome === 'lose' && x.mult === 0 && /Dealer blackjack/.test(x.detail);
     find('blackjack', {}, natural);
     const r = find('blackjack', { perk_loseCards2: 3 }, (x) => /even money/.test(x.detail));
-    expect(r.mult).toBe(1.5);
+    expect(r.mult).toBe(1.25);
   });
   it('Card Counter never busts and Dealer Tilt hands the dealer more cards', () => {
     const rng = mulberry32(7);

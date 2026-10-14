@@ -110,7 +110,7 @@ export function maxBet(def: TableDef, prestige: number): number {
 }
 
 export function maxPayout(def: TableDef, prestige: number, levels: Record<string, number> = {}): number {
-  const ceiling = levels.perk_ceilingBreaker ? 1 + RAISED_CEILING[levels.perk_ceilingBreaker - 1] : 1;
+  const ceiling = levels.perk_ceilingBreaker ? 1 + RAISED_CEILING : 1;
   return def.baseMaxPayout * MAX_PAYOUT_GROWTH ** prestige * ceiling;
 }
 
@@ -158,13 +158,13 @@ export function prestigeThreshold(def: TableDef, prestige: number, bonus: Casino
 
 export function luckChance(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {
   // Card Sharp (blackjack perk) amplifies Lucky Charm itself.
-  const sharp = levels.perk_loseCards4 ? CARD_SHARP_LUCK[levels.perk_loseCards4 - 1] : 1;
+  const sharp = levels.perk_loseCards4 ? CARD_SHARP_LUCK : 1;
   return Math.min(0.95, (0.03 * (levels.luck ?? 0) + bonus.luck) * sharp);
 }
 
 /** Longest win streak that still adds winnings; Heat Wave (coin flip perk) raises it. */
 export function streakCap(levels: Record<string, number>): number {
-  return STREAK_CAP + (levels.perk_hotHand ? HEAT_WAVE_CAP[levels.perk_hotHand - 1] : 0);
+  return STREAK_CAP + (levels.perk_hotHand ? HEAT_WAVE_CAP : 0);
 }
 
 /** Winnings multiplier from the Hot Streak upgrade at the given win streak. */
@@ -235,11 +235,11 @@ export interface Outcome {
 
 /**
  * Win streak after a round with the given net result: wins extend it, losses reset it, pushes keep it.
- * Heat Wave (levels) raises the cap, and at tier 3 a loss only halves the streak.
+ * Heat Wave (levels) raises the cap.
  */
 export function nextStreak(streak: number, net: number, levels: Record<string, number> = {}): number {
   if (net > 0) return Math.min(streakCap(levels), streak + 1);
-  if (net < 0) return levels.perk_hotHand === 3 ? Math.floor(streak / 2) : 0;
+  if (net < 0) return 0;
   return streak;
 }
 
@@ -260,7 +260,7 @@ export function resolvePlay(
     result = def.play(rng, levels);
     rerolled = true;
     // Double Luck: a second re-roll at a fraction of the chance.
-    const second = levels.perk_secondWind ? luck * DOUBLE_LUCK_FRACTION[levels.perk_secondWind - 1] : 0;
+    const second = levels.perk_secondWind ? luck * DOUBLE_LUCK_FRACTION : 0;
     if (result.mult < 1 && second > 0 && rng() < second) result = def.play(rng, levels);
   }
 

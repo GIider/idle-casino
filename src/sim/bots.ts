@@ -4,7 +4,7 @@ import { mulberry32 } from '../core/rng';
 import { FINAL_TABLE, TABLES, TABLE_IDS } from '../tables';
 import { allUpgrades, prestigeThreshold, upgradeCost } from '../core/economy';
 import { CASINO_UPGRADES } from '../core/casino';
-import { ACHIEVEMENTS, maxTier } from '../core/achievements';
+import { ACHIEVEMENTS } from '../core/achievements';
 import type { TableId } from '../core/types';
 import type { Rng } from '../core/types';
 
@@ -78,9 +78,9 @@ export interface RunOptions {
   sampleSec?: number;
   /** Upgrades the bot never buys, as `table:id` or a bare upgrade id (every table). */
   skipUpgrades?: string[];
-  /** Achievement ids whose perks are held at tier 0 (absent). */
+  /** Achievement ids whose perks are held locked (absent). */
   lockedAchievements?: string[];
-  /** Achievement ids whose perks are held at max tier from the start. */
+  /** Achievement ids whose perks are unlocked from the start. */
   grantedAchievements?: string[];
   /** Keep playing past the ascension threshold (for achievement timing). */
   ignoreAscension?: boolean;
@@ -102,7 +102,7 @@ export interface RunResult {
   progress: number;
   /** Minutes at which each table unlocked. */
   unlockedAt: Partial<Record<TableId, number>>;
-  /** Achievement id -> minutes at which tiers 1..n were reached. */
+  /** Achievement id -> minutes at which the achievement unlocked (a single entry). */
   achievementAt: Record<string, number[]>;
   events: SimEvent[];
   samples: SimSample[];
@@ -126,7 +126,7 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
   const samples: SimSample[] = [];
   const unlockedAt: RunResult['unlockedAt'] = {};
   const achievementAt: RunResult['achievementAt'] = {};
-  const tierSeen: Record<string, number> = {};
+  const seenAt = new Set<string>(grantedAchievements);
   let ascendedAt: number | null = null;
   let shopCompleteAt: number | null = null;
   let ascensionsToComplete: number | null = null;
@@ -135,7 +135,7 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
     for (const id of locked) {
       const p = g.state.achievements[id];
       if (p) {
-        p.tier = 0;
+        p.unlocked = false;
         p.count = 0;
         p.best = 0;
         p.run = 0;
@@ -144,7 +144,7 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
   };
   for (const id of grantedAchievements) {
     const def = ACHIEVEMENTS.find((a) => a.id === id);
-    if (def && g.state.achievements[id]) g.state.achievements[id].tier = maxTier(def);
+    if (def && g.state.achievements[id]) g.state.achievements[id].unlocked = true;
   }
   const progress = () => Math.log10(Math.max(1, g.ascensionMoney()) / 5e8 / 5 ** g.state.casino.ascensions);
 
@@ -163,13 +163,12 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
     }
     if (step % checkEvery !== 0) continue;
 
-    // Achievement tiers reached since the last check.
+    // Achievements unlocked since the last check.
     for (const [id, p] of Object.entries(g.state.achievements)) {
-      const seen = tierSeen[id] ?? (grantedAchievements.includes(id) ? p.tier : 0);
-      if (p.tier > seen) {
-        (achievementAt[id] ??= []).push(t);
-        tierSeen[id] = p.tier;
-        events.push({ t, kind: 'achievement', label: `${id} T${p.tier}` });
+      if (p.unlocked && !seenAt.has(id)) {
+        seenAt.add(id);
+        achievementAt[id] = [t];
+        events.push({ t, kind: 'achievement', label: id });
       }
     }
     for (const id of TABLE_IDS) {
@@ -323,7 +322,7 @@ export function upgradeMarginals(policy: BotPolicy, seeds: number[], ids: string
   });
 }
 
-/** Minutes an achievement's perk saves: the run with it locked out minus the run with it at max tier from the start. */
+/** Minutes an achievement's perk saves: the run with it locked out minus the run with it unlocked from the start. */
 export function perkMarginals(policy: BotPolicy, seeds: number[], ids: string[], cap = 150): MarginalRow[] {
   return ids.map((id) => {
     const locked = medianScore(runSeeds(policy, seeds, { maxMinutes: cap, lockedAchievements: [id] }), cap);

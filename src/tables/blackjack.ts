@@ -86,7 +86,7 @@ export const blackjack: TableDef = {
   play(rng, levels) {
     let result = playRound(rng, levels);
     // Second Hand: a lost hand may be redealt for free.
-    const again = levels.perk_loseCards5 ? SECOND_HAND_CHANCE[levels.perk_loseCards5 - 1] : 0;
+    const again = levels.perk_loseCards5 ? SECOND_HAND_CHANCE : 0;
     if (result.mult < 1 && again > 0 && rng() < again) {
       const redeal = playRound(rng, levels);
       result = { ...redeal, detail: `🔁 ${redeal.detail}` };
@@ -102,14 +102,14 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   const counter = levels.perk_collect_blackjack ?? 0;
 
   // Rich Shoe skews the player's draws toward tens; the dealer draws from the fair shoe.
-  const tenWeight = levels.perk_naturalBorn ? TEN_WEIGHT[levels.perk_naturalBorn - 1] : 4;
+  const tenWeight = levels.perk_naturalBorn ? TEN_WEIGHT : 4;
   const drawPlayer = () => draw(rng, tenWeight);
 
   const player = rng() < 0.05 * sleeve ? [1, 10] : [drawPlayer(), drawPlayer()];
   const dealer = [draw(rng), draw(rng)];
   const upcard = dealer[0] === 1 ? 11 : dealer[0];
   // Perfect Pairs: a side bet on the first two cards, paid whatever the hand does.
-  const pairBonus = levels.perk_winCards6 && player[0] === player[1] ? PAIR_BONUS[levels.perk_winCards6 - 1] : 0;
+  const pairBonus = levels.perk_winCards6 && player[0] === player[1] ? PAIR_BONUS : 0;
 
   const view = (outcome: BlackjackOutcome, insured = false): PlayView => ({
     kind: 'blackjack',
@@ -129,7 +129,7 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   if (playerNatural) return done({ mult: 2.5, detail: '🃏 Blackjack!', view: view('natural') });
   if (dealerNatural) {
     // Even Money: the dealer's natural no longer beats you outright.
-    const even = levels.perk_loseCards2 ? EVEN_MONEY[levels.perk_loseCards2 - 1] : 0;
+    const even = levels.perk_loseCards2 ? EVEN_MONEY : 0;
     if (even > 0) return done({ mult: even, detail: '🃏 Dealer blackjack — even money', view: view('push') });
     return done({ mult: 0, detail: '🃏 Dealer blackjack', view: view('lose') });
   }
@@ -138,14 +138,14 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   const surrender = levels.perk_winStreak ?? 0;
   if (surrender > 0 && upcard >= 10 && !player.includes(1)) {
     const t = total(player);
-    if (t >= SURRENDER_FLOOR[surrender - 1] && t <= 16) {
+    if (t >= SURRENDER_FLOOR && t <= 16) {
       const v = view('lose');
       return done({ mult: 0.5, detail: `🃏 Surrendered ${t}`, view: { ...v, surrendered: true } as PlayView });
     }
   }
 
   // Hole-Card Peek: knowing the dealer already stands on 17+, you keep hitting until you can beat it.
-  const peekChance = levels.perk_winCards5 ? PEEK_CHANCE[levels.perk_winCards5 - 1] : 0;
+  const peekChance = levels.perk_winCards5 ? PEEK_CHANCE : 0;
   const dealerStart = total(dealer);
   const peeked = peekChance > 0 && dealerStart >= 17 && dealerStart <= 20 && rng() < peekChance ? dealerStart : 0;
 
@@ -159,7 +159,6 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   const hit = (cards: number[]): boolean => {
     let next = drawPlayer();
     if (counter > 0 && total([...cards, next]) > 21) {
-      if (counter < 2) return false;
       next = drawPlayer();
       if (total([...cards, next]) > 21) return false;
     }
@@ -171,12 +170,12 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   };
   const dealerPlay = (p: number): number => {
     // Dealer Tilt: the dealer keeps hitting past 17.
-    const below = levels.perk_loseCards6 ? TILT_HITS_BELOW[levels.perk_loseCards6 - 1] : 17;
+    const below = levels.perk_loseCards6 ? TILT_HITS_BELOW : 17;
     const run = () => {
       while (total(dealer) < below) dealer.push(draw(rng));
     };
     run();
-    const mulligan = levels.perk_loseCards3 ? MULLIGAN_CHANCE[levels.perk_loseCards3 - 1] : 0;
+    const mulligan = levels.perk_loseCards3 ? MULLIGAN_CHANCE : 0;
     const d = total(dealer);
     if (mulligan > 0 && dealer.length > 2 && d <= 21 && p <= 21 && p < d && rng() < mulligan) {
       // Dealer Mulligan: the card that beat you is burned.
@@ -191,7 +190,7 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   const dd = levels.perk_winCards2 ?? 0;
   if (dd > 0) {
     const t = total(player);
-    if (t >= DOUBLE_FLOOR[dd - 1] && t <= 11) {
+    if (t >= DOUBLE_FLOOR && t <= 11) {
       player.push(drawPlayer());
       const p = total(player);
       const d = dealerPlay(p);
@@ -208,7 +207,7 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
 
   // Free Split: a pair becomes two hands and the second plays on the house.
   const split = levels.perk_winCards3 ?? 0;
-  if (split > 0 && player[0] === player[1] && splitAllowed(player[0], split)) {
+  if (split > 0 && player[0] === player[1] && splitAllowed(player[0])) {
     const second = [player[1], drawPlayer()];
     player.pop();
     player.push(drawPlayer());
@@ -234,9 +233,9 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   playHand(player);
   let p = total(player);
   // Burn Card: a busting card is discarded and drawn again.
-  let tries = levels.perk_bustOut ? BURN_TRIES[levels.perk_bustOut - 1] : 0;
+  let tries = levels.perk_bustOut ? BURN_TRIES : 0;
   while (p > 21 && tries-- > 0) {
-    if (rng() < BURN_CHANCE[(levels.perk_bustOut ?? 1) - 1]) {
+    if (rng() < BURN_CHANCE) {
       player.pop();
       player.push(drawPlayer());
       p = total(player);
@@ -252,7 +251,7 @@ function playRound(rng: Rng, levels: Record<string, number>): PlayResult {
   }
 
   // Charlie: enough cards without busting wins on the spot.
-  const charlie = levels.perk_winCards4 ? CHARLIE_CARDS[levels.perk_winCards4 - 1] : 0;
+  const charlie = levels.perk_winCards4 ? CHARLIE_CARDS : 0;
   if (charlie > 0 && player.length >= charlie) {
     return done({ mult: CHARLIE_MULT, detail: `🃏 Charlie! ${player.length} cards, ${p}`, view: { ...view('win'), charlie: true } as PlayView });
   }

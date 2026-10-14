@@ -35,8 +35,8 @@ export const slots: TableDef = {
   play(rng, levels) {
     const weights = slotWeights(levels.loaded ?? 0);
     const spin = () => [0, 1, 2].map(() => pickWeighted(rng, weights));
-    const wild = levels.perk_diamondMine ? WILD_REACH[levels.perk_diamondMine - 1] : -1;
-    const jackpot = levels.perk_collect_slots ? JACKPOT_SEED[levels.perk_collect_slots - 1] : 0;
+    const wild = levels.perk_diamondMine ? WILD_REACH : -1;
+    const jackpot = levels.perk_collect_slots ? JACKPOT_SEED : 0;
     const isTriple = (r: number[]) => r[0] === r[1] && r[1] === r[2];
 
     /** Payout multiple of one set of reels, wild diamonds included. */
@@ -53,7 +53,7 @@ export const slots: TableDef = {
 
     let reels = spin();
     // Hold & Respin: now and then the cherries stay and everything else spins again.
-    const hold = levels.perk_cherrySeason ? HOLD_CHANCE[levels.perk_cherrySeason - 1] : 0;
+    const hold = levels.perk_cherrySeason ? HOLD_CHANCE : 0;
     if (hold > 0 && reels.some((r) => r === 0) && !isTriple(reels) && rng() < hold) {
       const next = spin();
       reels = reels.map((r, k) => (r === 0 ? r : next[k]));
@@ -63,7 +63,7 @@ export const slots: TableDef = {
     let cascaded = false;
     let freed = false;
     // Cascade: a three of a kind chains into free spins until one misses.
-    const cascade = levels.perk_tripleCrown ? CASCADE_SPINS[levels.perk_tripleCrown - 1] : 0;
+    const cascade = levels.perk_tripleCrown ? CASCADE_SPINS : 0;
     if (cascade > 0 && isTriple(reels)) {
       for (let i = 0; i < cascade; i++) {
         const extra = spin();
@@ -74,14 +74,14 @@ export const slots: TableDef = {
       }
     }
     // Free Spins: a 2x+ win earns spins that pay in full.
-    const free = levels.perk_hotStreak ? FREE_SPINS[levels.perk_hotStreak - 1] : 0;
+    const free = levels.perk_hotStreak ? FREE_SPINS : 0;
     if (free > 0 && mult >= 2) {
       for (let i = 0; i < free; i++) mult += line(spin());
       freed = true;
       notes.push(`${free} free spin${free > 1 ? 's' : ''}`);
     }
     // Scatter Sevens: every seven anywhere pays.
-    const scatter = levels.perk_sevenHeaven ? SCATTER_PAY[levels.perk_sevenHeaven - 1] : 0;
+    const scatter = levels.perk_sevenHeaven ? SCATTER_PAY : 0;
     const sevens = reels.filter((r) => r === 4).length;
     if (scatter > 0 && sevens > 0) {
       mult += scatter * sevens;

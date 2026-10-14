@@ -84,7 +84,7 @@
           <div class="legend" id="walletLegend"></div>
         </div>
         <div>
-          <p class="hint">Events per table: ▲ unlock, │ prestige, ▪ achievement tier, ★ ascension reached. Hover for details.</p>
+          <p class="hint">Events per table: ▲ unlock, │ prestige, ▪ achievement unlock, ★ ascension reached. Hover for details.</p>
           <div class="chartwrap"><canvas id="events"></canvas><div class="tip" id="tip-events"></div></div>
         </div>
       </div>
@@ -93,10 +93,9 @@
     <div class="panel">
       <div class="bar"><h2 style="margin:0">Achievement unlock times</h2>
         <label>Table <select id="achTable"></select></label>
-        <label>Tier <select id="achTier"><option value="0">All tiers</option><option value="1">Rare (T1)</option><option value="2">Epic (T2)</option><option value="3">Legendary (T3)</option></select></label>
         <label>Sort <select id="achSort"><option value="time">Fastest first</option><option value="name">Name</option></select></label>
       </div>
-      <p class="hint">Median minutes to reach each tier, per bot (T1 / T2 / T3). “–” = not reached within the run in at least half the seeds. Hover a cell for min–max and how many seeds got there.</p>
+      <p class="hint">Median minutes to unlock each achievement, per bot. “–” = not reached within the run in at least half the seeds. Hover a cell for min–max and how many seeds got there.</p>
       <div class="scroll" id="ach"><div class="empty">Run the simulation to see results.</div></div>
     </div>
     <script type="module" src="/src/sim/main.ts"></script>

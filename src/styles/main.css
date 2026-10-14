@@ -1189,9 +1189,4 @@ small {
 .ach-title { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .ach-sub, .ach-next-gain { color: var(--muted); text-transform: capitalize; }
 .ach-next-gain { text-transform: none; font-size: 11px; }
-.ach-pips { display: inline-flex; gap: 4px; flex: none; }
-.ach-pip { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--muted); }
-.ach-pip.on.r0 { background: var(--cyan); border-color: var(--cyan); }
-.ach-pip.on.r1 { background: var(--pink); border-color: var(--pink); }
-.ach-pip.on.r2 { background: var(--gold); border-color: var(--gold); }
 @media (max-width: 800px) { .ach-grid { grid-template-columns: 1fr; } }

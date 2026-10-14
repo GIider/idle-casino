@@ -64,7 +64,7 @@ export const roulette: TableDef = {
     },
   ],
   play(rng, levels) {
-    const doubleChance = levels.perk_wheelSpinner ? DOUBLE_SPIN_CHANCE[levels.perk_wheelSpinner - 1] : 0;
+    const doubleChance = levels.perk_wheelSpinner ? DOUBLE_SPIN_CHANCE : 0;
     const first = spinOnce(rng, levels);
     // Double Spin: the wheel rolls again and both spins pay on the same stake.
     if (doubleChance > 0 && rng() < doubleChance) {
@@ -81,7 +81,7 @@ export const roulette: TableDef = {
 
 /** Draws a pocket: uniform, unless the Biased Wheel capstone favours 16-18. */
 function drawPocket(rng: Rng, levels: Record<string, number>): number {
-  const bias = levels.perk_collect_roulette ? BIASED_WHEEL[levels.perk_collect_roulette - 1] : 1;
+  const bias = levels.perk_collect_roulette ? BIASED_WHEEL : 1;
   if (bias === 1) return Math.floor(rng() * 37);
   const weights = Array.from({ length: 37 }, (_, n) => (Math.abs(n - LUCKY_NUMBER) <= 1 ? bias : 1));
   return pickWeighted(rng, weights);
@@ -99,10 +99,10 @@ function spinOnce(rng: Rng, levels: Record<string, number>): PlayResult {
   if (levels.bet_number) bets.push('number');
   const view = { kind: 'roulette' as const, pocket, bets };
   // Green Machine: zero is a win on every bet.
-  const green = pocket === 0 && levels.perk_zeroHero ? GREEN_MACHINE_MULT[levels.perk_zeroHero - 1] : 0;
+  const green = pocket === 0 && levels.perk_zeroHero ? GREEN_MACHINE_MULT : 0;
   const magnetHit = Math.abs(pocket - LUCKY_NUMBER) <= (levels.magnet ?? 0);
-  const bleed = levels.perk_colourRun ? BLEED_POCKETS.slice(0, BLACK_BLEED[levels.perk_colourRun - 1]) : [];
-  const dozenTop = 12 + (levels.perk_dozenDigger ? DOZEN_CREEP[levels.perk_dozenDigger - 1] : 0);
+  const bleed = levels.perk_colourRun ? BLEED_POCKETS.slice(0, BLACK_BLEED) : [];
+  const dozenTop = 12 + (levels.perk_dozenDigger ? DOZEN_CREEP : 0);
   const returns = bets.map((bet) => {
     switch (bet) {
       case 'dozen':
@@ -115,6 +115,6 @@ function spinOnce(rng: Rng, levels: Record<string, number>): PlayResult {
   });
   let mult = returns.reduce((sum, m) => sum + m, 0) / bets.length;
   // House Chip: a free chip on 17 that doesn't take a share of the stake.
-  if (levels.perk_luckySeventeen && magnetHit) mult += HOUSE_CHIP[levels.perk_luckySeventeen - 1] * 36;
+  if (levels.perk_luckySeventeen && magnetHit) mult += HOUSE_CHIP * 36;
   return { mult, detail, view };
 }

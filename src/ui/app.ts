@@ -184,7 +184,7 @@ export class App {
       this.updateTiles(g);
       const { earned, total } = this.achPage.totals();
       this.achFill.style.transform = `scaleX(${total ? earned / total : 0})`;
-      setText(this.achLabel, `${earned} / ${total} tiers`);
+      setText(this.achLabel, `${earned} / ${total}`);
       const ready = TABLE_IDS.some((id) => g.canPrestige(id));
       const title = `${ready ? '● ' : ''}Idle Casino`;
       if (document.title !== title) document.title = title;

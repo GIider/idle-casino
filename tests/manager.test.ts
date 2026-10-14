@@ -147,8 +147,8 @@ describe('blackjack card-count achievements', () => {
   const out = (v: PlayView): Outcome => ({ bet: 1, payout: 0, net: 0, detail: '', view: v, rerolled: false, capped: false });
 
   it('counts wins and dealer losses by player card count', () => {
-    const ach: Record<string, { count: number; run: number; best: number; tier: number }> = {};
-    for (const a of ACHIEVEMENTS) ach[a.id] = { count: 0, run: 0, best: 0, tier: 0 };
+    const ach: Record<string, { count: number; run: number; best: number; unlocked: boolean }> = {};
+    for (const a of ACHIEVEMENTS) ach[a.id] = { count: 0, run: 0, best: 0, unlocked: false };
     observeRound(ach, 'blackjack', out(view(2, 'natural')));
     observeRound(ach, 'blackjack', out(view(3, 'win')));
     observeRound(ach, 'blackjack', out(view(3, 'lose')));

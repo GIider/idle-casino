@@ -122,8 +122,8 @@ export interface AchievementProgress {
   run: number;
   /** Streak achievements: longest run. */
   best: number;
-  /** Rarity tier reached (0 = locked); also the level of the achievement's perk. */
-  tier: number;
+  /** Goal met: the achievement's perk is active. Permanent. */
+  unlocked: boolean;
 }
 
 /** Casino-wide meta progression, kept across ascensions. */

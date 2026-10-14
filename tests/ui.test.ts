@@ -68,7 +68,7 @@ describe('achievements page', () => {
     const expected = visible.reduce((n, id) => n + achievementsFor(id).length, 0);
     const titles = host.querySelectorAll('.ach-section .ach-card');
     expect(titles.length).toBe(expected);
-    expect(host.querySelector('.ach-summary')!.textContent).toContain(' tiers earned');
+    expect(host.querySelector('.ach-summary')!.textContent).toContain(' achievements unlocked');
 
     const done = Array.from(host.querySelectorAll('.ach-filters button')).find((b) => b.textContent === 'Completed') as HTMLButtonElement;
     done.click();

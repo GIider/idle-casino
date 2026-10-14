@@ -1,6 +1,6 @@
 import { BOTS, TARGET_MINUTES, median, runBot, type RunResult } from './bots';
 import type { SimRequest, SimResponse } from './worker';
-import { ACHIEVEMENTS, maxTier, RARITIES } from '../core/achievements';
+import { ACHIEVEMENTS } from '../core/achievements';
 import { fmt } from '../ui/format';
 
 const TABLE_NAMES = ['coinflip', 'slots', 'roulette', 'blackjack'] as const;
@@ -52,7 +52,7 @@ for (const b of BOTS) botPick.add(new Option(`${b.id} — ${b.label}`, b.id));
 const achTable = $<HTMLSelectElement>('achTable');
 achTable.add(new Option('All tables', ''));
 for (const t of TABLE_NAMES) achTable.add(new Option(t, t));
-for (const el of [botPick, achTable, $('achTier'), $('achSort'), $('bands')]) el.onchange = drawAll;
+for (const el of [botPick, achTable, $('achSort'), $('bands')]) el.onchange = drawAll;
 
 // ---- running ----------------------------------------------------------------------------------
 runBtn.onclick = () => {
@@ -376,19 +376,17 @@ function drawAchievements(): void {
   const ids = activeBots();
   if (ids.length === 0) { host.innerHTML = '<div class="empty">Run the simulation to see results.</div>'; return; }
   const tableFilter = $<HTMLSelectElement>('achTable').value;
-  const tierFilter = Number($<HTMLSelectElement>('achTier').value);
   const sort = $<HTMLSelectElement>('achSort').value;
   const defs = ACHIEVEMENTS.filter((a) => !tableFilter || a.table === tableFilter);
-  const cell = (id: string, achId: string, tier: number) => {
+  const cell = (id: string, achId: string) => {
     const runs = results.get(id)!;
-    const xs = runs.map((r) => r.achievementAt[achId]?.[tier] ?? Infinity);
+    const xs = runs.map((r) => r.achievementAt[achId]?.[0] ?? Infinity);
     const reached = xs.filter(Number.isFinite) as number[];
     const med = median(xs);
     return { med, reached: reached.length, total: runs.length, min: reached.length ? Math.min(...reached) : null, max: reached.length ? Math.max(...reached) : null };
   };
-  const first = (a: (typeof ACHIEVEMENTS)[number]) => Math.min(...ids.map((id) => cell(id, a.id, 0).med));
+  const first = (a: (typeof ACHIEVEMENTS)[number]) => Math.min(...ids.map((id) => cell(id, a.id).med));
   const rows = defs.slice().sort((a, b) => (sort === 'name' ? a.id.localeCompare(b.id) : first(a) - first(b)));
-  const tiers = tierFilter ? [tierFilter - 1] : [0, 1, 2];
   const head = `<thead><tr><th>Achievement</th>${ids.map((id) => `<th title="${botLabel(id)}"><i style="background:${botColor(id)};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px"></i>${id}</th>`).join('')}</tr></thead>`;
   let lastTable = '';
   const body = rows
@@ -397,12 +395,9 @@ function drawAchievements(): void {
       lastTable = a.table;
       const cells = ids
         .map((id) => {
-          const parts = tiers.filter((t) => t < maxTier(a)).map((t) => {
-            const c = cell(id, a.id, t);
-            const tip = `${RARITIES[t]}: ${c.reached}/${c.total} seeds reached` + (c.min !== null ? `; min ${c.min.toFixed(1)}, max ${c.max!.toFixed(1)} min` : '');
-            return `<span class="t${t + 1}" title="${tip}">${Number.isFinite(c.med) ? c.med.toFixed(0) : '–'}</span>`;
-          });
-          return `<td>${parts.join(' / ')}</td>`;
+          const c = cell(id, a.id);
+          const tip = `${c.reached}/${c.total} seeds reached` + (c.min !== null ? `; min ${c.min.toFixed(1)}, max ${c.max!.toFixed(1)} min` : '');
+          return `<td><span title="${tip}">${Number.isFinite(c.med) ? c.med.toFixed(0) : '–'}</span></td>`;
         })
         .join('');
       return `${sep}<tr><td title="${a.goal}">${a.id}<span class="tag">${a.table}</span></td>${cells}</tr>`;
