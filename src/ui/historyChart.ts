@@ -12,13 +12,12 @@ export class HistoryChart {
   readonly root: HTMLElement;
   private canvas: HTMLCanvasElement;
   private info: HTMLElement;
-  private range: Range = 'all';
+  private range: Range = 'm10';
   private hover: number | null = null;
   private key = '';
   private data: [number, number][] = [];
   private marks: number[] = [];
   private btns: Record<Range, HTMLButtonElement>;
-  private step = 1;
   private gameView: GameHistoryView;
   private combosView: SlotsCombosView | BlackjackHandsView | null;
   private tabs: Record<Mode, HTMLButtonElement | undefined>;
@@ -119,12 +118,11 @@ export class HistoryChart {
     this.key = key;
     this.data = series.slice();
     this.marks = history.marks;
-    this.step = history.rate.step;
     this.draw();
   }
 
   private visible(): [number, number][] {
-    return visiblePoints(this.data, this.range, this.step);
+    return visiblePoints(this.data, this.range);
   }
 
   private draw(): void {

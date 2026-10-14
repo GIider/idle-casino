@@ -112,6 +112,12 @@ export function recordRate(h: History, seconds: number, plays: number, lifetimeP
   h.rateFrom = [h.clock, lifetimeProfit];
 }
 
+/** Advances the clock over time that wasn't live play (offline) without sampling, so it can't spike the rate chart. */
+export function skipRate(h: History, seconds: number, lifetimeProfit: number): void {
+  h.clock += seconds;
+  h.rateFrom = [h.clock, lifetimeProfit];
+}
+
 export function markPrestige(h: Series, plays: number): void {
   h.marks.push(plays);
   if (h.marks.length > 50) h.marks.shift();

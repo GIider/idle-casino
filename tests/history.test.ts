@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_HISTORY_POINTS, compact, newHistory, normalizeHistory, recordSample } from '../src/core/history';
+import { MAX_HISTORY_POINTS, compact, newHistory, normalizeHistory, recordSample, skipRate } from '../src/core/history';
 import { Game } from '../src/core/game';
 import { createInitialState, normalizeState } from '../src/core/state';
 import { exportSave, importSave } from '../src/core/save';
@@ -7,6 +7,14 @@ import { mulberry32 } from '../src/core/rng';
 import { TABLES, TABLE_IDS } from '../src/tables';
 
 describe('history series', () => {
+  it('skipRate advances the clock without adding a rate sample', () => {
+    const h = newHistory();
+    skipRate(h, 3600, 5000);
+    expect(h.rate.points).toEqual([[0, 0]]);
+    expect(h.clock).toBe(3600);
+    expect(h.rateFrom).toEqual([3600, 5000]);
+  });
+
   it('stays bounded and keeps first and last points', () => {
     const h = newHistory();
     for (let i = 1; i <= 5000; i++) recordSample(h, i, i * 2);
