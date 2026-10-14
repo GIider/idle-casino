@@ -39,7 +39,7 @@ export class App {
   private handlers: AppHandlers;
   private sides = new Map<TableId, HTMLElement>();
   private qualityBtn: HTMLButtonElement;
-  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; fill: HTMLElement; wallet: HTMLElement; money: HTMLElement }>();
+  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; fill: HTMLElement; wallet: HTMLElement; money: HTMLElement; cost: HTMLElement }>();
   private chips = new Map<TableId, HTMLElement>();
   private slowAt = 0;
 
@@ -88,13 +88,14 @@ export class App {
       const def = TABLES[id];
       const lvl = h('small', { text: '' });
       const sub = h('small', { class: 'tile-rate', text: '' });
+      const cost = h('small', { class: 'tile-cost', text: '' });
       const icon = h('span', { class: 'tile-icon', text: def.icon });
       const fill = h('div', { class: 'bar-fill' });
       const bar = h('div', { class: 'bar tile-bar' }, fill);
       const money = h('span', { class: 'money', text: '0' });
       const wallet = h('span', { class: 'tile-wallet', title: `${def.currency.name} in the ${def.name} wallet` }, h('span', { text: def.currency.icon }), money);
-      const root = h('button', { class: 'tab tile', title: def.name, onclick: () => this.select(id) }, icon, bar, wallet, lvl, sub);
-      this.tiles.set(id, { root, sub, lvl, icon, fill, wallet, money });
+      const root = h('button', { class: 'tab tile', title: def.name, onclick: () => this.select(id) }, icon, bar, wallet, lvl, sub, cost);
+      this.tiles.set(id, { root, sub, lvl, icon, fill, wallet, money, cost });
       this.tabs.set(id, root);
       if (previousTable(id)) {
         const chip = h('span', { class: 'link-chip', text: '→' });
@@ -265,6 +266,12 @@ export class App {
       }
       toggleClass(t.wallet, 'hidden', !seen || !ts.unlocked);
       setText(t.money, fmt(ts.wallet));
+      const showCost = seen && ts.unlocked && !!previousTable(id);
+      toggleClass(t.cost, 'hidden', !showCost);
+      if (showCost) {
+        setText(t.cost, this.stakeNote(g, id));
+        t.cost.title = `Consumes ${TABLES[previousTable(id)!].currency.name} from the ${TABLES[previousTable(id)!].name} wallet`;
+      }
       setText(t.icon, seen ? TABLES[id].icon : '?');
       setText(t.lvl, !seen ? '' : ts.unlocked ? `Prestige ${ts.prestige}` : 'Locked');
       setText(
@@ -278,6 +285,14 @@ export class App {
             : `Unlock: ${fmt(TABLES[id].unlockCost)}`,
       );
     }
+  }
+
+  /** "−N 🪙 / min": what the table consumes of the previous table's currency, or "" at the first table. */
+  private stakeNote(g: Game, id: TableId): string {
+    const prev = previousTable(id);
+    if (!prev) return '';
+    const perMin = Math.round(g.stakeRate(id) * 60);
+    return `−${fmt(perMin)} ${TABLES[prev].currency.icon} / min`;
   }
 
   private doExport(): void {

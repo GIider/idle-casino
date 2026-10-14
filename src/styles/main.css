@@ -695,6 +695,13 @@ small {
   font-size: 34px;
 }
 
+.tile-cost {
+  color: var(--red, #e07070);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  display: block;
+}
+
 .tile-rate {
   color: var(--green);
   font-variant-numeric: tabular-nums;
@@ -920,6 +927,10 @@ small {
 .combo.triple { border-color: var(--gold); }
 .combo.triple { box-shadow: 0 0 6px rgba(255, 200, 80, .4); }
 
+.feed-row { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
+.feed-row small { white-space: nowrap; opacity: .8; }
+.feed-row input[type=range] { flex: 1 1 auto; min-width: 60px; accent-color: var(--gold); }
+.feed-row .feed-value { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13px; }
 .big-stats { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .stat-tile.big { padding: 12px 14px; transition: box-shadow .15s, border-color .15s; }
 .stat-tile.big .big-value { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
@@ -989,7 +1000,7 @@ small {
   .tiles > .tab.tile .tile-icon { font-size: 22px; }
   .tiles > .tab.tile .tile-bar { order: 5; flex: 0 0 100%; width: 100%; margin: 3px 0 0; height: 5px; }
   .tiles > .tab.tile small { font-size: 11px; }
-  .tiles > .tab.tile .tile-rate { flex: 0 0 100%; }
+  .tiles > .tab.tile .tile-rate, .tiles > .tab.tile .tile-cost { flex: 0 0 100%; }
   .rightcol { gap: 8px; }
 }
 @media (min-width: 721px) and (max-height: 760px) {
@@ -1176,6 +1187,7 @@ small {
     'icon name lvl'
     'wallet wallet wallet'
     'sub sub sub'
+    'cost cost cost'
     'bar bar bar';
   align-items: center;
   justify-items: start;
@@ -1186,13 +1198,15 @@ small {
 }
 .tiles > .tab.tile > .tile-icon { grid-area: icon; font-size: 26px; line-height: 1; }
 .tiles > .tab.tile > strong { grid-area: name; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.tiles > .tab.tile > small:not(.tile-rate) { grid-area: lvl; justify-self: end; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.tiles > .tab.tile > small:not(.tile-rate):not(.tile-cost) { grid-area: lvl; justify-self: end; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .tiles > .tab.tile > .tile-wallet { grid-area: wallet; justify-self: start; }
 .tiles > .tab.tile > .tile-wallet.hidden { display: none; }
 .tiles > .tab.tile > .tile-rate { grid-area: sub; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tiles > .tab.tile > .tile-cost { grid-area: cost; font-size: 12px; color: var(--red); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tiles > .tab.tile > .tile-cost.hidden { display: none; }
 .tiles > .tab.tile > .tile-bar { grid-area: bar; width: 100%; order: 0; margin: 4px 0 0; height: 5px; }
 /* The casino tile's status ("Ascend ★", chip count) goes on its own row so it never squeezes the name. */
-.tiles > .tab.tile.casino-tile > small:not(.tile-rate) { grid-area: sub; justify-self: start; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tiles > .tab.tile.casino-tile > small:not(.tile-rate):not(.tile-cost) { grid-area: sub; justify-self: start; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .tile-wallet .money { font-size: 17px; }
 .tile.active .tile-wallet .money { font-size: 17px; }
 

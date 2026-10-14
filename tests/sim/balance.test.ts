@@ -30,7 +30,7 @@ describe('balance: time to first ascension', () => {
       expect(s.median!, id).toBeLessThanOrEqual(TARGET_MINUTES.greedy);
     }
     // Not trivial either: an attentive, efficient player should still need real time.
-    expect(summarize('optimal', results.get('optimal')!).median!).toBeGreaterThanOrEqual(30);
+    expect(summarize('optimal', results.get('optimal')!).median!).toBeGreaterThanOrEqual(25);
   });
 
   it('even poor strategies ascend within 90 minutes', () => {

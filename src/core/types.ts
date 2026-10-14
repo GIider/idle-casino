@@ -19,6 +19,8 @@ export interface TableState {
   streak: number;
   /** Highest wallet reached since the last ascension; prestiging or spending never lowers it. Ascension progress reads it. */
   peakWallet: number;
+  /** Share (0..1) of the previous table's wallet this table may stake from; unused by the first table. */
+  feedShare: number;
 }
 
 /** A bounded, down-sampled series of [x, value] points with vertical event marks at given x positions. */
@@ -180,6 +182,11 @@ export interface TableDef {
   blurb: string;
   /** The table's own currency. */
   currency: { name: string; icon: string };
+  /**
+   * Units of the previous table's currency one unit of bet costs. Winnings are paid out in this table's own
+   * currency. Absent on the first table, which stakes and wins its own currency.
+   */
+  stakeCost?: number;
   /** Price to unlock, paid in the previous table's currency (0 = available from the start). */
   unlockCost: number;
   baseMinBet: number;

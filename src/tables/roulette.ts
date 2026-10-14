@@ -38,6 +38,7 @@ export const roulette: TableDef = {
   icon: '🎡',
   blurb: 'European wheel with a single zero. Starts on red; add the first dozen and number 17 to spread every stake across more bets.',
   currency: { name: 'Plaques', icon: '🔶' },
+  stakeCost: 0.3,
   unlockCost: 7500,
   baseMinBet: 25,
   baseMaxBet: 500,

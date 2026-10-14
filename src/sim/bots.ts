@@ -53,7 +53,7 @@ export const BOTS: BotPolicy[] = [
   { id: 'slow-prestige', label: 'Slow to prestige (waits for 2× the threshold)', buy: 'cheapest', prestige: 'slow', checkEverySec: 1, spendFraction: 0.6 },
   { id: 'never-prestige', label: 'Never prestige (informational)', buy: 'cheapest', prestige: 'never', checkEverySec: 1, spendFraction: 0.6 },
   { id: 'lazy', label: 'Lazy (acts every minute)', buy: 'cheapest', prestige: 'asap', checkEverySec: 60, spendFraction: 0.6 },
-  { id: 'hoarder', label: 'Hoarder (buys only with 100% wallet slack)', buy: 'cheapest', prestige: 'asap', checkEverySec: 1, spendFraction: 0.05 },
+  { id: 'hoarder', label: 'Hoarder (buys only with ~230% wallet slack)', buy: 'cheapest', prestige: 'asap', checkEverySec: 1, spendFraction: 0.3 },
 ];
 
 export interface SimEvent {
@@ -146,7 +146,7 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
     const def = ACHIEVEMENTS.find((a) => a.id === id);
     if (def && g.state.achievements[id]) g.state.achievements[id].unlocked = true;
   }
-  const progress = () => Math.log10(Math.max(1, g.ascensionMoney()) / 5e8 / 5 ** g.state.casino.ascensions);
+  const progress = () => Math.log10(Math.max(1, g.ascensionMoney()) / 5e9 / 5 ** g.state.casino.ascensions);
 
   for (let step = 0; step <= total; step++) {
     if (step > 0) g.tick(dt);

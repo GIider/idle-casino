@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game } from '../src/core/game';
-import { SAVE_VERSION, createInitialState, normalizeState } from '../src/core/state';
+import { DEFAULT_FEED_SHARE, SAVE_VERSION, createInitialState, normalizeState } from '../src/core/state';
 import { DEV_SAVE_KEY, SAVE_KEY, clearSave, exportSave, importSave, loadGame, saveGame } from '../src/core/save';
 import { mulberry32 } from '../src/core/rng';
 import { STARTER_BETS, prestigeWallet } from '../src/core/state';
@@ -74,22 +74,35 @@ describe('Game', () => {
     expect(g.bonusFor('roulette').payout).toBe(1);
   });
 
-  it('keeps each table\'s money separate', () => {
+  it('stakes the previous table\'s currency and pays winnings in its own', () => {
     const g = game();
     g.table('coinflip').wallet = 1e12;
     g.unlock('slots');
-    const slotsWallet = g.table('slots').wallet;
-    // Coin Flip's riches can't fund a Slots upgrade or stake.
-    g.table('slots').wallet = 0;
-    expect(g.buyUpgrade('slots', 'luck')).toBe(false);
-    expect(g.play('slots')).toBeNull();
-    expect(g.table('coinflip').wallet).toBe(1e12 - g.def('slots').unlockCost);
-    g.table('slots').wallet = slotsWallet;
+    const slots = g.table('slots');
     const before = g.table('coinflip').wallet;
-    g.table('slots').levels.speed = 2;
-    g.tick(3);
-    expect(g.table('slots').plays).toBeGreaterThan(0);
-    expect(g.table('coinflip').wallet).toBe(before + g.sessionNet.coinflip);
+    // Slots has no stake of its own to run on: it draws on the Pennies fed to it.
+    slots.wallet = 0;
+    expect(g.buyUpgrade('slots', 'luck')).toBe(false);
+    const out = g.play('slots');
+    expect(out).not.toBeNull();
+    expect(g.table('coinflip').wallet).toBe(before - g.stakePrice('slots', out!.bet));
+    expect(slots.wallet).toBe(Math.max(0, out!.net));
+    // Feed share 0 starves the table without touching either wallet.
+    g.setFeedShare('slots', 0);
+    const frozen = g.table('coinflip').wallet;
+    expect(g.play('slots')).toBeNull();
+    expect(g.table('coinflip').wallet).toBe(frozen);
+  });
+
+  it('a starved table is never comped chips', () => {
+    const g = game();
+    g.table('coinflip').wallet = 1e12;
+    g.unlock('slots');
+    g.table('coinflip').wallet = 0;
+    g.table('slots').wallet = 0;
+    g.tick(5);
+    expect(g.table('slots').plays).toBe(0);
+    expect(g.table('slots').wallet).toBe(0);
   });
 
   it('an unlocked table plays on tick with no purchases, faster with speed', () => {
@@ -184,6 +197,11 @@ describe('saves', () => {
     expect(s.tables.coinflip.levels.auto).toBeUndefined();
     expect(s.tables.coinflip.levels.speed).toBe(20);
     expect(s.tables.slots.unlocked).toBe(false);
+    // Saves from before chained stakes get the default feed share; out-of-range values are clamped.
+    expect(s.tables.slots.feedShare).toBe(DEFAULT_FEED_SHARE);
+    const t = normalizeState({ version: SAVE_VERSION, tables: { slots: { feedShare: 7 }, roulette: { feedShare: -1 } } });
+    expect(t.tables.slots.feedShare).toBe(1);
+    expect(t.tables.roulette.feedShare).toBe(0);
   });
 
   it('refuses saves from before per-table wallets', () => {

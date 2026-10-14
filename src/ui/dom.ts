@@ -8,6 +8,7 @@ type Attrs = {
   type?: string;
   value?: string;
   min?: string;
+  max?: string;
   step?: string;
   disabled?: boolean;
   onclick?: (e: MouseEvent) => void;

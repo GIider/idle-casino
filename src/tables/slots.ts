@@ -17,6 +17,7 @@ export const slots: TableDef = {
   icon: '🎰',
   blurb: 'Three reels, rare symbols, big numbers. Two cherries return your stake.',
   currency: { name: 'Tokens', icon: '🎟️' },
+  stakeCost: 0.3,
   unlockCost: 1500,
   baseMinBet: 5,
   baseMaxBet: 100,

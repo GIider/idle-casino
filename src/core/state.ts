@@ -11,6 +11,8 @@ const MAX_STREAK_STORED = 1000;
 export const START_MONEY = 100;
 /** A newly unlocked table starts with this many of its own minimum bets. */
 export const STARTER_BETS = 50;
+/** Default share of the upstream wallet a table stakes from. */
+export const DEFAULT_FEED_SHARE = 0.3;
 
 /** What a table's wallet holds when it is first available. */
 export function starterWallet(def: TableDef): number {
@@ -34,6 +36,7 @@ export function newTableState(def: TableDef): TableState {
     history: newHistory(),
     streak: 0,
     peakWallet: def.unlockCost === 0 ? START_MONEY : 0,
+    feedShare: DEFAULT_FEED_SHARE,
   };
 }
 
@@ -96,6 +99,7 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
     ts.plays = Math.floor(num(src.plays, 0));
     ts.streak = Math.min(MAX_STREAK_STORED, Math.floor(num(src.streak, 0)));
     ts.peakWallet = Math.max(ts.wallet, Math.floor(num(src.peakWallet, 0)));
+    ts.feedShare = Math.min(1, num(src.feedShare, DEFAULT_FEED_SHARE));
     ts.history = normalizeHistory(src.history, ts.plays, ts.lifetimeProfit);
     if (src.levels && typeof src.levels === 'object') {
       // Only current upgrades survive (e.g. the retired `auto` level is dropped), clamped to their max.

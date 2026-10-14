@@ -91,7 +91,7 @@ export const NO_BONUS: CasinoBonus = {
 };
 
 /** Wallet needed in the final table's currency to ascend (Markers). */
-export const ASCEND_BASE_THRESHOLD = 5e8;
+export const ASCEND_BASE_THRESHOLD = 5e9;
 export const ASCEND_THRESHOLD_GROWTH = 5;
 
 export function casinoBonus(casino: CasinoState): CasinoBonus {

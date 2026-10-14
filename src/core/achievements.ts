@@ -437,7 +437,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: 'Bust Out',
     goal: 'Bust',
     kind: 'grind',
-    target: 150,
+    target: 40,
     score: (v) => (v.kind === 'blackjack' && v.outcome === 'bust' ? 1 : 0),
     perk: {
       name: 'Burn Card',

@@ -69,6 +69,10 @@ export class TablePanel {
   private bigBetGhost: HTMLElement;
   private bigBetOld: HTMLElement;
   private bigTiles: HTMLElement[] = [];
+  /** The feed-share slider row; null on the first table, which stakes its own currency. */
+  private feedRow: HTMLElement | null = null;
+  private feedInput: HTMLInputElement | null = null;
+  private feedLabel: HTMLElement | null = null;
   private winTile: HTMLElement;
   private previewing = false;
   private rows: UpgradeRow[] = [];
@@ -134,6 +138,34 @@ export class TablePanel {
     const bigBetTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Bet / Max payout' }), h('div', { class: 'big-value' }, this.bigBet, this.bigBetGhost), this.bigBetOld);
     this.bigTiles = [bigBetTile];
     const bigStats = h('div', { class: 'big-stats' }, bigBetTile);
+    const prevId = previousTable(id);
+    if (prevId) {
+      const prevCur = game.def(prevId).currency;
+      this.feedLabel = h('span', { class: 'feed-value' });
+      this.feedInput = h('input', {
+        type: 'range',
+        min: '0',
+        max: '100',
+        step: '5',
+        title: `Share of your ${prevCur.name} this table may stake`,
+        oninput: () => {
+          game.setFeedShare(id, Number(this.feedInput!.value) / 100);
+          this.invalidate();
+          this.update();
+        },
+      });
+      this.feedRow = h(
+        'div',
+        {
+          class: 'feed-row',
+          title: `Each bet is paid in ${prevCur.name} (${def.stakeCost ?? 1} per unit of bet); winnings arrive as ${def.currency.name}. The slider caps how much of your ${prevCur.name} this table may stake, leaving the rest for ${game.def(prevId).name} upgrades.`,
+        },
+        h('small', { text: `Stakes ${prevCur.icon} ${prevCur.name}` }),
+        this.feedInput,
+        this.feedLabel,
+      );
+      bigStats.append(this.feedRow);
+    }
 
     // Upgrades
     this.cheapestBtn = h('button', {
@@ -312,7 +344,7 @@ export class TablePanel {
       setText(this.statTiles.luck, `${(luckChance(levels, game.bonus) * 100).toFixed(1)}%`);
       const curWin = payoutMultiplier(levels, ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak);
       const autobetLvl = ts.levels.autobet ?? 0;
-      const curBet = betAtLevel(def, ts.prestige, ts.wallet, autobetLvl);
+      const curBet = betAtLevel(def, ts.prestige, game.stakeBudget(id), autobetLvl);
       const curMax = maxPayout(def, ts.prestige, levels);
       const prestigePv = this.previewing;
       const betPv = !prestigePv && this.previewUpgrade === 'autobet' && autobetLvl < 7;
@@ -322,14 +354,23 @@ export class TablePanel {
       let shownBet = curBet;
       let shownMax = curMax;
       if (prestigePv) {
-        shownBet = betAtLevel(def, ts.prestige + 1, ts.wallet, autobetLvl);
+        shownBet = betAtLevel(def, ts.prestige + 1, game.stakeBudget(id), autobetLvl);
         shownMax = maxPayout(def, ts.prestige + 1, levels);
       } else if (betPv) {
         const n = Math.max(1, game.quoteUpgrade(id, 'autobet', buyMode()).count);
-        shownBet = betAtLevel(def, ts.prestige, ts.wallet, Math.min(7, autobetLvl + n));
+        shownBet = betAtLevel(def, ts.prestige, game.stakeBudget(id), Math.min(7, autobetLvl + n));
       }
-      const line = (b: number, m: number): string => `${cur.icon} ${fmt(b)} → ${cur.icon} ${fmt(m)}`;
+      // The bet is paid in the previous table's currency (the first table's own); the payout lands in this table's.
+      const stakeIcon = previousTable(id) ? game.def(previousTable(id)!).currency.icon : cur.icon;
+      const line = (b: number, m: number): string => `${stakeIcon} ${fmt(game.stakePrice(id, b))} → ${cur.icon} ${fmt(m)}`;
       setText(this.bigBet, line(shownBet, shownMax));
+      if (this.feedInput && this.feedLabel) {
+        const prev = game.def(previousTable(id)!).currency;
+        const pct = Math.round(ts.feedShare * 100);
+        if (document.activeElement !== this.feedInput) this.feedInput.value = String(pct);
+        const price = game.stakePrice(id, curBet);
+        setText(this.feedLabel, curBet > 0 && game.stakeBudget(id) >= curBet ? `${pct}% · ${prev.icon} ${fmt(price)}/bet` : `${pct}% · starved`);
+      }
       // Ghost holds the widest candidate so toggling a preview never changes the tile's width.
       setText(this.bigBetGhost, line(Math.max(shownBet, curBet), Math.max(shownMax, curMax)));
       // Always rendered (just concealed) so the tile keeps its size and the button doesn't move under the cursor.

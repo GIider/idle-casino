@@ -54,14 +54,14 @@ export const COMMON_UPGRADES: UpgradeDef[] = [
   {
     id: 'autobet',
     name: 'Bigger Bets',
-    description: 'Wager a larger share of the table wallet on every play',
+    description: "Wager a larger share of the currency this table stakes on every play (the previous table's, up to the Stakes slider)",
     baseCost: 4,
     growth: 1.7,
     maxLevel: 7,
   },
 ];
 
-/** Share of the table's wallet the table bets, by `autobet` level (clamped to the table's min/max bet). */
+/** Share of the table's stake budget the table bets, by `autobet` level (clamped to the table's min/max bet). */
 export const AUTO_BET_FRACTIONS = [0, 0.02, 0.05, 0.1, 0.15, 0.25, 0.35, 0.5];
 
 /** Winnings bonus a table gets per prestige level of the table before it in the chain. */
@@ -153,7 +153,7 @@ export function bulkPurchase(
 }
 
 export function prestigeThreshold(def: TableDef, prestige: number, bonus: CasinoBonus = NO_BONUS): number {
-  return Math.ceil(def.baseMinBet * 2500 * (PRESTIGE_THRESHOLD_GROWTH_BY_TABLE[def.id] ?? PRESTIGE_THRESHOLD_GROWTH) ** prestige * bonus.prestigeCost);
+  return Math.ceil(def.baseMinBet * 20000 * (PRESTIGE_THRESHOLD_GROWTH_BY_TABLE[def.id] ?? PRESTIGE_THRESHOLD_GROWTH) ** prestige * bonus.prestigeCost);
 }
 
 export function luckChance(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {
@@ -216,11 +216,14 @@ export function betAtLevel(def: TableDef, prestige: number, wallet: number, auto
   return Math.floor(Math.min(maxBet(def, prestige), Math.max(minBet(def, prestige), wallet * autoBetFraction({ autobet: autobetLevel }))));
 }
 
-/** The bet a table places from the table's own wallet, or 0 if the wallet can't cover the minimum. */
-export function chooseAutoBet(def: TableDef, ts: TableState): number {
+/**
+ * The bet a table places out of `budget` (in the table's own bet units: its own wallet for the first table,
+ * the fed share of the previous table's wallet otherwise), or 0 if the budget can't cover the minimum.
+ */
+export function chooseAutoBet(def: TableDef, ts: TableState, budget: number = ts.wallet): number {
   const lo = minBet(def, ts.prestige);
-  let bet = betAtLevel(def, ts.prestige, ts.wallet, ts.levels.autobet ?? 0);
-  bet = Math.min(bet, Math.floor(ts.wallet));
+  let bet = betAtLevel(def, ts.prestige, budget, ts.levels.autobet ?? 0);
+  bet = Math.min(bet, Math.floor(budget));
   return bet < lo ? 0 : bet;
 }
 

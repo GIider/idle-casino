@@ -51,6 +51,9 @@ export interface OfflineReport {
   net: number;
 }
 
+/** The first table keeps this many of its own minimum bets before the next table may draw on its wallet. */
+export const FEED_RESERVE_BETS = 50;
+
 /** Wallet (in minimum bets) the dev unlock tops every table up to. */
 const DEV_WALLET_BETS = 100000;
 
@@ -120,15 +123,61 @@ export class Game {
     this.notice = { text, seq: ++this.seq };
   }
 
+  /** The wallet a table's stakes are drawn from: the previous table's, or its own for the first table. */
+  stakeSource(id: TableId): TableState {
+    const prev = previousTable(id);
+    return prev ? this.state.tables[prev] : this.state.tables[id];
+  }
+
+  /** What the table may bet from, in its own bet units: the fed share of the stake wallet at the table's exchange rate. */
+  stakeBudget(id: TableId): number {
+    const def = TABLES[id];
+    const prev = previousTable(id);
+    if (!prev) return this.state.tables[id].wallet;
+    return this.feedable(id) / (def.stakeCost ?? 1);
+  }
+
+  /** Units of the previous table's wallet this table may stake from: its fed share of what is above the first table's bet reserve. */
+  feedable(id: TableId): number {
+    const prev = previousTable(id);
+    if (!prev) return 0;
+    const upstream = this.state.tables[prev];
+    // Only the first table bets from its own wallet, so only it needs a bankroll kept back.
+    const reserve = previousTable(prev) ? 0 : minBet(TABLES[prev], upstream.prestige) * FEED_RESERVE_BETS;
+    return Math.max(0, upstream.wallet - reserve) * this.state.tables[id].feedShare;
+  }
+
+  /** Units of the stake wallet that a bet of `bet` costs. */
+  stakePrice(id: TableId, bet: number): number {
+    return previousTable(id) ? Math.ceil(bet * (TABLES[id].stakeCost ?? 1)) : bet;
+  }
+
+  /** Units of the previous table's currency this table is consuming per second at its current bet (0 at the first table or when starved). */
+  stakeRate(id: TableId): number {
+    if (!previousTable(id)) return 0;
+    const ts = this.state.tables[id];
+    if (!ts.unlocked) return 0;
+    const bet = chooseAutoBet(TABLES[id], ts, this.stakeBudget(id));
+    if (bet <= 0) return 0;
+    return effectivePlaysPerSecond(ts.levels, this.bonus) * this.stakePrice(id, bet);
+  }
+
+  /** Sets the share of the previous table's wallet this table may stake from. */
+  setFeedShare(id: TableId, share: number): void {
+    this.state.tables[id].feedShare = Math.min(1, Math.max(0, Number.isFinite(share) ? share : 0));
+    delete this.estimateCache[id];
+  }
+
   /** Plays one round at the table's automatic stake. Returns null if the table is locked or can't afford it. */
   play(id: TableId): Outcome | null {
     const def = TABLES[id];
     const ts = this.state.tables[id];
     if (!ts.unlocked) return null;
-    const stake = chooseAutoBet(def, ts);
+    const stake = chooseAutoBet(def, ts, this.stakeBudget(id));
     if (stake <= 0) return null;
 
-    ts.wallet -= stake;
+    // The stake leaves the stake wallet (the previous table's, except at the first table); winnings land in this table's own.
+    this.stakeSource(id).wallet -= this.stakePrice(id, stake);
     let ctx = this.tickCtx?.[id];
     if (!ctx) {
       ctx = { levels: this.levelsFor(id), bonus: this.bonusFor(id) };
@@ -136,7 +185,8 @@ export class Game {
     }
     const { levels } = ctx;
     const outcome = resolvePlay(def, levels, ts.prestige, stake, this.rng, ctx.bonus, ts.streak);
-    ts.wallet += outcome.payout;
+    // A fed table pays its winnings in its own currency (the stake was paid upstream); the first table settles its own stake.
+    ts.wallet += previousTable(id) ? Math.max(0, outcome.net) : outcome.payout;
     ts.streak = nextStreak(ts.streak, outcome.net, levels);
     ts.plays++;
     ts.profit += outcome.net;
@@ -222,7 +272,8 @@ export class Game {
     const def = TABLES[id];
     const ts = this.state.tables[id];
     if (!ts.unlocked) return false;
-    const reserve = minBet(def, ts.prestige) * MANAGER_RESERVE_BETS;
+    // The reserve keeps the table betting, which only matters where the bet comes from its own wallet.
+    const reserve = previousTable(id) ? 0 : minBet(def, ts.prestige) * MANAGER_RESERVE_BETS;
     let best: { id: string; cost: number; core: boolean } | null = null;
     for (const upg of allUpgrades(def)) {
       const level = ts.levels[upg.id] ?? 0;
@@ -276,6 +327,8 @@ export class Game {
     for (const id of TABLE_IDS) {
       const ts = this.state.tables[id];
       if (!ts.unlocked) continue;
+      // Only the first table bets from its own wallet; the others are starved, never comped (chips would be free money).
+      if (previousTable(id)) continue;
       const lowest = minBet(TABLES[id], ts.prestige);
       if (ts.wallet >= lowest) continue;
       ts.wallet = lowest * BAILOUT_BETS;
@@ -422,7 +475,9 @@ export class Game {
     casino.totalChips += reward;
     casino.ascensions += 1;
     for (const id of TABLE_IDS) {
+      const feedShare = this.state.tables[id].feedShare;
       this.state.tables[id] = newTableState(TABLES[id]);
+      this.state.tables[id].feedShare = feedShare;
       this.acc[id] = 0;
       this.managerClock[id] = 0;
       delete this.last[id];
@@ -495,14 +550,26 @@ export class Game {
       const ts = this.state.tables[id];
       if (!ts.unlocked) continue;
       this.offlineManager(id, effective * efficiency);
-      const plays = Math.floor(effectivePlaysPerSecond(ts.levels, bonus) * effective * efficiency);
+      let plays = Math.floor(effectivePlaysPerSecond(ts.levels, bonus) * effective * efficiency);
       if (plays <= 0) continue;
-      const bet = chooseAutoBet(def, ts);
+      const bet = chooseAutoBet(def, ts, this.stakeBudget(id));
       if (bet <= 0) continue;
+      const source = this.stakeSource(id);
+      const fed = previousTable(id) !== null;
+      // Stakes come out of the stake wallet; it can only fund as many plays as the fed share covers.
+      const price = this.stakePrice(id, bet);
+      if (fed) plays = Math.min(plays, Math.floor(this.feedable(id) / price));
+      if (plays <= 0) continue;
       const avg = estimateNetPerPlay(def, this.levelsFor(id), ts.prestige, bet, mulberry32(1337), 2000, this.bonusFor(id));
       const net = Math.round(avg * plays);
-      const applied = Math.max(net, -ts.wallet);
-      ts.wallet += applied;
+      // A fed table's wallet receives only winnings; the stakes were paid from the stake wallet.
+      const applied = fed ? net : Math.max(net, -ts.wallet);
+      if (fed) {
+        source.wallet -= price * plays;
+        ts.wallet += Math.max(0, net);
+      } else {
+        ts.wallet += applied;
+      }
       ts.profit += applied;
       ts.lifetimeProfit += applied;
       ts.plays += plays;
@@ -545,7 +612,7 @@ export class Game {
     const ts = this.state.tables[id];
     const bonus = this.bonus;
     const rate = effectivePlaysPerSecond(ts.levels, bonus);
-    const bet = chooseAutoBet(def, ts);
+    const bet = chooseAutoBet(def, ts, this.stakeBudget(id));
     if (bet <= 0) return 0;
     const levels = this.levelsFor(id);
     const bonusFor = this.bonusFor(id);

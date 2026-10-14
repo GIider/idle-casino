@@ -52,6 +52,7 @@ export const blackjack: TableDef = {
   icon: '🃏',
   blurb: 'Beat the dealer to 21. Naturals pay 3:2. You stand on 17 unless you learn better.',
   currency: { name: 'Markers', icon: '♠️' },
+  stakeCost: 0.1,
   unlockCost: 37500,
   baseMinBet: 100,
   baseMaxBet: 2000,
