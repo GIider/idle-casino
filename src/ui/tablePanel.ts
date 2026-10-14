@@ -428,7 +428,7 @@ export class TablePanel {
         setLines(row.button, buyLines(q.count, q.cost, q.nextCost, fmt, cur.icon, marked ? ties : [], marked ? ownShort : undefined));
         const missing = [
           ...(ownShort ? [`${cur.name}`] : []),
-          ...rawTies.filter((t, i) => ties[i].short).map((t) => game.def(t.from).currency.name),
+          ...rawTies.filter((_, i) => ties[i].short).map((t) => game.def(t.from).currency.name),
         ];
         row.button.title = ties.length
           ? `Also costs ${rawTies.map((t) => `${fmt(t.amount)} ${game.def(t.from).currency.name}`).join(' and ')}${missing.length ? `. Missing: ${missing.join(', ')}` : ''}`
