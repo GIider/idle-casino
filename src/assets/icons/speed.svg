@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><defs>
+<linearGradient id="speedg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8f0ff"/><stop offset="1" stop-color="#2f9bff"/></linearGradient>
+<filter id="speedf" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs><g filter="url(#speedf)" fill="url(#speedg)" stroke="url(#speedg)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="36" r="18" fill="none"/><path d="M26 8h12M32 8v10M32 36l8-9" fill="none"/><path d="M48 14l4 4" fill="none"/></g></svg>

@@ -1,6 +1,6 @@
 import type { PlayView } from '../../core/types';
 import { SYMBOLS } from '../../tables/slots';
-import { colorOf } from '../../tables/roulette';
+import { betHits, colorOf } from '../../tables/roulette';
 import { COLORS, clamp01, easeOut, hash, roundRect } from './canvas';
 import { fmtSigned } from '../format';
 import { profile } from '../quality';
@@ -68,57 +68,135 @@ function drawResult(
 }
 
 function coinScene(view: Extract<PlayView, { kind: 'coin' }>, c: SceneCtx): Scene {
-  const duration = 1.1 * c.speed;
-  const edge = Math.min(c.levels.edge ?? 0, 8);
+  const duration = 1.2 * c.speed;
+  const edgeLevel = Math.min(c.levels.edge ?? 0, 8);
+  const special = view.special;
+  // Full half-turns before landing: even lands heads, odd lands tails; an edge landing stops mid-turn.
+  const turns = (view.heads ? 6 : 7) + (special === 'edge' ? 0.5 : 0);
+  const AIR = 0.78;
+
+  /** One coin: extruded rim, bevelled face, milled edge ticks and the crown/star emblem. */
+  const drawCoin = (ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, angle: number, alpha: number): void => {
+    const cos = Math.cos(angle);
+    const sy = Math.max(0.09, Math.abs(cos));
+    const heads = cos >= 0;
+    const thick = r * 0.12 + edgeLevel * 0.6;
+    const gold = special === 'gold' && heads;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(cx, cy);
+    ctx.scale(1, sy);
+    // Rim: stacked discs give the coin visible thickness while it turns.
+    ctx.fillStyle = heads ? '#8a5a00' : '#6a6a8a';
+    for (let d = thick; d >= 0; d -= 1.5) {
+      ctx.beginPath();
+      ctx.arc(0, d / sy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
+    if (heads) {
+      g.addColorStop(0, gold ? '#ffffff' : '#fff6bf');
+      g.addColorStop(0.5, gold ? '#ffe36a' : COLORS.gold);
+      g.addColorStop(1, '#b87400');
+    } else {
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(0.5, '#cfd2ea');
+      g.addColorStop(1, '#7c80a8');
+    }
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    // Milled edge ticks and the inner ring.
+    ctx.strokeStyle = heads ? 'rgba(122,74,0,0.55)' : 'rgba(70,72,110,0.55)';
+    ctx.lineWidth = Math.max(1, r * 0.03);
+    if (sy > 0.3) {
+      for (let k = 0; k < 28; k++) {
+        const a = (k / 28) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9);
+        ctx.lineTo(Math.cos(a) * r * 0.97, Math.sin(a) * r * 0.97);
+        ctx.stroke();
+      }
+    }
+    ctx.lineWidth = Math.max(1.5, r * 0.05);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+    ctx.stroke();
+    // Emblem.
+    if (heads) {
+      text(ctx, '♛', 0, r * 0.02, r * 1.0, '#7a4a00', 800);
+    } else {
+      ctx.fillStyle = '#5a5e90';
+      ctx.beginPath();
+      for (let k = 0; k < 8; k++) {
+        const rr = k % 2 === 0 ? r * 0.5 : r * 0.14;
+        const a = (k / 8) * Math.PI * 2 - Math.PI / 2;
+        ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
   return {
     duration,
     draw(ctx, t, w, h) {
       const p = clamp01(t / duration);
-      const angle = easeOut(p) * (view.heads ? 6 : 7) * Math.PI;
-      const r = Math.min(h * 0.2, w * 0.3, 60);
+      const air = clamp01(p / AIR);
+      const r = Math.max(14, Math.min(h * 0.24, w * 0.32, 84));
       const cx = w / 2;
-      const cy = h * 0.42 - Math.sin(p * Math.PI) * h * 0.2;
-      const cos = Math.cos(angle);
-      const sy = Math.max(0.06, Math.abs(cos));
-      const heads = cos >= 0;
-      const thick = 3 + edge * 0.8;
+      const floor = h * 0.7;
+      const restY = floor - r * 0.55;
+      const lift = Math.sin(air * Math.PI) * h * 0.3;
+      let bounce = 0;
+      if (p > AIR) {
+        const b = (p - AIR) / (1 - AIR);
+        bounce = Math.abs(Math.sin(b * Math.PI * 2)) * (1 - b) * h * 0.06;
+      }
+      const cy = restY - lift - bounce;
+      const angleAt = (u: number): number => easeOut(clamp01(u)) * turns * Math.PI;
+      const angle = angleAt(air);
+      const flying = p < AIR;
 
-      // Shadow on the felt.
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      // Pool of light on the floor, shrinking and fading as the coin rises.
+      const rise = flying ? Math.sin(air * Math.PI) : 0;
+      const pool = ctx.createRadialGradient(cx, floor, 2, cx, floor, r * 1.5);
+      pool.addColorStop(0, `rgba(10,20,60,${0.55 - rise * 0.25})`);
+      pool.addColorStop(1, 'rgba(10,20,60,0)');
+      ctx.fillStyle = pool;
       ctx.beginPath();
-      ctx.ellipse(cx, h * 0.66, r * (0.9 - Math.sin(p * Math.PI) * 0.3), r * 0.18, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, floor, r * (1.4 - rise * 0.4), r * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(1, sy);
-      ctx.fillStyle = '#a07a12';
-      ctx.beginPath();
-      ctx.arc(0, thick / sy, r, 0, Math.PI * 2);
-      ctx.fill();
-      const g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
-      g.addColorStop(0, heads ? '#fff2a8' : '#e8e8f4');
-      g.addColorStop(1, heads ? COLORS.gold : '#9a9ab8');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = heads ? '#b8901a' : '#6e6e90';
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
+      // Halo: always faint for a gold coin; after settling, green for a win and red for a loss.
+      const settled = t >= duration;
+      const halo = settled ? (c.net > 0 ? COLORS.green : c.net < 0 ? COLORS.red : '') : special === 'gold' ? COLORS.gold : '';
+      if (halo) {
+        const hg = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r * 1.9);
+        hg.addColorStop(0, halo + '66');
+        hg.addColorStop(1, halo + '00');
+        ctx.fillStyle = hg;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 1.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(1, sy);
-      text(ctx, heads ? '♛' : '✦', 0, 0, r * 1.0, heads ? '#8a6410' : '#55557a', 800);
-      ctx.restore();
+      // Motion trail while it is spinning up in the air.
+      if (flying && air > 0.04) {
+        for (let k = 3; k >= 1; k--) {
+          const u = air - k * 0.035;
+          if (u <= 0) continue;
+          const ty = restY - Math.sin(u * Math.PI) * h * 0.3;
+          drawCoin(ctx, cx, ty, r, angleAt(u), 0.14);
+        }
+      }
+      drawCoin(ctx, cx, cy, r, angle, 1);
 
-      if (t >= duration) {
+      if (settled) {
         // Settled: what it landed on (or the special payout), a free-try tag, and the net.
-        const call = view.special === 'gold' ? 'GOLD COIN' : view.special === 'edge' ? 'EDGE!' : view.special === 'ride' ? 'RIDDEN' : view.heads ? 'HEADS' : 'TAILS';
+        const call = special === 'gold' ? 'GOLD COIN' : special === 'edge' ? 'EDGE!' : special === 'ride' ? 'RIDDEN' : view.heads ? 'HEADS' : 'TAILS';
         const caption = c.result.bonusPlay ? `${call} · FREE TRY` : call;
         drawResult(ctx, c.result, w, h, caption);
       }
@@ -127,92 +205,151 @@ function coinScene(view: Extract<PlayView, { kind: 'coin' }>, c: SceneCtx): Scen
 }
 
 function slotsScene(view: Extract<PlayView, { kind: 'slots' }>, c: SceneCtx): Scene {
-  const stops = [0.6, 0.9, 1.2].map((s) => s * c.speed);
-  const duration = stops[2] + 0.35;
+  const stops = [0.7, 1.05, 1.4].map((s) => s * c.speed);
+  const duration = stops[2] + 0.45;
   const n = SYMBOLS.length;
   // Cherry Picker visibly loads the strip: extra cherries pass by while spinning.
   const loaded = Math.min(c.levels.loaded ?? 0, 10);
+  /** Symbol on reel `i` at strip position `k`; the landing position always holds the real result. */
+  const strip = (i: number, k: number, land: number): number => {
+    if (k === land) return view.reels[i];
+    if (loaded > 0 && hash(k, i + 7) < loaded * 0.05) return 0;
+    return Math.floor(hash(k * 3 + i, 11 + i) * n) % n;
+  };
+  const lands = stops.map((st, i) => Math.round(st * 9 / c.speed) + 8 + i * 3);
+  // A pair on the first two reels makes the third reel "hang" before it stops.
+  const tease = view.reels[0] === view.reels[1];
+  // Which reels took part in a pair/triple (and the scatter sevens), so exactly those light up when the round settles.
+  const counts = new Array<number>(n).fill(0);
+  for (const r of view.reels) counts[r]++;
+  const lit = view.reels.map((r) => counts[r] >= 2 || (view.scatter === true && r === 4));
+  const tier = Math.max(...counts) >= 3 ? 2 : lit.some(Boolean) ? 1 : 0;
   return {
     duration,
     draw(ctx, t, w, h) {
-      const cell = Math.min(w * 0.2, h * 0.5, 92);
-      const gap = cell * 0.18;
+      const cell = Math.min(w * 0.22, h * 0.36, 130);
+      const gap = cell * 0.14;
+      const winH = cell * 1.55;
       const total = cell * 3 + gap * 2;
       const x0 = w / 2 - total / 2;
-      const y0 = h / 2 - cell / 2;
+      const cy = h * 0.48;
       const done = t >= stops[2];
-      const win = done && c.net > 0;
+      const win = done && tier > 0;
+      const hitColor = tier === 2 ? COLORS.gold : COLORS.cyan;
+
+      // Cabinet frame behind the reels.
+      const padX = cell * 0.22;
+      const padY = cell * 0.22;
+      const fx = x0 - padX;
+      const fy = cy - winH / 2 - padY;
+      const fw = total + padX * 2;
+      const fh = winH + padY * 2;
+      roundRect(ctx, fx, fy, fw, fh, 18);
+      const body = ctx.createLinearGradient(0, fy, 0, fy + fh);
+      body.addColorStop(0, '#2a1a05');
+      body.addColorStop(1, '#120a02');
+      ctx.fillStyle = body;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = win ? hitColor : '#b8770a';
+      ctx.stroke();
+
+      // Marquee bulbs chase around the frame; the whole ring flashes on a win.
+      const bulbs = Math.max(8, Math.floor(fw / 22));
+      for (let k = 0; k < bulbs; k++) {
+        const bx = fx + 12 + (k / (bulbs - 1)) * (fw - 24);
+        const on = win ? (tier === 2 ? Math.floor(t * 8) % 2 === 0 : k % 2 === 0) : (k + Math.floor(t * 10)) % 3 === 0;
+        ctx.fillStyle = on ? hitColor : '#5a3a08';
+        ctx.beginPath();
+        ctx.arc(bx, fy - 7, 3, 0, Math.PI * 2);
+        ctx.arc(bx, fy + fh + 7, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       for (let i = 0; i < 3; i++) {
         const x = x0 + i * (cell + gap);
+        const cx = x + cell / 2;
+        const hit = done && lit[i];
         ctx.save();
-        roundRect(ctx, x, y0, cell, cell, 12);
-        ctx.fillStyle = '#0d0820';
-        ctx.fill();
-        ctx.shadowColor = win ? COLORS.gold : 'transparent';
-        ctx.shadowBlur = win && profile.canvasShadows ? 18 : 0;
-        ctx.lineWidth = win && !profile.canvasShadows ? 4 : 3;
-        ctx.strokeStyle = win ? COLORS.gold : COLORS.line;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
+        roundRect(ctx, x, cy - winH / 2, cell, winH, 12);
         ctx.clip();
-        const spinning = t < stops[i];
-        const fs = cell * 0.55;
-        if (spinning) {
-          const pos = t * 16 + i * 3;
-          const f = pos - Math.floor(pos);
-          for (let row = -1; row <= 1; row++) {
-            let idx = (Math.floor(pos) + row + 3 * n) % n;
-            if (loaded > 0 && hash(Math.floor(pos) + row, i) < loaded * 0.05) idx = 0;
-            ctx.globalAlpha = 0.55;
-            text(ctx, SYMBOLS[idx], x + cell / 2, y0 + cell / 2 + (row + f) * cell * 0.9, fs, COLORS.fg);
+        const glass = ctx.createLinearGradient(0, cy - winH / 2, 0, cy + winH / 2);
+        glass.addColorStop(0, '#0a0f24');
+        glass.addColorStop(0.5, '#1b2650');
+        glass.addColorStop(1, '#0a0f24');
+        ctx.fillStyle = glass;
+        ctx.fillRect(x, cy - winH / 2, cell, winH);
+
+        const fs = cell * 0.62;
+        const p = clamp01(t / stops[i]);
+        const ease = 1 - (1 - p) ** 3;
+        let pos = lands[i] * ease;
+        if (p >= 1) {
+          // Little overshoot-and-settle once the reel locks.
+          const s = clamp01((t - stops[i]) / 0.22);
+          pos = lands[i] + Math.sin(s * Math.PI) * 0.12 * (1 - s) * 2;
+        }
+        const speedNow = p >= 1 ? 0 : (1 - p) ** 2;
+        const blur = speedNow * cell * 0.22;
+        const k0 = Math.floor(pos);
+        for (let k = k0 - 2; k <= k0 + 3; k++) {
+          const y = cy + (pos - k) * cell;
+          const dist = Math.abs(y - cy) / (winH / 2);
+          // Once settled, symbols that are not part of a pair/triple dim so the hit stands out.
+          const settled = p >= 1 && win && !hit ? 0.4 : p >= 1 && !win ? 0.55 : 1;
+          const alpha = Math.max(0.15, 1 - dist * 0.7) * (k === lands[i] && p >= 1 ? 1 : settled);
+          const sym = SYMBOLS[strip(i, k, lands[i])];
+          ctx.globalAlpha = alpha * (blur > 1 ? 0.7 : 1);
+          let size = fs;
+          if (hit && k === lands[i]) size = fs * (1.1 + 0.07 * Math.sin(t * 9));
+          if (blur > 1) {
+            ctx.globalAlpha = alpha * 0.25;
+            text(ctx, sym, cx, y - blur, size, COLORS.fg);
+            text(ctx, sym, cx, y + blur, size, COLORS.fg);
+            ctx.globalAlpha = alpha * 0.7;
           }
+          text(ctx, sym, cx, y, size, COLORS.fg);
+        }
+        ctx.globalAlpha = 1;
+
+        // Shade top and bottom so the strip reads as rolling on a drum.
+        const shade = ctx.createLinearGradient(0, cy - winH / 2, 0, cy + winH / 2);
+        shade.addColorStop(0, 'rgba(0,0,0,0.65)');
+        shade.addColorStop(0.28, 'rgba(0,0,0,0)');
+        shade.addColorStop(0.72, 'rgba(0,0,0,0)');
+        shade.addColorStop(1, 'rgba(0,0,0,0.65)');
+        ctx.fillStyle = shade;
+        ctx.fillRect(x, cy - winH / 2, cell, winH);
+        if (hit) {
+          ctx.globalAlpha = 0.18 + 0.1 * Math.sin(t * 9);
+          ctx.fillStyle = hitColor;
+          ctx.fillRect(x, cy - winH / 2, cell, winH);
           ctx.globalAlpha = 1;
-        } else {
-          const settle = clamp01((t - stops[i]) / 0.15);
-          const bounce = (1 - settle) * -cell * 0.25;
-          text(ctx, SYMBOLS[view.reels[i]], x + cell / 2, y0 + cell / 2 + bounce, fs, COLORS.fg);
         }
         ctx.restore();
+
+        // Window outline; the third reel pulses while it hangs on a pair.
+        const hanging = tease && i === 2 && t >= stops[1] && t < stops[2];
+        roundRect(ctx, x, cy - winH / 2, cell, winH, 12);
+        ctx.lineWidth = hit || hanging ? 3 : 2;
+        ctx.strokeStyle = hit ? hitColor : hanging ? (Math.floor(t * 12) % 2 ? COLORS.cyan : COLORS.gold) : '#3a4f8f';
+        ctx.stroke();
       }
+
+      // Payline across the middle.
+      ctx.strokeStyle = win ? hitColor : 'rgba(255,84,112,0.55)';
+      ctx.lineWidth = win ? 3 : 1.5;
+      ctx.beginPath();
+      ctx.moveTo(fx + 4, cy);
+      ctx.lineTo(fx + fw - 4, cy);
+      ctx.stroke();
+
       if (done) {
         const notes = /\(([^)]*)\)\s*$/.exec(c.result.detail)?.[1] ?? '';
         drawResult(ctx, c.result, w, h, notes);
       }
     },
   };
-}
-
-/** Faint grid of earlier spins around the live reels, newest nearest the centre; fills the stage. */
-export function drawSlotsBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number, past: number[][]): void {
-  if (past.length === 0) return;
-  const cell = Math.min(w * 0.11, h * 0.26, 54);
-  const pitchX = cell * 1.05;
-  const blockW = pitchX * 3 + cell * 0.5;
-  const rows = Math.floor(h / cell / 1.1);
-  const blocks = Math.max(1, Math.floor(w / blockW));
-  const half = Math.floor(rows / 2);
-  const spots: { r: number; b: number; d: number }[] = [];
-  for (let r = -half; r <= half; r++) {
-    for (let b = -Math.floor(blocks / 2); b <= Math.floor(blocks / 2); b++) {
-      // The centre block of the middle row is where the live reels sit.
-      if (r === 0 && b === 0) continue;
-      spots.push({ r, b, d: Math.abs(r) * 1.4 + Math.abs(b) });
-    }
-  }
-  spots.sort((x, y) => x.d - y.d);
-  const newest = past.length - 1;
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `${cell * 0.5}px system-ui, sans-serif`;
-  spots.slice(0, past.length).forEach((spot, i) => {
-    const reels = past[newest - i];
-    ctx.globalAlpha = Math.max(0.1, 0.34 - i * 0.02);
-    const cy = h / 2 + spot.r * cell * 1.1;
-    const cx0 = w / 2 + spot.b * blockW;
-    reels.forEach((sym, k) => ctx.fillText(SYMBOLS[sym], cx0 + (k - 1) * pitchX, cy));
-  });
-  ctx.restore();
 }
 
 // European single-zero wheel order.
@@ -222,66 +359,102 @@ const WHEEL = [
 ];
 
 function rouletteScene(view: Extract<PlayView, { kind: 'roulette' }>, c: SceneCtx): Scene {
-  const duration = 2.6 * c.speed;
+  const duration = 3 * c.speed;
   const slice = (Math.PI * 2) / WHEEL.length;
   const target = WHEEL.indexOf(view.pocket);
   const magnet = view.bets.includes('number') ? (c.levels.magnet ?? 0) : 0;
+  const hits = betHits(view.pocket, view.bets, c.levels);
+  const col = colorOf(view.pocket);
+  const tint = col === 'red' ? COLORS.red : col === 'green' ? COLORS.green : COLORS.fg;
+  const BET_LABEL: Record<string, string> = { color: 'Red', dozen: '1st dozen', number: 'Lucky 17' };
   return {
     duration,
     draw(ctx, t, w, h) {
       const p = clamp01(t / duration);
-      // Wide stages put the wheel left and the result panel right; narrow ones stack them.
-      const wide = w >= 380;
-      const R = wide ? Math.min(h * 0.44, w * 0.26) : Math.min(h * 0.34, w * 0.38);
-      const cx = wide ? w * 0.3 : w / 2;
-      const cy = wide ? h / 2 : h * 0.42;
-      const rot = easeOut(p) * 2.2;
+      const R = Math.max(30, Math.min(h * 0.36, w * 0.42));
+      const cx = w / 2;
+      const cy = h * 0.43;
+      const rot = easeOut(p) * 2.6;
+      const settled = p >= 1;
+      const won = settled && c.net > 0;
+
+      // Outer rim and ball track.
+      const rim = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R * 1.1);
+      rim.addColorStop(0, '#2b1a05');
+      rim.addColorStop(0.5, '#ffd35c');
+      rim.addColorStop(1, '#7a4a00');
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.1, 0, Math.PI * 2);
+      ctx.fillStyle = rim;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.0, 0, Math.PI * 2);
+      ctx.fillStyle = '#0a0f24';
+      ctx.fill();
 
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(rot);
+      const rIn = R * 0.62;
+      const rOut = R * 0.93;
       for (let i = 0; i < WHEEL.length; i++) {
         const n = WHEEL[i];
         const a0 = i * slice - Math.PI / 2 - slice / 2;
+        const colr = colorOf(n);
+        const hot = settled && n === view.pocket;
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(0, 0, R, a0, a0 + slice);
+        ctx.arc(0, 0, rOut, a0, a0 + slice);
+        ctx.arc(0, 0, rIn, a0 + slice, a0, true);
         ctx.closePath();
-        const col = colorOf(n);
-        ctx.fillStyle = col === 'green' ? '#12924a' : col === 'red' ? '#c4203f' : '#14101f';
+        ctx.fillStyle = hot ? '#fff3b8' : colr === 'green' ? '#12924a' : colr === 'red' ? '#c4203f' : '#14101f';
         ctx.fill();
         ctx.lineWidth = 1;
-        ctx.strokeStyle = COLORS.line;
+        ctx.strokeStyle = '#e8c35a';
         ctx.stroke();
         if (magnet > 0 && Math.abs(n - 17) <= magnet) {
           ctx.lineWidth = 2.5;
           ctx.strokeStyle = COLORS.cyan;
           ctx.beginPath();
-          ctx.arc(0, 0, R * 0.99, a0 + 0.01, a0 + slice - 0.01);
+          ctx.arc(0, 0, rOut - 2, a0 + 0.02, a0 + slice - 0.02);
           ctx.stroke();
         }
-        if (R > 60) {
+        if (R > 55) {
           ctx.save();
           ctx.rotate(a0 + slice / 2 + Math.PI / 2);
-          text(ctx, String(n), 0, -R * 0.84, Math.max(8, R * 0.1), COLORS.fg, 600);
+          text(ctx, String(n), 0, -R * 0.82, Math.max(8, R * 0.09), hot ? '#2a1700' : COLORS.fg, 700);
           ctx.restore();
         }
       }
+      // Hub: dark cone with four spokes and a gold cap.
       ctx.beginPath();
-      ctx.arc(0, 0, R * 0.62, 0, Math.PI * 2);
-      ctx.fillStyle = '#1a1030';
+      ctx.arc(0, 0, rIn, 0, Math.PI * 2);
+      ctx.fillStyle = '#120a24';
       ctx.fill();
       ctx.lineWidth = 2;
       ctx.strokeStyle = COLORS.gold;
       ctx.stroke();
+      ctx.lineWidth = Math.max(2, R * 0.04);
+      ctx.strokeStyle = '#b8770a';
+      for (let k = 0; k < 4; k++) {
+        const a = (k * Math.PI) / 2 + Math.PI / 4;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * R * 0.12, Math.sin(a) * R * 0.12);
+        ctx.lineTo(Math.cos(a) * rIn * 0.92, Math.sin(a) * rIn * 0.92);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 0.12, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.gold;
+      ctx.fill();
       ctx.restore();
 
-      // Ball: spirals inwards, counter to the wheel, then rides the winning pocket.
+      // Ball: orbits the track against the wheel, slows, then drops into the pocket with a couple of bounces.
       const ease = easeOut(p);
-      const angleOnWheel = target * slice;
-      const orbit = (1 - ease) * -Math.PI * 2 * 5;
-      const a = rot + angleOnWheel - Math.PI / 2 + orbit;
-      const rad = R * (0.97 - 0.17 * ease) - Math.sin(clamp01(p * 6)) * 0;
+      const world = rot + target * slice - Math.PI / 2;
+      const a = world + (1 - ease) * -Math.PI * 2 * 6;
+      const s = clamp01((p - 0.62) / 0.3);
+      const bounce = Math.abs(Math.sin(s * Math.PI * 3)) * (1 - s) * R * 0.05;
+      const rad = R * (0.965 - 0.115 * easeOut(s)) - bounce;
       ctx.beginPath();
       ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, Math.max(3, R * 0.045), 0, Math.PI * 2);
       ctx.fillStyle = '#fff';
@@ -292,25 +465,37 @@ function rouletteScene(view: Extract<PlayView, { kind: 'roulette' }>, c: SceneCt
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      if (p >= 1) {
-        const col = colorOf(view.pocket);
-        const tint = col === 'red' ? COLORS.red : col === 'green' ? COLORS.green : COLORS.fg;
-        text(ctx, String(view.pocket), cx, cy, R * 0.42, tint, 800);
-        if (wide) {
-          const px = w * 0.62;
-          const pw = w - px - 12;
-          const mid = px + pw / 2;
-          text(ctx, String(view.pocket), mid, h * 0.26, Math.min(48, h * 0.24), tint, 800);
-          text(ctx, col.toUpperCase(), mid, h * 0.26 + Math.min(30, h * 0.16), 12, COLORS.muted, 700);
-          text(ctx, `${view.bets.length} bet${view.bets.length > 1 ? 's' : ''}: ${view.bets.join(' · ')}`, mid, h * 0.58, 12, COLORS.muted, 600, pw);
-          drawResult(ctx, c.result, pw, h, '', mid, h * 0.76);
-          if (c.result.rerolled) text(ctx, '↻ re-rolled', mid, h * 0.9, 12, COLORS.cyan, 700);
-        } else {
-          drawResult(ctx, c.result, w, h, `${col.toUpperCase()} · ${view.bets.join(' · ')}`);
-        }
-      } else if (wide) {
-        text(ctx, 'Spinning…', w * 0.62 + (w - w * 0.62 - 12) / 2, h * 0.5, 14, COLORS.muted, 600);
+      if (!settled) return;
+
+      // Result: pocket number in the hub, bet chips that lit up, then the net.
+      text(ctx, String(view.pocket), cx, cy, R * 0.4, tint, 800);
+      if (won) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 1.12, 0, Math.PI * 2);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = COLORS.gold;
+        ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 8);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
       }
+      const chipY = cy + R * 1.1 + 20;
+      const size = Math.max(10, Math.min(13, w * 0.04));
+      ctx.font = `700 ${size}px system-ui, sans-serif`;
+      const labels = view.bets.map((b) => BET_LABEL[b] ?? b);
+      const widths = labels.map((l) => ctx.measureText(l).width + 16);
+      const gap = 6;
+      let x = cx - (widths.reduce((sum, v) => sum + v, 0) + gap * (labels.length - 1)) / 2;
+      labels.forEach((l, i) => {
+        roundRect(ctx, x, chipY - size, widths[i], size * 2, size);
+        ctx.fillStyle = hits[i] ? 'rgba(255,207,74,0.25)' : 'rgba(8,16,42,0.8)';
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = hits[i] ? COLORS.gold : '#2c3f7a';
+        ctx.stroke();
+        text(ctx, l, x + widths[i] / 2, chipY, size, hits[i] ? COLORS.gold : COLORS.muted, 700);
+        x += widths[i] + gap;
+      });
+      drawResult(ctx, c.result, w, h, `${view.pocket} ${col}`, cx, h - 16);
     },
   };
 }
@@ -333,8 +518,53 @@ function handTotal(cards: number[]): number {
   return t;
 }
 
+/** Playing card face: corner indices, big centre suit. (x, y) is the top-left of the card. */
+function drawCardFace(ctx: CanvasRenderingContext2D, x: number, y: number, cw: number, ch: number, rank: string, suit: string, color: string): void {
+  roundRect(ctx, x, y, cw, ch, Math.max(4, cw * 0.1));
+  const g = ctx.createLinearGradient(x, y, x, y + ch);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(1, '#e9e4f5');
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.stroke();
+  const small = cw * (rank.length > 1 ? 0.27 : 0.32);
+  text(ctx, rank, x + cw * 0.22, y + ch * 0.15, small, color, 800);
+  text(ctx, suit, x + cw * 0.22, y + ch * 0.15 + small * 0.95, small * 0.8, color, 700);
+  text(ctx, suit, x + cw / 2 + cw * 0.04, y + ch * 0.58, cw * 0.62, color, 700);
+}
+
+function drawCardBack(ctx: CanvasRenderingContext2D, x: number, y: number, cw: number, ch: number): void {
+  roundRect(ctx, x, y, cw, ch, Math.max(4, cw * 0.1));
+  const g = ctx.createLinearGradient(x, y, x + cw, y + ch);
+  g.addColorStop(0, '#1d4fb8');
+  g.addColorStop(1, '#0a1f5c');
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(255,207,74,0.45)';
+  ctx.lineWidth = 1;
+  const step = Math.max(8, cw * 0.22);
+  for (let d = -ch; d < cw + ch; d += step) {
+    ctx.beginPath();
+    ctx.moveTo(x + d, y);
+    ctx.lineTo(x + d + ch, y + ch);
+    ctx.moveTo(x + d + ch, y);
+    ctx.lineTo(x + d, y + ch);
+    ctx.stroke();
+  }
+  ctx.restore();
+  roundRect(ctx, x + 3, y + 3, cw - 6, ch - 6, Math.max(3, cw * 0.08));
+  ctx.strokeStyle = COLORS.gold;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
 function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: SceneCtx): Scene {
-  const step = 0.2 * c.speed;
+  const step = 0.22 * c.speed;
+  const FLIP = 0.2 * c.speed;
   type Who = 'p' | 's' | 'd'; // player hand, split hand, dealer
   const hands: Record<Who, number[]> = { p: view.player, s: view.split ?? [], d: view.dealer };
   // Deal order: player, dealer, player, dealer, then remaining player hits, split hand, dealer hits.
@@ -348,7 +578,10 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
   for (let i = 0; i < hands.s.length; i++) order.push({ who: 's', i });
   for (let i = 2; i < view.dealer.length; i++) order.push({ who: 'd', i });
   const holeHidden = view.outcome === 'bust' && view.dealer.length === 2;
-  const duration = order.length * step + 0.55 * c.speed;
+  // The dealer's hole card lies face down until the player's hands are done, then flips.
+  const firstHit = order.findIndex((o) => o.who === 'd' && o.i >= 2);
+  const revealAt = (firstHit === -1 ? order.length : firstHit) * step;
+  const duration = order.length * step + FLIP + 0.6 * c.speed;
   const label = {
     natural: ['BLACKJACK!', COLORS.gold],
     win: ['YOU WIN', COLORS.green],
@@ -356,6 +589,8 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
     lose: ['DEALER WINS', COLORS.red],
     bust: [view.insured ? 'BUST · INSURED' : 'BUST', view.insured ? COLORS.gold : COLORS.red],
   }[view.outcome] as [string, string];
+  const playerWon = view.outcome === 'win' || view.outcome === 'natural';
+  const dealerWon = view.outcome === 'lose' || view.outcome === 'bust';
   const pair = /pair \+[\d.]+×/.exec(c.result.detail)?.[0];
   // Small tags for the special rewards this hand used.
   const tags = [
@@ -371,88 +606,98 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
     duration,
     draw(ctx, t, w, h) {
       const split = hands.s.length > 0;
-      // Card size is picked from the lane height so two hands plus their total badges fit; the hand is
-      // squeezed (overlap) rather than shrunk when it has many cards.
-      const ch = Math.max(34, Math.min(h * 0.25, 84));
+      // The bottom strip is left to the seat dots; the rest is split between two mats, a headline pill and the net.
+      const H = h - 28;
+      const ch = Math.max(34, Math.min((H - 110) / 2 - 38, 112));
       const cw = ch / 1.4;
+      const matH = ch + 38;
+      const topY = 8;
+      const playerTop = topY + matH + 42;
+      const cardY = { d: topY + 8, p: playerTop + 8, s: playerTop + 8 };
       const geom = (who: Who) => {
         const count = hands[who].length;
-        const maxW = who === 'd' || !split ? w - 28 : w * 0.44;
-        let spread = cw * 0.64;
+        const maxW = who === 'd' || !split ? w - 40 : w * 0.42;
+        let spread = cw * 0.78;
         if (count > 1 && (count - 1) * spread + cw > maxW) spread = Math.max(cw * 0.3, (maxW - cw) / (count - 1));
         const width = (count - 1) * spread + cw;
         const centre = who === 'd' || !split ? w / 2 : who === 'p' ? w * 0.27 : w * 0.73;
         return { spread, width, x0: centre - width / 2, centre };
       };
-      const rowY = { d: h * 0.05, p: h * 0.55, s: h * 0.55 };
-      const matH = ch + 30;
 
-      // Felt mats the hands sit on, with empty card slots until the cards arrive.
-      const mat = (y: number, x: number, mw: number) => {
-        roundRect(ctx, x, y - 6, mw, matH, 14);
-        const g = ctx.createLinearGradient(0, y - 6, 0, y - 6 + matH);
-        g.addColorStop(0, '#0f4a3a');
-        g.addColorStop(1, '#09301f');
+      // Felt mats; the side that won glows in the outcome colour, the other fades.
+      const settledNow = t >= duration - 0.3 * c.speed;
+      const mat = (y: number, x: number, mw: number, glow: string | null, dim: boolean) => {
+        roundRect(ctx, x, y, mw, matH, 16);
+        const g = ctx.createLinearGradient(0, y, 0, y + matH);
+        g.addColorStop(0, '#0f5a44');
+        g.addColorStop(1, '#093524');
         ctx.fillStyle = g;
         ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+        ctx.lineWidth = glow ? 3 : 1.5;
+        ctx.strokeStyle = glow ?? 'rgba(255,255,255,0.16)';
         ctx.stroke();
+        if (dim) {
+          ctx.fillStyle = 'rgba(5,11,28,0.45)';
+          ctx.fill();
+        }
       };
-      mat(rowY.d, 8, w - 16);
+      const dealerGlow = settledNow && dealerWon ? COLORS.red : null;
+      const playerGlow = settledNow && playerWon ? label[1] : null;
+      mat(topY, 8, w - 16, dealerGlow, settledNow && playerWon);
       if (split) {
-        mat(rowY.p, 8, w / 2 - 12);
-        mat(rowY.s, w / 2 + 4, w / 2 - 12);
+        mat(playerTop, 8, w / 2 - 12, playerGlow, settledNow && dealerWon);
+        mat(playerTop, w / 2 + 4, w / 2 - 12, playerGlow, settledNow && dealerWon);
       } else {
-        mat(rowY.p, 8, w - 16);
+        mat(playerTop, 8, w - 16, playerGlow, settledNow && dealerWon);
       }
       ctx.save();
       ctx.setLineDash([4, 4]);
       ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
       (split ? (['d', 'p', 's'] as Who[]) : (['d', 'p'] as Who[])).forEach((who) => {
         const g = geom(who);
         for (let i = 0; i < 2; i++) {
-          roundRect(ctx, g.x0 + i * g.spread, rowY[who], cw, ch, 6);
+          roundRect(ctx, g.x0 + i * g.spread, cardY[who], cw, ch, 6);
           ctx.stroke();
         }
       });
       ctx.restore();
 
       const drawCard = (who: Who, i: number, k: number) => {
-        if (t < k * step) return;
+        const born = k * step;
+        if (t < born) return;
         const g = geom(who);
-        const age = clamp01((t - k * step) / (0.22 * c.speed));
-        const e = easeOut(age);
-        const x = g.x0 + i * g.spread + (1 - e) * (w * 0.35);
-        const y = rowY[who] - (1 - e) * ch * 0.6;
-        const faceDown = who === 'd' && i === 1 && holeHidden;
+        const e = easeOut((t - born) / (0.24 * c.speed));
+        const tx = g.x0 + i * g.spread;
+        const ty = cardY[who];
+        // Slides in from the shoe at the top right, turning as it lands.
+        const sx = w - cw * 0.8;
+        const sy = -ch;
+        const x = tx + (sx - tx) * (1 - e);
+        const y = ty + (sy - ty) * (1 - e);
+        const isHole = who === 'd' && i === 1;
+        const faceUp = !isHole || (!holeHidden && t >= revealAt + FLIP / 2);
+        const flipP = isHole && !holeHidden ? clamp01((t - revealAt) / FLIP) : 1;
+        const sxScale = isHole && !holeHidden && flipP < 1 ? Math.max(0.05, Math.abs(1 - 2 * flipP)) : 1;
         ctx.save();
-        ctx.globalAlpha = e;
+        ctx.globalAlpha = Math.min(1, e * 1.5);
+        ctx.translate(x + cw / 2, y + ch / 2);
+        ctx.rotate((1 - e) * 0.4);
+        ctx.scale(sxScale, 1);
+        ctx.translate(-cw / 2, -ch / 2);
         if (profile.canvasShadows) {
           ctx.shadowColor = 'rgba(0,0,0,0.55)';
           ctx.shadowBlur = 8;
         }
-        roundRect(ctx, x, y, cw, ch, 6);
-        ctx.fillStyle = faceDown ? COLORS.pink : '#f8f4ff';
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        if (faceDown) {
-          ctx.strokeStyle = '#fff4';
-          ctx.lineWidth = 2;
-          ctx.stroke();
+        if (!faceUp) {
+          drawCardBack(ctx, 0, 0, cw, ch);
         } else {
           const v = hands[who][i];
           const faceKey = who === 'p' ? i : who === 's' ? i + 30 : i + 9;
           const rank = v === 10 ? FACES[Math.floor(hash(c.seed, faceKey) * 4)] : RANK_LABEL[v];
           const suit = SUITS[Math.floor(hash(c.seed + 7, faceKey + 50) * 4)];
           const red = suit === '♥' || suit === '♦';
-          const color = red ? '#d3213f' : '#17122a';
-          // Overlapped cards only show their left strip, so the rank sits at the left edge.
-          const showsAll = i === hands[who].length - 1 || g.spread >= cw * 0.9;
-          const cx = showsAll ? x + cw / 2 : x + Math.min(cw / 2, g.spread / 2 + 1);
-          text(ctx, rank, cx, y + ch * 0.36, cw * (rank.length > 1 ? 0.5 : 0.62), color, 800);
-          text(ctx, suit, cx, y + ch * 0.74, cw * 0.46, color, 700);
+          drawCardFace(ctx, 0, 0, cw, ch, rank, suit, red ? '#d3213f' : '#17122a');
         }
         ctx.restore();
       };
@@ -460,50 +705,50 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
 
       const shown = (who: Who) => {
         const n = order.filter((o, k) => o.who === who && t >= (k + 1) * step).length;
-        const visible = who === 'd' && holeHidden ? Math.min(n, 1) : n;
+        const holeUp = !holeHidden && t >= revealAt + FLIP;
+        const visible = who === 'd' && !holeUp ? Math.min(n, 1) : n;
         return visible === 0 ? 0 : handTotal(hands[who].slice(0, visible));
       };
-      // Total badge under each hand: big number, coloured by state.
-      const badge = (who: Who, label: string, total: number, final: boolean) => {
+      // Total badge in the strip under each hand's cards, so it never covers a card.
+      const badge = (who: Who, name: string, total: number, final: boolean) => {
         if (total <= 0) return;
         const g = geom(who);
-        const y = rowY[who] + ch + 12;
+        const y = cardY[who] + ch + 15;
         const num = total > 21 ? 'BUST' : String(total);
         const tint = total > 21 ? COLORS.red : total === 21 ? COLORS.gold : COLORS.fg;
         ctx.save();
-        ctx.font = '800 20px system-ui, sans-serif';
+        ctx.font = '800 18px system-ui, sans-serif';
         const nw = ctx.measureText(num).width;
         ctx.font = '700 10px system-ui, sans-serif';
-        const lw = ctx.measureText(label).width;
-        const bw = nw + (label ? lw + 8 : 0) + 18;
+        const lw = ctx.measureText(name).width;
+        const bw = nw + (name ? lw + 8 : 0) + 18;
         roundRect(ctx, g.centre - bw / 2, y - 12, bw, 24, 12);
-        ctx.fillStyle = 'rgba(8,12,24,0.78)';
+        ctx.fillStyle = 'rgba(8,12,24,0.85)';
         ctx.fill();
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = final ? tint : 'rgba(255,255,255,0.2)';
         ctx.stroke();
         ctx.restore();
         let x = g.centre - bw / 2 + 9;
-        if (label) {
+        if (name) {
           ctx.font = '700 10px system-ui, sans-serif';
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
           ctx.fillStyle = COLORS.muted;
-          ctx.fillText(label, x, y + 1);
+          ctx.fillText(name, x, y + 1);
           x += lw + 8;
         }
-        ctx.font = '800 20px system-ui, sans-serif';
+        ctx.font = '800 18px system-ui, sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = tint;
         ctx.fillText(num, x, y + 1);
       };
-      const settled = t >= duration - 0.3 * c.speed;
-      badge('d', w < 260 ? 'D' : 'DEALER', shown('d'), settled);
-      badge('p', w < 260 ? 'Y' : split ? 'HAND 1' : 'YOU', shown('p'), settled);
-      if (split) badge('s', w < 260 ? 'H2' : 'HAND 2', shown('s'), settled);
+      badge('d', w < 260 ? 'D' : 'DEALER', shown('d'), settledNow);
+      badge('p', w < 260 ? 'Y' : split ? 'HAND 1' : 'YOU', shown('p'), settledNow);
+      if (split) badge('s', w < 260 ? 'H2' : 'HAND 2', shown('s'), settledNow);
 
-      if (settled) {
+      if (settledNow) {
         const a = easeOut((t - (duration - 0.3 * c.speed)) / (0.3 * c.speed));
         ctx.save();
         ctx.globalAlpha = a;
@@ -512,17 +757,17 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
         const hs = Math.max(11, Math.min(15, w * 0.045));
         ctx.font = `800 ${hs}px system-ui, sans-serif`;
         const hw = Math.min(w - 16, ctx.measureText(head).width + 24);
-        const hy = rowY.d + matH - 2 + (rowY.p - (rowY.d + matH)) / 2 + 2;
+        const hy = topY + matH + 21;
         roundRect(ctx, w / 2 - hw / 2, hy - hs * 0.9, hw, hs * 1.8, hs * 0.9);
-        ctx.fillStyle = 'rgba(8,12,24,0.88)';
+        ctx.fillStyle = 'rgba(8,12,24,0.92)';
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = label[1];
         ctx.stroke();
         text(ctx, head, w / 2, hy + 1, hs, label[1], 800, hw - 16);
-        // Net, large, under the player's mat.
+        // Net, large, below the player's mat and above the seat dots.
         const net = `${fmtSigned(c.result.net)}${c.result.capped ? ' · MAX' : ''}`;
-        text(ctx, net, w / 2, h - 14, Math.max(16, Math.min(26, w * 0.1)), netColor(c.result.net), 800, w - 12);
+        text(ctx, net, w / 2, playerTop + matH + (h - 28 - (playerTop + matH)) / 2 + 6, Math.max(16, Math.min(26, w * 0.1)), netColor(c.result.net), 800, w - 12);
         ctx.restore();
       }
     },

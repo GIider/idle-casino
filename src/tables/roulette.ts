@@ -18,6 +18,20 @@ export function colorOf(n: number): string {
   return RED_POCKETS.has(n) ? 'red' : 'black';
 }
 
+/** Which of the table's bets (`view.bets`) a pocket pays; display only, mirrors `spinOnce`. */
+export function betHits(pocket: number, bets: string[], levels: Record<string, number>): boolean[] {
+  const green = pocket === 0 && !!levels.perk_zeroHero;
+  const magnetHit = Math.abs(pocket - LUCKY_NUMBER) <= (levels.magnet ?? 0);
+  const bleed = levels.perk_colourRun ? BLEED_POCKETS.slice(0, BLACK_BLEED) : [];
+  const dozenTop = 12 + (levels.perk_dozenDigger ? DOZEN_CREEP : 0);
+  return bets.map((bet) => {
+    if (green) return true;
+    if (bet === 'dozen') return pocket >= 1 && pocket <= dozenTop;
+    if (bet === 'number') return magnetHit;
+    return colorOf(pocket) === 'red' || bleed.includes(pocket);
+  });
+}
+
 export const roulette: TableDef = {
   id: 'roulette',
   name: 'Roulette',

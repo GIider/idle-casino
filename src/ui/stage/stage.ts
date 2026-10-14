@@ -2,7 +2,8 @@ import type { TableId } from '../../core/types';
 import type { LastPlay } from '../../core/game';
 import { COLORS, prefersReducedMotion, roundRect, setupCanvas } from './canvas';
 import { Fx } from './fx';
-import { createScene, drawSlotsBackdrop, type Scene } from './scenes';
+import { drawBackdrop } from './backdrop';
+import { createScene, type Scene } from './scenes';
 import { probeFrame, profile } from '../quality';
 import { perfBegin, perfEnd } from '../perf';
 
@@ -40,12 +41,8 @@ export class Stage {
   private seenSeq = -1;
   private dirty = true;
   private bg: HTMLCanvasElement | null = null;
-  /** Past slot spins pre-drawn once per spin/size; blitted each frame instead of re-laid-out. */
-  private backdrop: { canvas: HTMLCanvasElement; key: string } | null = null;
+  private bgLow = false;
   private id: TableId;
-  private recentSlots: number[][] = [];
-  /** `recentSlots` without the newest spin, as the backdrop draws it. */
-  private backdropSlots: number[][] = [];
 
   constructor(icon: string, id: TableId) {
     this.idleIcon = icon;
@@ -58,14 +55,6 @@ export class Stage {
       this.observer = new ResizeObserver(() => this.request());
       this.observer.observe(this.canvas);
     }
-  }
-
-  /** Past slot spins (oldest first) drawn faintly behind the reels. */
-  setRecentSpins(recent: number[][]): void {
-    const changed = recent.length !== this.recentSlots.length || recent[recent.length - 1] !== this.recentSlots[this.recentSlots.length - 1];
-    this.recentSlots = recent;
-    this.backdropSlots = recent.slice(0, -1);
-    if (changed && this.id === 'slots') this.request();
   }
 
   setPlayers(n: number): void {
@@ -81,7 +70,7 @@ export class Stage {
   /** The coin table throws one coin per concurrent player (speed upgrades); everything else shows one animation. */
   private laneCount(): number {
     if (this.id === 'coinflip') return Math.max(1, Math.min(MAX_LANES, this.seats));
-    if (this.id === 'blackjack' || this.id === 'roulette') return Math.max(1, Math.min(MAX_BLACKJACK_LANES, this.seats));
+    if (this.id === 'blackjack' || this.id === 'roulette' || this.id === 'slots') return Math.max(1, Math.min(MAX_BLACKJACK_LANES, this.seats));
     return 1;
   }
 
@@ -196,10 +185,6 @@ export class Stage {
     const { ctx, w, h } = s;
 
     ctx.drawImage(this.background(w, h, this.canvas.width / w), 0, 0, w, h);
-    if (this.id === 'slots' && this.backdropSlots.length > 0 && !profile.low) {
-      const scale = this.canvas.width / w;
-      ctx.drawImage(this.backdropLayer(w, h, scale), 0, 0, w, h);
-    }
 
     const n = this.laneCount();
     this.fitLanes(n);
@@ -262,39 +247,19 @@ export class Stage {
   private background(w: number, h: number, scale: number): HTMLCanvasElement {
     const bw = Math.round(w * scale);
     const bh = Math.round(h * scale);
-    if (!this.bg || this.bg.width !== bw || this.bg.height !== bh) {
+    if (!this.bg || this.bg.width !== bw || this.bg.height !== bh || this.bgLow !== profile.low) {
+      this.bgLow = profile.low;
       const c = document.createElement('canvas');
       c.width = bw;
       c.height = bh;
       const x = c.getContext('2d');
       if (x) {
-        const g = x.createRadialGradient(bw / 2, bh / 2, 10, bw / 2, bh / 2, Math.max(bw, bh) * 0.7);
-        g.addColorStop(0, COLORS.feltLight);
-        g.addColorStop(1, COLORS.bg);
-        x.fillStyle = g;
-        x.fillRect(0, 0, bw, bh);
+        x.setTransform(scale, 0, 0, scale, 0, 0);
+        drawBackdrop(x, w, h, profile.low);
       }
       this.bg = c;
     }
     return this.bg;
-  }
-
-  private backdropLayer(w: number, h: number, scale: number): HTMLCanvasElement {
-    const last = this.backdropSlots[this.backdropSlots.length - 1];
-    const key = `${w}x${h}@${scale}|${this.backdropSlots.length}|${last?.join(',')}`;
-    if (!this.backdrop || this.backdrop.key !== key) {
-      const c = this.backdrop?.canvas ?? document.createElement('canvas');
-      c.width = Math.round(w * scale);
-      c.height = Math.round(h * scale);
-      const x = c.getContext('2d');
-      if (x) {
-        x.setTransform(scale, 0, 0, scale, 0, 0);
-        x.fillStyle = COLORS.fg;
-        drawSlotsBackdrop(x, w, h, this.backdropSlots);
-      }
-      this.backdrop = { canvas: c, key };
-    }
-    return this.backdrop.canvas;
   }
 
   private drawSeats(ctx: CanvasRenderingContext2D, w: number, h: number, dt: number): void {

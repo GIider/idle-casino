@@ -14,7 +14,20 @@ import { previousTable } from '../tables';
 import { Stage } from './stage/stage';
 import { HistoryChart } from './historyChart';
 import { perfBegin, perfEnd } from './perf';
+import { UPGRADE_ICONS, iconSvg } from '../assets';
+import { bonusLabel } from './upgradeBonus';
 import { buyLabel, buyMode, buyModeSelector, onBuyModeChange } from './buyMode';
+
+let iconSeq = 0;
+
+/** Inline SVG medallion; gradient ids are made unique per instance so hidden panels can't break visible ones. */
+function upgradeIcon(id: string): HTMLElement {
+  const el = h('span', { class: 'upgrade-icon' });
+  el.setAttribute('aria-hidden', 'true');
+  const n = ++iconSeq;
+  el.innerHTML = iconSvg(UPGRADE_ICONS[id] ?? 'coin').replace(/(id="|url\(#)([a-z]+[gf])(?=["\)])/g, `$1$2${n}`);
+  return el;
+}
 
 /** Upgrade quotes refresh at most this often (ms) unless something invalidates them. */
 const SLOW_MS = 250;
@@ -24,6 +37,8 @@ interface UpgradeRow {
   root: HTMLElement;
   level: HTMLElement;
   button: HTMLButtonElement;
+  bonusNow: HTMLElement;
+  bonusNext: HTMLElement;
 }
 
 export class TablePanel {
@@ -130,6 +145,9 @@ export class TablePanel {
     const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }), buyModeSelector(), this.cheapestBtn);
     for (const u of allUpgrades(def)) {
       const level = h('span', { class: 'level' });
+      const bonusNow = h('span', { class: 'bonus-now' });
+      const bonusNext = h('span', { class: 'bonus-next' });
+      const bonus = h('div', { class: 'upgrade-bonus' }, h('span', { class: 'bonus-tag', text: 'Total' }), bonusNow, bonusNext);
       const button = h('button', { class: 'btn buy', onclick: () => {
           game.buyUpgrade(id, u.id, buyMode());
           this.invalidate();
@@ -138,7 +156,8 @@ export class TablePanel {
       const root = h(
         'div',
         { class: 'upgrade' },
-        h('div', { class: 'upgrade-text' }, h('div', {}, h('strong', { text: u.name }), ' ', level), h('small', { text: u.description })),
+        upgradeIcon(u.id),
+        h('div', { class: 'upgrade-text' }, h('div', {}, h('strong', { text: u.name }), ' ', level), h('small', { text: u.description }), bonus),
         button,
       );
       upgrades.append(root);
@@ -152,7 +171,7 @@ export class TablePanel {
         button.addEventListener('focus', () => set(true));
         button.addEventListener('blur', () => set(false));
       }
-      this.rows.push({ def: u, root, level, button });
+      this.rows.push({ def: u, root, level, button, bonusNow, bonusNext });
     }
 
     // Prestige
@@ -162,16 +181,9 @@ export class TablePanel {
       class: 'btn prestige',
       text: 'Prestige',
       onclick: () => {
-        const next = game.table(id).prestige + 1;
-        if (
-          game.canPrestige(id) &&
-          window.confirm(
-            `Prestige ${def.name}? Its upgrades and wallet reset, but its minimum bet and maximum payout rise (level ${next}).`,
-          )
-        ) {
-          game.prestige(id);
-          this.invalidate();
-        }
+        if (!game.canPrestige(id)) return;
+        game.prestige(id);
+        this.invalidate();
       },
     });
 
@@ -344,6 +356,10 @@ export class TablePanel {
       const level = ts.levels[row.def.id] ?? 0;
       const maxed = level >= row.def.maxLevel;
       setText(row.level, `Lv ${level}/${row.def.maxLevel}`);
+      const nowText = bonusLabel(row.def.id, level);
+      setText(row.bonusNow, nowText);
+      row.bonusNow.title = nowText;
+      setText(row.bonusNext, maxed ? 'Max level reached' : `Next: ${bonusLabel(row.def.id, level + 1)}`);
       if (maxed) {
         setText(row.button, 'Maxed');
         setDisabled(row.button, true);
@@ -364,7 +380,6 @@ export class TablePanel {
     this.canvasStage.setPlayers(1 + Math.floor((ts.levels.speed ?? 0) / 4));
     this.canvasStage.resume();
     this.history.update(ts.history, ts.plays);
-    this.canvasStage.setRecentSpins(ts.history.stats.slots.recent);
 
     const last = game.last[id];
     if (last && last.seq !== this.seenSeq) {

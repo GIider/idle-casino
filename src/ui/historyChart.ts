@@ -200,7 +200,7 @@ export class HistoryChart {
       ctx.beginPath();
       pts.forEach((p, i) => (i === 0 ? ctx.moveTo(X(p[0]), Y(p[1])) : ctx.lineTo(X(p[0]), Y(p[1]))));
     };
-    const area = (color: string, clipTop: number, clipH: number) => {
+    const area = (color: string | CanvasGradient, clipTop: number, clipH: number) => {
       ctx.save();
       ctx.beginPath();
       ctx.rect(0, clipTop, w, clipH);
@@ -213,12 +213,24 @@ export class HistoryChart {
       ctx.fill();
       ctx.restore();
     };
-    area('rgba(61,255,143,0.25)', 0, zero);
-    area('rgba(255,77,109,0.25)', zero, ht - zero);
+    const up = ctx.createLinearGradient(0, 0, 0, zero);
+    up.addColorStop(0, 'rgba(61,255,143,0.45)');
+    up.addColorStop(1, 'rgba(61,255,143,0.04)');
+    const down = ctx.createLinearGradient(0, zero, 0, ht);
+    down.addColorStop(0, 'rgba(255,84,112,0.04)');
+    down.addColorStop(1, 'rgba(255,84,112,0.5)');
+    area(up, 0, zero);
+    area(down, zero, ht - zero);
 
-    ctx.lineWidth = 2;
+    // Neon line: soft glow pass under a crisp core.
     ctx.lineJoin = 'round';
     ctx.strokeStyle = net >= 0 ? COLORS.green : COLORS.red;
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 6;
+    path();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2;
     path();
     ctx.stroke();
 

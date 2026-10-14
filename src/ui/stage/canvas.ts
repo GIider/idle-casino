@@ -1,15 +1,15 @@
 import { profile } from '../quality';
 
 export const COLORS = {
-  bg: '#0a1226',
+  bg: '#050b1c',
   felt: '#122046',
   feltLight: '#1f3770',
-  line: '#24345c',
+  line: '#1e3a78',
   fg: '#eef2ff',
   muted: '#8fa0c4',
   pink: '#e8a317',
-  cyan: '#4fc3ff',
-  gold: '#f5c542',
+  cyan: '#4fb4ff',
+  gold: '#ffcf4a',
   green: '#2fd36b',
   red: '#ff5470',
 };

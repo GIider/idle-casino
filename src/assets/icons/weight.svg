@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><defs>
+<linearGradient id="weightg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8f0ff"/><stop offset="1" stop-color="#2f9bff"/></linearGradient>
+<filter id="weightf" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs><g filter="url(#weightf)" fill="url(#weightg)" stroke="url(#weightg)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M32 8v44M18 52h28M12 18h40" fill="none"/><path d="M12 18l-6 16h12zM52 18l-6 16h12z" fill="none"/></g></svg>

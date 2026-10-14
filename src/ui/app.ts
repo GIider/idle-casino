@@ -52,17 +52,7 @@ export class App {
     const header = h(
       'header',
       { class: 'top' },
-      h('div', { class: 'brand' }, h('span', { class: 'logo', text: '♠ IDLE CASINO ♦' }),
-        h('span', { class: 'version', text: `v${__APP_VERSION__} · ${__BUILD_DATE__}`, title: 'Version and build date' }),
-        h('a', {
-          class: 'repo-link',
-          href: 'https://github.com/GIider/idle-casino',
-          target: '_blank',
-          rel: 'noopener noreferrer',
-          title: 'Source on GitHub',
-          text: 'GitHub ↗',
-        }),
-      ),
+      h('div', { class: 'brand' }, h('span', { class: 'logo', text: '♠ IDLE CASINO ♦' })),
       h(
         'div',
         { class: 'menu' },
@@ -142,7 +132,21 @@ export class App {
     main.prepend(yourCasino);
     main.append(this.casinoPanel.root, this.achPage.root);
 
-    host.replaceChildren(header, h('div', { class: 'shell' }, main, side), this.toastEl);
+    const dock = h(
+      'footer',
+      { class: 'dock' },
+      h('span', { class: 'version', text: `v${__APP_VERSION__} · ${__BUILD_DATE__}`, title: 'Version and build date' }),
+      h('a', {
+        class: 'repo-link',
+        href: 'https://github.com/GIider/idle-casino',
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        title: 'Source on GitHub',
+        text: 'GitHub ↗',
+      }),
+    );
+
+    host.replaceChildren(header, h('div', { class: 'shell' }, main, side), dock, this.toastEl);
     this.select(this.selected);
   }
 

@@ -1,3 +1,8 @@
+@font-face { font-family: 'Cinzel'; font-weight: 700; font-style: normal; font-display: swap; src: url('../assets/fonts/cinzel-700.woff2') format('woff2'); }
+@font-face { font-family: 'Rajdhani'; font-weight: 500; font-style: normal; font-display: swap; src: url('../assets/fonts/rajdhani-500.woff2') format('woff2'); }
+@font-face { font-family: 'Rajdhani'; font-weight: 600; font-style: normal; font-display: swap; src: url('../assets/fonts/rajdhani-600.woff2') format('woff2'); }
+@font-face { font-family: 'Rajdhani'; font-weight: 700; font-style: normal; font-display: swap; src: url('../assets/fonts/rajdhani-700.woff2') format('woff2'); }
+
 :root {
   --bg: #0a1226;
   --bg2: #0e1930;
@@ -21,7 +26,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--fg);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: Rajdhani, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 #app {
@@ -1240,3 +1245,376 @@ small {
 .ach-sub, .ach-next-gain { color: var(--muted); text-transform: capitalize; }
 .ach-next-gain { text-transform: none; font-size: 11px; }
 @media (max-width: 800px) { .ach-grid { grid-template-columns: 1fr; } }
+
+/* ---- Theme layer: navy glass panels, gold + electric-blue glow (matches the visual mockup) ---- */
+:root {
+  --bg: #050b1c;
+  --bg2: #0a1530;
+  --card: #0b1636;
+  --line: #1e3a78;
+  --fg: #f1f5ff;
+  --muted: #8fa6d6;
+  --gold: #ffcf4a;
+  --gold-deep: #b8770a;
+  --cyan: #4fb4ff;
+  --glow-gold: 0 0 14px rgba(255, 190, 60, 0.35);
+  --glow-blue: 0 0 14px rgba(60, 140, 255, 0.35);
+  --glass: linear-gradient(180deg, rgba(20, 40, 90, 0.85), rgba(8, 16, 42, 0.92));
+}
+
+body {
+  background: radial-gradient(1200px 600px at 50% -10%, #12306b 0%, var(--bg) 60%) fixed, var(--bg);
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.logo {
+  font-family: Cinzel, Georgia, serif;
+  font-size: 22px !important;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  text-shadow: 0 0 12px rgba(255, 190, 60, 0.55);
+}
+
+.top {
+  background: linear-gradient(180deg, #0b1838, var(--bg));
+  border-bottom: 1px solid var(--gold-deep);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.version,
+.repo-link {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: 10px;
+}
+
+.card,
+.stat-tile,
+.tile,
+.wallet,
+.stage-canvas {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgba(120, 180, 255, 0.06), var(--glow-blue);
+}
+
+.card.hero,
+.play-card {
+  border-color: var(--gold-deep);
+  box-shadow: inset 0 0 0 1px rgba(255, 210, 120, 0.1), var(--glow-gold);
+}
+
+.stage-canvas {
+  background: radial-gradient(ellipse at 50% 30%, #1d4fb8 0%, #0b1c4a 45%, #060d22 100%);
+  border-color: var(--gold-deep);
+  box-shadow: var(--glow-gold);
+}
+
+.card h3 {
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  color: var(--cyan);
+}
+
+.money,
+.big-value,
+.tile-value {
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(255, 190, 60, 0.35);
+}
+
+.btn {
+  background: linear-gradient(180deg, #14275a, #0b1736);
+  border: 1px solid #2c4fa0;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--cyan);
+  box-shadow: var(--glow-blue);
+}
+
+.btn.prestige {
+  background: linear-gradient(180deg, #4a3205, #241802);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.btn.primary {
+  background: linear-gradient(180deg, #ffd45a, #d98e0c);
+  border-color: #ffe9a0;
+  color: #2a1700;
+  text-shadow: none;
+}
+
+.btn.buy {
+  min-width: 84px;
+  font-size: 17px;
+  background: linear-gradient(180deg, #17306e, #0c1b45);
+  border-color: #3a66c8;
+}
+
+.btn.buy:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--cyan);
+}
+
+.tab.active,
+.tile.active {
+  background: linear-gradient(180deg, rgba(40, 70, 160, 0.9), rgba(12, 24, 64, 0.95));
+  border-color: var(--gold);
+  box-shadow: var(--glow-gold);
+}
+
+/* Upgrade rows: icon medallion + text + cost button */
+.upgrade {
+  gap: 12px;
+  padding: 10px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(18, 36, 84, 0.7), rgba(8, 16, 40, 0.85));
+}
+
+.upgrade:first-of-type {
+  border-top: 1px solid var(--line);
+}
+
+.upgrade-text {
+  flex: 1;
+}
+
+.upgrade-text strong {
+  font-size: 17px;
+}
+
+.upgrade-icon {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #1b3a80, #081230);
+  border: 1px solid var(--line);
+}
+
+.upgrade-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.bar {
+  background: #060d22;
+  border-color: var(--line);
+}
+
+.bar-fill {
+  background: linear-gradient(90deg, #ffb400, #ffe27a);
+}
+
+.toast {
+  background: var(--glass);
+  border-color: var(--gold);
+  box-shadow: var(--glow-gold);
+}
+
+/* ---- Phase 2 layout: wider upgrade column, tile strip, bottom dock ---- */
+.top .brand .repo-link,
+.top .brand .version {
+  display: none;
+}
+
+.dock {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+  padding: 6px 4px;
+  margin-top: 8px;
+  border-top: 1px solid var(--gold-deep);
+  background: linear-gradient(0deg, #0b1838, transparent);
+}
+
+.dock .version,
+.dock .repo-link {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.dock .repo-link {
+  color: var(--cyan);
+}
+
+@media (min-width: 721px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr) 430px;
+  }
+  .side-panel:not(.hidden):not(.locked-hide) {
+    padding-right: 4px;
+  }
+  .below-stage {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .dock {
+    margin-bottom: 8px;
+  }
+}
+
+/* Top tile strip reads as stat panels: glass, gold when selected, gold bar. */
+.tiles > .tab.tile {
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 0 1px rgba(120, 180, 255, 0.06);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.tiles > .tab.tile:hover {
+  border-color: var(--cyan);
+  box-shadow: var(--glow-blue);
+}
+
+.tiles > .tab.tile.active {
+  border-color: var(--gold);
+  box-shadow: var(--glow-gold);
+}
+
+.tile-bar {
+  background: #060d22;
+}
+
+.below-stage .card.hero h2 {
+  font-family: Cinzel, Georgia, serif;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Upgrade rows: total bonus + hover highlight ---- */
+/* Fixed two-line block: the "next level" line always reserves its space so hovering never changes the row size. */
+.upgrade-bonus {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.bonus-tag {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.bonus-now,
+.bonus-next {
+  min-width: 0;
+  min-height: 1.3em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.bonus-now {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.bonus-next {
+  grid-column: 1 / -1;
+  color: var(--green);
+  visibility: hidden;
+}
+
+.upgrade {
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+
+.upgrade:hover,
+.upgrade:focus-within {
+  border-color: var(--gold);
+  box-shadow: var(--glow-gold), inset 0 0 18px rgba(255, 190, 60, 0.12);
+  background: linear-gradient(180deg, rgba(40, 62, 130, 0.85), rgba(12, 24, 58, 0.95));
+}
+
+.upgrade:hover .upgrade-icon,
+.upgrade:focus-within .upgrade-icon {
+  border-color: var(--gold);
+  box-shadow: 0 0 14px rgba(255, 190, 60, 0.55);
+}
+
+.upgrade:hover .bonus-next,
+.upgrade:focus-within .bonus-next {
+  visibility: visible;
+}
+
+.history-pair .history-range .btn {
+  border-radius: 999px;
+}
+
+.history-pair .history-range .btn.active {
+  background: linear-gradient(180deg, #4a3205, #241802);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ---- Phase 5: responsive + accessibility ---- */
+.btn:focus-visible,
+.tab:focus-visible,
+.upgrade:focus-within,
+a:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .logo {
+    font-size: 18px !important;
+  }
+  .upgrade-icon {
+    width: 38px;
+    height: 38px;
+  }
+  .upgrade-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+  .btn.buy {
+    min-width: 72px;
+    font-size: 15px;
+  }
+  .top .menu {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upgrade,
+  .tiles > .tab.tile {
+    transition: none;
+  }
+}
+
+/* Fixed-width cost button: its label changes every few ticks, and a width change re-wraps the description (rows jumped). */
+.btn.buy {
+  flex: none;
+  width: 132px;
+  min-width: 0;
+  padding-inline: 8px;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upgrade-text {
+  min-width: 0;
+}

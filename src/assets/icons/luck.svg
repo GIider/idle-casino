@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><defs>
+<linearGradient id="luckg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9dffc0"/><stop offset="1" stop-color="#14b85a"/></linearGradient>
+<filter id="luckf" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs><g filter="url(#luckf)" fill="url(#luckg)" stroke="url(#luckg)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><g stroke="none"><circle cx="24" cy="24" r="11"/><circle cx="40" cy="24" r="11"/><circle cx="24" cy="38" r="11"/><circle cx="40" cy="38" r="11"/></g><path d="M32 34 L30 56" fill="none"/></g></svg>
