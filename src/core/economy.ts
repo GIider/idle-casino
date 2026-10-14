@@ -211,12 +211,15 @@ export function autoBetFraction(levels: Record<string, number>): number {
   return AUTO_BET_FRACTIONS[level];
 }
 
+/** The wallet-share bet at a given `autobet` level, clamped to the table's min/max bet (ignores whether the wallet can cover it). */
+export function betAtLevel(def: TableDef, prestige: number, wallet: number, autobetLevel: number): number {
+  return Math.floor(Math.min(maxBet(def, prestige), Math.max(minBet(def, prestige), wallet * autoBetFraction({ autobet: autobetLevel }))));
+}
+
 /** The bet a table places from the table's own wallet, or 0 if the wallet can't cover the minimum. */
 export function chooseAutoBet(def: TableDef, ts: TableState): number {
   const lo = minBet(def, ts.prestige);
-  const hi = maxBet(def, ts.prestige);
-  let bet = ts.wallet * autoBetFraction(ts.levels);
-  bet = Math.floor(Math.min(hi, Math.max(lo, bet)));
+  let bet = betAtLevel(def, ts.prestige, ts.wallet, ts.levels.autobet ?? 0);
   bet = Math.min(bet, Math.floor(ts.wallet));
   return bet < lo ? 0 : bet;
 }

@@ -560,12 +560,6 @@ small {
   contain-intrinsic-size: 200px;
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
 @media (max-width: 720px) {
   .shell {
     grid-template-columns: 1fr;
@@ -909,7 +903,7 @@ small {
 .combo.triple { border-color: var(--gold); }
 .combo.triple { box-shadow: 0 0 6px rgba(255, 200, 80, .4); }
 
-.big-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.big-stats { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .stat-tile.big { padding: 12px 14px; transition: box-shadow .15s, border-color .15s; }
 .stat-tile.big .big-value { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
 .big-old { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); min-height: 16px; text-decoration: line-through; }
@@ -956,7 +950,7 @@ small {
   .hero-head h2 { font-size: 20px; }
   .hero-bank { margin: 0 0 6px; }
   .hero-bank .money { font-size: 22px; }
-  .hero .big-stats, .hero .stats-grid { gap: 8px; margin-bottom: 8px; }
+  .hero .big-stats { gap: 8px; margin-bottom: 8px; }
   .stat-tile.big { padding: 6px 12px; display: flex; align-items: baseline; column-gap: 10px; row-gap: 0; flex-wrap: wrap; }
   .stat-tile.big small { flex: 0 0 auto; }
   .stat-tile.big .big-old { min-height: 0; flex: 0 0 auto; max-width: 100%; }
@@ -983,7 +977,6 @@ small {
 }
 @media (min-width: 721px) and (max-height: 760px) {
   .stat-tile.big { padding: 4px 10px; }
-  .hero .stats-grid { display: none; }
 }
 @media (min-width: 721px) and (max-height: 640px) {
   .hero-bank .rate, .kv-grid .kv:nth-child(n+4) { display: none; }
@@ -1145,10 +1138,9 @@ small {
 .history-pair .history-view, .history-pair .history-profit, .history-pair .combo-view { min-height: 0; overflow: hidden; }
 .history-pair .history-canvas { min-height: 0; }
 
-/* Stats card keeps a constant height: four kv columns up front (Streak joins the row) and single-line tiles. */
-.hero .kv-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.hero .kv-value, .stats-grid .tile-value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stats-grid .tile-value { font-size: clamp(12px, 1.1vw, 16px); }
+/* Stats card keeps a constant height: three kv columns and single-line values. */
+.hero .kv-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.hero .kv-value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .top .brand .repo-link { margin-left: 10px; font-size: 11px; color: var(--cyan); text-decoration: none; white-space: nowrap; }
 .top .brand .repo-link:hover { text-decoration: underline; }

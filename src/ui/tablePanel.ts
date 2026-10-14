@@ -4,12 +4,12 @@ import {
   allUpgrades,
   luckChance,
   maxPayout,
-  minBet,
+  betAtLevel,
   payoutMultiplier,
   prestigeThreshold,
 } from '../core/economy';
 import { h, setDisabled, setText, toggleClass } from './dom';
-import { fmt, fmtSigned } from './format';
+import { fmt } from './format';
 import { previousTable } from '../tables';
 import { Stage } from './stage/stage';
 import { HistoryChart } from './historyChart';
@@ -39,26 +39,21 @@ export class TablePanel {
   private unlockNote: HTMLElement;
   private unlockFill: HTMLElement;
   private unlockLabel: HTMLElement;
-  private statTiles: Record<'prestige' | 'luck' | 'winnings' | 'streak', HTMLElement>;
-  private streakTile: HTMLElement;
+  private statTiles: Record<'prestige' | 'luck' | 'winnings', HTMLElement>;
   private body: HTMLElement;
 
   private statsEl: HTMLElement;
-  private tileProfit: HTMLElement;
-  private tileIncome: HTMLElement;
   private winOld!: HTMLElement;
   /** Winnings multiplier captured when the prestige preview opens, so the comparison holds still. */
   private frozenWin: number | null = null;
-  private tilePlays: HTMLElement;
+  /** Upgrade whose buy button is hovered/focused; Bigger Bets previews its bet in the Bet / Payout tile. */
+  private previewUpgrade: string | null = null;
   private stage: HTMLElement;
   private noticeEl: HTMLElement;
   private managerSeq = 0;
-  private bigMin: HTMLElement;
-  private bigMinGhost: HTMLElement;
-  private bigMinOld: HTMLElement;
-  private bigMax: HTMLElement;
-  private bigMaxGhost: HTMLElement;
-  private bigMaxOld: HTMLElement;
+  private bigBet: HTMLElement;
+  private bigBetGhost: HTMLElement;
+  private bigBetOld: HTMLElement;
   private bigTiles: HTMLElement[] = [];
   private winTile: HTMLElement;
   private previewing = false;
@@ -105,9 +100,7 @@ export class TablePanel {
       prestige: kv('Prestige'),
       luck: kv('Luck', 'gain'),
       winnings: kv('Winnings', 'gain'),
-      streak: kv('Streak', 'gain'),
     };
-    this.streakTile = h('div', { class: 'kv' }, h('small', { text: 'Streak' }), this.statTiles.streak);
     this.winOld = h('small', { class: 'kv-old concealed' });
     this.winTile = h('div', { class: 'kv' }, h('small', { text: 'Winnings' }), this.statTiles.winnings, this.winOld);
     this.statsEl = h(
@@ -116,27 +109,19 @@ export class TablePanel {
       h('div', { class: 'kv' }, h('small', { text: 'Prestige' }), this.statTiles.prestige),
       h('div', { class: 'kv' }, h('small', { text: 'Luck' }), this.statTiles.luck),
       this.winTile,
-      this.streakTile,
     );
-    this.tileProfit = h('div', { class: 'tile-value', text: '0' });
-    this.tileIncome = h('div', { class: 'tile-value', text: '0' });
-    this.tilePlays = h('div', { class: 'tile-value', text: '0' });
     this.canvasStage = new Stage(def.icon, id);
     this.noticeEl = h('div', { class: 'stage-notice' });
     this.stage = h('div', { class: 'stage' }, this.canvasStage.canvas, this.noticeEl);
 
     // Each big value stacks its shown text over a hidden copy of the other state, so the tile is always as wide as
     // the wider of the two and toggling the prestige preview can never change how it wraps (which would move the button).
-    this.bigMin = h('span', { class: 'big-shown' });
-    this.bigMinGhost = h('span', { class: 'big-ghost' });
-    this.bigMinOld = h('div', { class: 'big-old' });
-    this.bigMax = h('span', { class: 'big-shown' });
-    this.bigMaxGhost = h('span', { class: 'big-ghost' });
-    this.bigMaxOld = h('div', { class: 'big-old' });
-    const bigMinTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Min bet' }), h('div', { class: 'big-value' }, this.bigMin, this.bigMinGhost), this.bigMinOld);
-    const bigMaxTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Max payout' }), h('div', { class: 'big-value' }, this.bigMax, this.bigMaxGhost), this.bigMaxOld);
-    this.bigTiles = [bigMinTile, bigMaxTile];
-    const bigStats = h('div', { class: 'big-stats' }, bigMinTile, bigMaxTile);
+    this.bigBet = h('span', { class: 'big-shown' });
+    this.bigBetGhost = h('span', { class: 'big-ghost' });
+    this.bigBetOld = h('div', { class: 'big-old' });
+    const bigBetTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Bet / Max payout' }), h('div', { class: 'big-value' }, this.bigBet, this.bigBetGhost), this.bigBetOld);
+    this.bigTiles = [bigBetTile];
+    const bigStats = h('div', { class: 'big-stats' }, bigBetTile);
 
     // Upgrades
     this.cheapestBtn = h('button', {
@@ -160,6 +145,16 @@ export class TablePanel {
         button,
       );
       upgrades.append(root);
+      if (u.id === 'autobet') {
+        const set = (on: boolean): void => {
+          this.previewUpgrade = on ? u.id : null;
+          this.update();
+        };
+        button.addEventListener('mouseenter', () => set(true));
+        button.addEventListener('mouseleave', () => set(false));
+        button.addEventListener('focus', () => set(true));
+        button.addEventListener('blur', () => set(false));
+      }
       this.rows.push({ def: u, root, level, button });
     }
 
@@ -211,13 +206,6 @@ export class TablePanel {
             h('div', { class: 'hero-head' }, h('h2', { text: `${def.icon} ${def.name}` }), prestigeWrap),
             h('p', { text: def.blurb }),
             bigStats,
-            h(
-              'div',
-              { class: 'stats-grid' },
-              h('div', { class: 'stat-tile' }, h('small', { text: 'Run profit' }), this.tileProfit),
-              h('div', { class: 'stat-tile' }, h('small', { text: 'Income / sec' }), this.tileIncome),
-              h('div', { class: 'stat-tile' }, h('small', { text: 'Plays' }), this.tilePlays),
-            ),
             this.statsEl,
             this.barWrap,
           ),
@@ -321,34 +309,37 @@ export class TablePanel {
     setText(this.statTiles.prestige, `${ts.prestige}`);
     setText(this.statTiles.luck, `${(luckChance(levels, game.bonus) * 100).toFixed(1)}%`);
     const curWin = payoutMultiplier(levels, ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak);
-    const curMin = minBet(def, ts.prestige);
+    const autobetLvl = ts.levels.autobet ?? 0;
+    const curBet = betAtLevel(def, ts.prestige, ts.wallet, autobetLvl);
     const curMax = maxPayout(def, ts.prestige, levels);
-    const pv = this.previewing;
+    const prestigePv = this.previewing;
+    const betPv = !prestigePv && this.previewUpgrade === 'autobet' && autobetLvl < 7;
+    const pv = prestigePv;
     const nextWin = payoutMultiplier({}, ts.prestige + 1, game.bonusFor(id), def.baseWinBonus, 0);
     setText(this.statTiles.winnings, `×${(pv ? nextWin : curWin).toFixed(2)}`);
-    const nextMin = minBet(def, ts.prestige + 1);
-    const nextMax = maxPayout(def, ts.prestige + 1, levels);
-    setText(this.bigMin, `${cur.icon} ${fmt(pv ? nextMin : curMin)}`);
-    setText(this.bigMinGhost, `${cur.icon} ${fmt(pv ? curMin : nextMin)}`);
-    setText(this.bigMax, `${cur.icon} ${fmt(pv ? nextMax : curMax)}`);
-    setText(this.bigMaxGhost, `${cur.icon} ${fmt(pv ? curMax : nextMax)}`);
+    let shownBet = curBet;
+    let shownMax = curMax;
+    if (prestigePv) {
+      shownBet = betAtLevel(def, ts.prestige + 1, ts.wallet, autobetLvl);
+      shownMax = maxPayout(def, ts.prestige + 1, levels);
+    } else if (betPv) {
+      const n = Math.max(1, game.quoteUpgrade(id, 'autobet', buyMode()).count);
+      shownBet = betAtLevel(def, ts.prestige, ts.wallet, Math.min(7, autobetLvl + n));
+    }
+    const line = (b: number, m: number): string => `${cur.icon} ${fmt(b)} → ${cur.icon} ${fmt(m)}`;
+    setText(this.bigBet, line(shownBet, shownMax));
+    // Ghost holds the widest candidate so toggling a preview never changes the tile's width.
+    setText(this.bigBetGhost, line(Math.max(shownBet, curBet), Math.max(shownMax, curMax)));
     // Always rendered (just concealed) so the tile keeps its size and the button doesn't move under the cursor.
-    setText(this.bigMinOld, `was ${fmt(curMin)}`);
-    setText(this.bigMaxOld, `was ${fmt(curMax)}`);
-    toggleClass(this.bigMinOld, 'concealed', !pv);
-    toggleClass(this.bigMaxOld, 'concealed', !pv);
+    setText(this.bigBetOld, `was ${line(curBet, curMax)}`);
+    const anyPv = prestigePv || betPv;
+    toggleClass(this.bigBetOld, 'concealed', !anyPv);
     if (pv && this.frozenWin === null) this.frozenWin = payoutMultiplier({}, ts.prestige, game.bonusFor(id), def.baseWinBonus, 0);
     if (!pv) this.frozenWin = null;
     setText(this.winOld, `was ×${(this.frozenWin ?? curWin).toFixed(2)}`);
     toggleClass(this.winOld, 'concealed', !pv);
-    for (const t of this.bigTiles) toggleClass(t, 'preview', pv);
+    for (const t of this.bigTiles) toggleClass(t, 'preview', anyPv);
     toggleClass(this.winTile, 'preview', pv);
-    toggleClass(this.streakTile, 'hidden', !ts.levels.streak);
-    setText(this.statTiles.streak, `${ts.streak}`);
-
-    setText(this.tileProfit, fmtSigned(ts.profit));
-    setText(this.tileIncome, `≈ ${fmtSigned(Math.round(game.incomeEstimate(id)))}`);
-    setText(this.tilePlays, fmt(ts.plays));
 
     toggleClass(this.cheapestBtn, 'hidden', game.casinoLevel('bulkbuy') < 1);
     setDisabled(this.cheapestBtn, !game.canBuyCheapest(id));
