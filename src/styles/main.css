@@ -1074,3 +1074,22 @@ small {
     background: rgba(255, 210, 74, 0.25);
   }
 }
+
+/* Tables with every upgrade maxed get a rainbow outline */
+.tab.tile.maxed { position: relative; }
+.tab.tile.maxed::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff4d4d, #ffb84d, #ffe94d, #4dff7a, #4dd2ff, #7a4dff, #ff4dd2, #ff4d4d) 0 0 / 200% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+  animation: rainbow-shift 4s linear infinite;
+}
+@keyframes rainbow-shift { to { background-position: 200% 0; } }
+:root[data-quality='low'] .tab.tile.maxed::after { animation: none; }
+@media (prefers-reduced-motion: reduce) { .tab.tile.maxed::after { animation: none; } }

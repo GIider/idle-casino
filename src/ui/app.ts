@@ -7,7 +7,7 @@ import { fmt } from './format';
 import { TablePanel } from './tablePanel';
 import { CasinoPanel } from './casinoPanel';
 import { cycleQuality } from './quality';
-import { CROSS_PRESTIGE_BONUS } from '../core/economy';
+import { CROSS_PRESTIGE_BONUS, allUpgrades } from '../core/economy';
 import { previousTable } from '../tables';
 
 
@@ -200,6 +200,7 @@ export class App {
       toggleClass(t.root, 'locked', !ts.unlocked);
       toggleClass(t.root, 'hidden-feature', !seen);
       toggleClass(t.root, 'ready', seen && g.canPrestige(id));
+      toggleClass(t.root, 'maxed', seen && allUpgrades(TABLES[id]).every((u) => (ts.levels[u.id] ?? 0) >= u.maxLevel));
       t.fill.style.transform = `scaleX(${g.prestigeProgress(id)})`;
       t.root.disabled = !seen;
       t.root.title = seen ? TABLES[id].name : '';
