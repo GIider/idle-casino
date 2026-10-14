@@ -211,7 +211,11 @@ export class App {
       toggleClass(t.root, 'hidden-feature', !seen);
       toggleClass(t.root, 'ready', seen && g.canPrestige(id));
       toggleClass(t.root, 'maxed', seen && allUpgrades(TABLES[id]).every((u) => (ts.levels[u.id] ?? 0) >= u.maxLevel));
-      t.fill.style.transform = `scaleX(${g.prestigeProgress(id)})`;
+      // Locked tables show progress toward unlocking (previous table's wallet vs the price); unlocked ones toward prestige.
+      const payer = g.unlockPayer(id);
+      const unlockProgress = payer ? Math.min(1, Math.max(0, payer.wallet / Math.max(1, TABLES[id].unlockCost))) : 0;
+      t.fill.style.transform = `scaleX(${ts.unlocked ? g.prestigeProgress(id) : unlockProgress})`;
+      toggleClass(t.root, 'unlocking', !ts.unlocked);
       t.root.disabled = !seen;
       t.root.title = seen ? TABLES[id].name : '';
       const chip = this.chips.get(id);

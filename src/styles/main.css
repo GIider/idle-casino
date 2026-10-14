@@ -1169,3 +1169,9 @@ small {
 .tiles > .tab.tile > .tile-bar { grid-area: bar; width: 100%; order: 0; margin: 4px 0 0; height: 5px; }
 .tile-wallet .money { font-size: 17px; }
 .tile.active .tile-wallet .money { font-size: 17px; }
+
+.blip-legend { display: flex; gap: 8px; margin-left: auto; padding-left: 8px; font-size: 10px; color: var(--muted); white-space: nowrap; }
+.legend-item { display: inline-flex; align-items: center; gap: 3px; }
+.legend-item .blip { display: inline-block; flex: none; width: 10px; height: 10px; }
+
+.tile.unlocking .bar-fill { background: var(--green); }

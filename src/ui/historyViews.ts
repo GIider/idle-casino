@@ -82,6 +82,13 @@ export class SlotsCombosView {
     this.ribbon.replaceChildren(
       h('small', { text: 'Recent' }),
       ...s.recent.map((r) => h('span', { class: `blip ${kindOf(r)}`, title: r.map((x) => SYMBOLS[x]).join(' ') })),
+      h(
+        'span',
+        { class: 'blip-legend' },
+        h('span', { class: 'legend-item' }, h('i', { class: 'blip triple' }), 'Triple'),
+        h('span', { class: 'legend-item' }, h('i', { class: 'blip pair' }), 'Pair'),
+        h('span', { class: 'legend-item' }, h('i', { class: 'blip' }), 'None'),
+      ),
     );
   }
 }
