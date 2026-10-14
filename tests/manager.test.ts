@@ -71,30 +71,27 @@ describe('Floor Manager', () => {
     expect(ts.levels.sleeve).toBe(0);
   });
 
-  it('auto-prestiges only with Concierge when enabled', () => {
+  it('auto-prestiges whenever the manager fires, but only with Concierge', () => {
     const g = newGame();
     const ts = g.table('coinflip');
     for (const u of allUpgrades(TABLES.coinflip)) ts.levels[u.id] = u.maxLevel;
     ts.wallet = 1e9;
     ts.profit = 1e12;
     g.state.casino.levels.manager = 1;
-    g.setAutoPrestige(true);
-    expect(g.state.casino.autoPrestige).toBe(false);
     g.tick(5);
     expect(ts.prestige).toBe(0);
     g.state.casino.levels.concierge = 1;
     g.state.casino.levels.overtime = 2;
-    g.setAutoPrestige(true);
     g.tick(3);
     expect(ts.prestige).toBe(1);
   });
 
   it('normalizes saved manager settings', () => {
     const g = newGame();
-    g.state.casino.autoPrestige = true;
+    g.state.casino.levels.concierge = 1;
     const raw = JSON.parse(JSON.stringify(g.state));
     const back = normalizeState(raw);
-    expect(back.casino.autoPrestige).toBe(true);
+    expect(back.casino.levels.concierge).toBe(1);
   });
 });
 

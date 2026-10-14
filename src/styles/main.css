@@ -238,33 +238,9 @@ small {
   text-align: center;
 }
 
-.result {
-  font-size: 28px;
-  font-weight: 700;
-  word-break: break-word;
-}
-
-.net {
-  font-size: 20px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 .stage.win {
   border-color: var(--green);
   box-shadow: 0 0 18px #3dff8f55;
-}
-
-.stage.win .net {
-  color: var(--green);
-}
-
-.stage.lose .net {
-  color: var(--red);
-}
-
-.stage.push .net {
-  color: var(--muted);
 }
 
 /* Controls */
@@ -334,14 +310,6 @@ small {
   border-top: none;
 }
 
-.auto-buy {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.8em;
-  color: var(--muted, inherit);
-  white-space: nowrap;
-}
 
 .upgrade-text {
   display: flex;
@@ -854,20 +822,6 @@ small {
   flex: none;
 }
 
-.activity .card.history {
-  border: none;
-  padding: 0;
-  background: none;
-}
-
-.activity .history h3 {
-  display: none;
-}
-
-.activity .history-canvas {
-  height: 110px;
-}
-
 .hero-head {
   display: flex;
   align-items: center;
@@ -905,18 +859,10 @@ small {
   flex: none;
 }
 .below-stage > * { min-width: 0; }
-@media (max-width: 720px) {
-  .below-stage { grid-template-columns: 1fr; }
-}
-.activity { overflow: hidden; }
 
 .side-panel > .card.upgrades > h3,
 .side-panel > .achievements > h3 {
   display: none;
-}
-
-.activity .history-canvas {
-  height: 130px;
 }
 
 /* Design language: goal (what to do) vs gain (what you get) */
@@ -1111,12 +1057,10 @@ small {
 @media (prefers-reduced-motion: reduce) { .tab.tile.maxed::after { animation: none; } }
 
 /* History fills whatever height the grid row gives the card. */
-.activity { display: flex; flex-direction: column; }
-.activity .card.history { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
-.activity .history-view, .activity .history-profit { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
-.activity .history-view.hidden, .activity .history-profit.hidden, .activity .combo-view.hidden { display: none; }
-.activity .history .history-canvas { height: auto; flex: 1 1 0; min-height: 130px; }
-.activity .combo-view { flex: 1 1 0; height: auto; min-height: 130px; }
+.history-pair .history-view, .history-pair .history-profit { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+.history-pair .history-view.hidden, .history-pair .combo-view.hidden { display: none; }
+.history-pair .history-canvas { height: auto; flex: 1 1 0; min-height: 90px; }
+.history-pair .combo-view { flex: 1 1 0; height: auto; min-height: 100px; }
 
 /* Slots combos: last spin | per-symbol table, ribbon beneath */
 .slots-body { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px; }
@@ -1129,14 +1073,99 @@ small {
 .slots-last.triple { border-color: var(--gold); box-shadow: 0 0 10px rgba(255, 200, 80, .35); }
 .slots-last.triple .slots-last-tag { color: var(--gold); }
 .slots-table { display: flex; flex-direction: column; justify-content: space-between; min-height: 0; }
-.slots-row { display: grid; grid-template-columns: 2.2em 1fr 1fr; align-items: center; font-variant-numeric: tabular-nums; font-size: 13px; }
+.slots-row { display: grid; grid-template-columns: 2.2em 1.2fr 1fr 1fr; align-items: center; font-variant-numeric: tabular-nums; font-size: 13px; }
 .slots-row.head { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
 .slots-row span:nth-child(n+2) { text-align: right; }
+.bj-row .bj-row-name { text-align: left; }
 .slots-sym { font-size: 16px; }
 .slots-n.triple { color: var(--gold); font-weight: 700; }
 .slots-n.pair { color: var(--cyan); }
+.slots-n.seen { color: var(--muted); }
 .slots-ribbon { display: flex; align-items: center; gap: 3px; flex: none; }
 .slots-ribbon small { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; margin-right: 4px; }
 .blip { flex: 1 1 0; max-width: 18px; height: 10px; border-radius: 3px; background: var(--line); }
 .blip.pair { background: var(--cyan); }
 .blip.triple { background: var(--gold); }
+
+/* Game stats, income and unique-history cards share one horizontal line. */
+.below-stage { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: stretch; }
+.history-pair { display: contents; }
+.history-pair > .card.history { border: 1px solid var(--line); padding: 10px 12px; background: var(--card); flex: 1 1 0; gap: 6px; min-width: 0; min-height: 0; overflow: hidden; }
+.history-pair .history-head { min-height: 28px; margin-bottom: 4px; flex-wrap: wrap; }
+.history-pair h3 { display: block; margin: 0; font-size: 14px; }
+.history-pair .history-canvas { height: auto; flex: 1 1 0; min-height: 90px; }
+.history-pair .combo-view { flex: 1 1 0; height: auto; min-height: 100px; }
+.below-stage > .card { min-height: 0; overflow: hidden; }
+@media (max-width: 560px) {
+  .below-stage { grid-template-columns: 1fr; }
+}
+
+/* Blackjack hands: reuses the slots layout */
+.bj-last-line { font-size: 24px; white-space: nowrap; }
+.bj-last-line .bj-vs { color: var(--muted); font-size: 14px; }
+.bj-last-cards { font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slots-last.bj-natural, .slots-last.bj-win { border-color: var(--green); }
+.slots-last.bj-natural { border-color: var(--gold); box-shadow: 0 0 10px rgba(255, 200, 80, .35); }
+.slots-last.bj-push { border-color: var(--cyan); }
+.slots-last.bj-lose, .slots-last.bj-bust { border-color: var(--red); }
+.slots-last.bj-win .slots-last-tag { color: var(--green); }
+.slots-last.bj-natural .slots-last-tag { color: var(--gold); }
+.slots-last.bj-lose .slots-last-tag, .slots-last.bj-bust .slots-last-tag { color: var(--red); }
+.bj-row { grid-template-columns: 4.5em 1fr 1fr; position: relative; padding: 1px 4px; border-radius: 4px; background: linear-gradient(90deg, var(--bar, var(--line)) var(--share), transparent var(--share)); }
+.bj-row.bj-natural { --bar: rgba(255, 200, 80, .35); }
+.bj-row.bj-win { --bar: rgba(61, 255, 143, .3); }
+.bj-row.bj-push { --bar: rgba(80, 220, 255, .3); }
+.bj-row.bj-lose { --bar: rgba(255, 80, 100, .3); }
+.bj-row.bj-bust { --bar: rgba(255, 90, 180, .3); }
+.bj-row .bj-row-name { text-align: left; }
+.blip.bj-natural { background: var(--gold); }
+.blip.bj-win { background: var(--green); }
+.blip.bj-push { background: var(--cyan); }
+.blip.bj-lose { background: var(--red); }
+.blip.bj-bust { background: var(--pink, #ff5ab4); }
+
+/* Row height comes from the stats card alone: history cards never size the row (no growth ratchet when stats change). */
+.below-stage { grid-auto-rows: minmax(230px, auto); }
+.history-pair > .card.history { contain: size; }
+.history-pair .history-view, .history-pair .history-profit, .history-pair .combo-view { min-height: 0; overflow: hidden; }
+.history-pair .history-canvas { min-height: 0; }
+
+/* Stats card keeps a constant height: four kv columns up front (Streak joins the row) and single-line tiles. */
+.hero .kv-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hero .kv-value, .stats-grid .tile-value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stats-grid .tile-value { font-size: clamp(12px, 1.1vw, 16px); }
+
+.top .brand .repo-link { margin-left: 10px; font-size: 11px; color: var(--cyan); text-decoration: none; white-space: nowrap; }
+.top .brand .repo-link:hover { text-decoration: underline; }
+
+/* Wallet lives in the game tiles now. */
+.tile-wallet { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.tile-wallet .money { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile.active .tile-wallet .money { font-size: 17px; }
+
+/* Tiles: one fixed grid so every tile lines up the same way.
+   icon | name | prestige / wallet / income per min / progress bar */
+.tiles > .tab.tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'icon name lvl'
+    'wallet wallet wallet'
+    'sub sub sub'
+    'bar bar bar';
+  align-items: center;
+  justify-items: start;
+  column-gap: 8px;
+  row-gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+}
+.tiles > .tab.tile > .tile-icon { grid-area: icon; font-size: 26px; line-height: 1; }
+.tiles > .tab.tile > strong { grid-area: name; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tiles > .tab.tile > small:not(.tile-rate) { grid-area: lvl; justify-self: end; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.tiles > .tab.tile > .tile-wallet { grid-area: wallet; justify-self: start; }
+.tiles > .tab.tile > .tile-wallet.hidden { display: none; }
+.tiles > .tab.tile > .tile-rate { grid-area: sub; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tiles > .tab.tile > .tile-bar { grid-area: bar; width: 100%; order: 0; margin: 4px 0 0; height: 5px; }
+.tile-wallet .money { font-size: 17px; }
+.tile.active .tile-wallet .money { font-size: 17px; }

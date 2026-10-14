@@ -2,8 +2,20 @@ import type { PlayView } from '../../core/types';
 import { SYMBOLS } from '../../tables/slots';
 import { colorOf } from '../../tables/roulette';
 import { COLORS, clamp01, easeOut, hash, roundRect } from './canvas';
+import { fmtSigned } from '../format';
+
+/** What the round paid; scenes draw this into the animation once they settle. */
+export interface ResultInfo {
+  bet: number;
+  net: number;
+  detail: string;
+  capped: boolean;
+  rerolled: boolean;
+  bonusPlay?: boolean;
+}
 
 export interface SceneCtx {
+  result: ResultInfo;
   levels: Record<string, number>;
   /** Positive when the round was won, negative when lost. */
   net: number;
@@ -26,12 +38,32 @@ function text(
   size: number,
   color: string,
   weight = 700,
+  maxWidth?: number,
 ): void {
   ctx.font = `${weight} ${size}px system-ui, -apple-system, 'Segoe UI', sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = color;
-  ctx.fillText(s, x, y);
+  if (maxWidth !== undefined) ctx.fillText(s, x, y, maxWidth);
+  else ctx.fillText(s, x, y);
+}
+
+const netColor = (net: number) => (net > 0 ? COLORS.green : net < 0 ? COLORS.red : COLORS.muted);
+
+/** Net line plus an optional small caption, bottom-centred in a w×h area (the round's result, in the scene). */
+function drawResult(
+  ctx: CanvasRenderingContext2D,
+  r: ResultInfo,
+  w: number,
+  h: number,
+  caption = '',
+  x = w / 2,
+  y = h - 18,
+): void {
+  const big = Math.max(13, Math.min(22, w * 0.07));
+  const net = `${fmtSigned(r.net)}${r.capped ? ' · MAX' : ''}`;
+  text(ctx, net, x, y, big, netColor(r.net), 800, w - 8);
+  if (caption) text(ctx, caption, x, y - big - 4, 12, COLORS.muted, 600, w - 8);
 }
 
 function coinScene(view: Extract<PlayView, { kind: 'coin' }>, c: SceneCtx): Scene {
@@ -42,9 +74,9 @@ function coinScene(view: Extract<PlayView, { kind: 'coin' }>, c: SceneCtx): Scen
     draw(ctx, t, w, h) {
       const p = clamp01(t / duration);
       const angle = easeOut(p) * (view.heads ? 6 : 7) * Math.PI;
-      const r = Math.min(h * 0.26, 64);
+      const r = Math.min(h * 0.2, w * 0.3, 60);
       const cx = w / 2;
-      const cy = h * 0.55 - Math.sin(p * Math.PI) * h * 0.28;
+      const cy = h * 0.42 - Math.sin(p * Math.PI) * h * 0.2;
       const cos = Math.cos(angle);
       const sy = Math.max(0.06, Math.abs(cos));
       const heads = cos >= 0;
@@ -53,7 +85,7 @@ function coinScene(view: Extract<PlayView, { kind: 'coin' }>, c: SceneCtx): Scen
       // Shadow on the felt.
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.beginPath();
-      ctx.ellipse(cx, h * 0.8, r * (0.9 - Math.sin(p * Math.PI) * 0.3), r * 0.18, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, h * 0.66, r * (0.9 - Math.sin(p * Math.PI) * 0.3), r * 0.18, 0, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.save();
@@ -82,6 +114,13 @@ function coinScene(view: Extract<PlayView, { kind: 'coin' }>, c: SceneCtx): Scen
       ctx.scale(1, sy);
       text(ctx, heads ? '♛' : '✦', 0, 0, r * 1.0, heads ? '#8a6410' : '#55557a', 800);
       ctx.restore();
+
+      if (t >= duration) {
+        // Settled: what it landed on (or the special payout), a free-try tag, and the net.
+        const call = view.special === 'gold' ? 'GOLD COIN' : view.special === 'edge' ? 'EDGE!' : view.special === 'ride' ? 'RIDDEN' : view.heads ? 'HEADS' : 'TAILS';
+        const caption = c.result.bonusPlay ? `${call} · FREE TRY` : call;
+        drawResult(ctx, c.result, w, h, caption);
+      }
     },
   };
 }
@@ -134,8 +173,45 @@ function slotsScene(view: Extract<PlayView, { kind: 'slots' }>, c: SceneCtx): Sc
         }
         ctx.restore();
       }
+      if (done) {
+        const notes = /\(([^)]*)\)\s*$/.exec(c.result.detail)?.[1] ?? '';
+        drawResult(ctx, c.result, w, h, notes);
+      }
     },
   };
+}
+
+/** Faint grid of earlier spins around the live reels, newest nearest the centre; fills the stage. */
+export function drawSlotsBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number, past: number[][]): void {
+  if (past.length === 0) return;
+  const cell = Math.min(w * 0.11, h * 0.26, 54);
+  const pitchX = cell * 1.05;
+  const blockW = pitchX * 3 + cell * 0.5;
+  const rows = Math.floor(h / cell / 1.1);
+  const blocks = Math.max(1, Math.floor(w / blockW));
+  const half = Math.floor(rows / 2);
+  const spots: { r: number; b: number; d: number }[] = [];
+  for (let r = -half; r <= half; r++) {
+    for (let b = -Math.floor(blocks / 2); b <= Math.floor(blocks / 2); b++) {
+      // The centre block of the middle row is where the live reels sit.
+      if (r === 0 && b === 0) continue;
+      spots.push({ r, b, d: Math.abs(r) * 1.4 + Math.abs(b) });
+    }
+  }
+  spots.sort((x, y) => x.d - y.d);
+  const newest = past.length - 1;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `${cell * 0.5}px system-ui, sans-serif`;
+  spots.slice(0, past.length).forEach((spot, i) => {
+    const reels = past[newest - i];
+    ctx.globalAlpha = Math.max(0.1, 0.34 - i * 0.02);
+    const cy = h / 2 + spot.r * cell * 1.1;
+    const cx0 = w / 2 + spot.b * blockW;
+    reels.forEach((sym, k) => ctx.fillText(SYMBOLS[sym], cx0 + (k - 1) * pitchX, cy));
+  });
+  ctx.restore();
 }
 
 // European single-zero wheel order.
@@ -153,9 +229,11 @@ function rouletteScene(view: Extract<PlayView, { kind: 'roulette' }>, c: SceneCt
     duration,
     draw(ctx, t, w, h) {
       const p = clamp01(t / duration);
-      const R = Math.min(h * 0.44, w * 0.4);
-      const cx = w / 2;
-      const cy = h / 2;
+      // Wide stages put the wheel left and the result panel right; narrow ones stack them.
+      const wide = w >= 380;
+      const R = wide ? Math.min(h * 0.44, w * 0.26) : Math.min(h * 0.34, w * 0.38);
+      const cx = wide ? w * 0.3 : w / 2;
+      const cy = wide ? h / 2 : h * 0.42;
       const rot = easeOut(p) * 2.2;
 
       ctx.save();
@@ -213,7 +291,22 @@ function rouletteScene(view: Extract<PlayView, { kind: 'roulette' }>, c: SceneCt
 
       if (p >= 1) {
         const col = colorOf(view.pocket);
-        text(ctx, String(view.pocket), cx, cy, R * 0.42, col === 'red' ? COLORS.red : col === 'green' ? COLORS.green : COLORS.fg, 800);
+        const tint = col === 'red' ? COLORS.red : col === 'green' ? COLORS.green : COLORS.fg;
+        text(ctx, String(view.pocket), cx, cy, R * 0.42, tint, 800);
+        if (wide) {
+          const px = w * 0.62;
+          const pw = w - px - 12;
+          const mid = px + pw / 2;
+          text(ctx, String(view.pocket), mid, h * 0.26, Math.min(48, h * 0.24), tint, 800);
+          text(ctx, col.toUpperCase(), mid, h * 0.26 + Math.min(30, h * 0.16), 12, COLORS.muted, 700);
+          text(ctx, `${view.bets.length} bet${view.bets.length > 1 ? 's' : ''}: ${view.bets.join(' · ')}`, mid, h * 0.58, 12, COLORS.muted, 600, pw);
+          drawResult(ctx, c.result, pw, h, '', mid, h * 0.76);
+          if (c.result.rerolled) text(ctx, '↻ re-rolled', mid, h * 0.9, 12, COLORS.cyan, 700);
+        } else {
+          drawResult(ctx, c.result, w, h, `${col.toUpperCase()} · ${view.bets.join(' · ')}`);
+        }
+      } else if (wide) {
+        text(ctx, 'Spinning…', w * 0.62 + (w - w * 0.62 - 12) / 2, h * 0.5, 14, COLORS.muted, 600);
       }
     },
   };
@@ -239,14 +332,17 @@ function handTotal(cards: number[]): number {
 
 function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: SceneCtx): Scene {
   const step = 0.2 * c.speed;
-  // Deal order: player, dealer, player, dealer, then remaining player hits, then dealer hits.
-  const order: { who: 'p' | 'd'; i: number }[] = [
+  type Who = 'p' | 's' | 'd'; // player hand, split hand, dealer
+  const hands: Record<Who, number[]> = { p: view.player, s: view.split ?? [], d: view.dealer };
+  // Deal order: player, dealer, player, dealer, then remaining player hits, split hand, dealer hits.
+  const order: { who: Who; i: number }[] = [
     { who: 'p', i: 0 },
     { who: 'd', i: 0 },
     { who: 'p', i: 1 },
     { who: 'd', i: 1 },
   ];
   for (let i = 2; i < view.player.length; i++) order.push({ who: 'p', i });
+  for (let i = 0; i < hands.s.length; i++) order.push({ who: 's', i });
   for (let i = 2; i < view.dealer.length; i++) order.push({ who: 'd', i });
   const holeHidden = view.outcome === 'bust' && view.dealer.length === 2;
   const duration = order.length * step + 0.55 * c.speed;
@@ -257,67 +353,171 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
     lose: ['DEALER WINS', COLORS.red],
     bust: [view.insured ? 'BUST · INSURED' : 'BUST', view.insured ? COLORS.gold : COLORS.red],
   }[view.outcome] as [string, string];
+  const pair = /pair \+[\d.]+×/.exec(c.result.detail)?.[0];
+  // Small tags for the special rewards this hand used.
+  const tags = [
+    view.doubled ? 'DOUBLE' : '',
+    view.split ? 'SPLIT' : '',
+    view.surrendered ? 'SURRENDER' : '',
+    view.charlie ? 'CHARLIE' : '',
+    view.insured ? 'INSURED' : '',
+    pair ? pair.toUpperCase() : '',
+  ].filter(Boolean);
 
   return {
     duration,
     draw(ctx, t, w, h) {
-      const cw = Math.min(w * 0.11, h * 0.26, 58);
-      const ch = cw * 1.4;
-      const spread = cw * 0.72;
-      const rows = { d: h * 0.1, p: h * 0.58 };
-      const drawCard = (who: 'p' | 'd', i: number, k: number) => {
-        const cards = who === 'p' ? view.player : view.dealer;
-        const count = cards.length;
-        const baseX = w / 2 - ((count - 1) * spread + cw) / 2 + i * spread;
-        const age = clamp01((t - k * step) / (0.22 * c.speed));
+      const split = hands.s.length > 0;
+      // Card size is picked from the lane height so two hands plus their total badges fit; the hand is
+      // squeezed (overlap) rather than shrunk when it has many cards.
+      const ch = Math.max(34, Math.min(h * 0.25, 84));
+      const cw = ch / 1.4;
+      const geom = (who: Who) => {
+        const count = hands[who].length;
+        const maxW = who === 'd' || !split ? w - 28 : w * 0.44;
+        let spread = cw * 0.64;
+        if (count > 1 && (count - 1) * spread + cw > maxW) spread = Math.max(cw * 0.3, (maxW - cw) / (count - 1));
+        const width = (count - 1) * spread + cw;
+        const centre = who === 'd' || !split ? w / 2 : who === 'p' ? w * 0.27 : w * 0.73;
+        return { spread, width, x0: centre - width / 2, centre };
+      };
+      const rowY = { d: h * 0.05, p: h * 0.55, s: h * 0.55 };
+      const matH = ch + 30;
+
+      // Felt mats the hands sit on, with empty card slots until the cards arrive.
+      const mat = (y: number, x: number, mw: number) => {
+        roundRect(ctx, x, y - 6, mw, matH, 14);
+        const g = ctx.createLinearGradient(0, y - 6, 0, y - 6 + matH);
+        g.addColorStop(0, '#0f4a3a');
+        g.addColorStop(1, '#09301f');
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+        ctx.stroke();
+      };
+      mat(rowY.d, 8, w - 16);
+      if (split) {
+        mat(rowY.p, 8, w / 2 - 12);
+        mat(rowY.s, w / 2 + 4, w / 2 - 12);
+      } else {
+        mat(rowY.p, 8, w - 16);
+      }
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      (split ? (['d', 'p', 's'] as Who[]) : (['d', 'p'] as Who[])).forEach((who) => {
+        const g = geom(who);
+        for (let i = 0; i < 2; i++) {
+          roundRect(ctx, g.x0 + i * g.spread, rowY[who], cw, ch, 6);
+          ctx.stroke();
+        }
+      });
+      ctx.restore();
+
+      const drawCard = (who: Who, i: number, k: number) => {
         if (t < k * step) return;
+        const g = geom(who);
+        const age = clamp01((t - k * step) / (0.22 * c.speed));
         const e = easeOut(age);
-        const x = baseX + (1 - e) * (w * 0.4);
-        const y = rows[who] - (1 - e) * ch * 0.8;
+        const x = g.x0 + i * g.spread + (1 - e) * (w * 0.35);
+        const y = rowY[who] - (1 - e) * ch * 0.6;
         const faceDown = who === 'd' && i === 1 && holeHidden;
         ctx.save();
         ctx.globalAlpha = e;
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowColor = 'rgba(0,0,0,0.55)';
         ctx.shadowBlur = 8;
         roundRect(ctx, x, y, cw, ch, 6);
-        ctx.fillStyle = faceDown ? COLORS.pink : '#f6f1ff';
+        ctx.fillStyle = faceDown ? COLORS.pink : '#f8f4ff';
         ctx.fill();
         ctx.shadowBlur = 0;
         if (faceDown) {
-          ctx.strokeStyle = '#fff3';
+          ctx.strokeStyle = '#fff4';
           ctx.lineWidth = 2;
-          roundRect(ctx, x + 4, y + 4, cw - 8, ch - 8, 4);
           ctx.stroke();
         } else {
-          const v = cards[i];
-          const label = v === 10 ? FACES[Math.floor(hash(c.seed, who === 'p' ? i : i + 9) * 4)] : RANK_LABEL[v];
-          const suit = SUITS[Math.floor(hash(c.seed + 7, (who === 'p' ? 0 : 20) + i) * 4)];
+          const v = hands[who][i];
+          const faceKey = who === 'p' ? i : who === 's' ? i + 30 : i + 9;
+          const rank = v === 10 ? FACES[Math.floor(hash(c.seed, faceKey) * 4)] : RANK_LABEL[v];
+          const suit = SUITS[Math.floor(hash(c.seed + 7, faceKey + 50) * 4)];
           const red = suit === '♥' || suit === '♦';
           const color = red ? '#d3213f' : '#17122a';
-          text(ctx, label, x + cw / 2, y + ch * 0.36, cw * 0.46, color, 800);
-          text(ctx, suit, x + cw / 2, y + ch * 0.72, cw * 0.4, color, 700);
+          // Overlapped cards only show their left strip, so the rank sits at the left edge.
+          const showsAll = i === hands[who].length - 1 || g.spread >= cw * 0.9;
+          const cx = showsAll ? x + cw / 2 : x + Math.min(cw / 2, g.spread / 2 + 1);
+          text(ctx, rank, cx, y + ch * 0.36, cw * (rank.length > 1 ? 0.5 : 0.62), color, 800);
+          text(ctx, suit, cx, y + ch * 0.74, cw * 0.46, color, 700);
         }
         ctx.restore();
       };
       order.forEach((o, k) => drawCard(o.who, o.i, k));
 
-      const shown = (who: 'p' | 'd') => {
-        const cards = who === 'p' ? view.player : view.dealer;
-        const idxs = order.map((o, k) => ({ o, k })).filter(({ o, k }) => o.who === who && t >= (k + 1) * step);
-        let n = idxs.length;
-        if (who === 'd' && holeHidden) n = Math.min(n, 1);
-        return n === 0 ? 0 : handTotal(cards.slice(0, n));
+      const shown = (who: Who) => {
+        const n = order.filter((o, k) => o.who === who && t >= (k + 1) * step).length;
+        const visible = who === 'd' && holeHidden ? Math.min(n, 1) : n;
+        return visible === 0 ? 0 : handTotal(hands[who].slice(0, visible));
       };
-      const pt = shown('p');
-      const dt = shown('d');
-      if (dt > 0) text(ctx, `Dealer ${dt}`, w * 0.14, rows.d + ch / 2, 13, COLORS.muted, 600);
-      if (pt > 0) text(ctx, `You ${pt}`, w * 0.14, rows.p + ch / 2, 13, COLORS.fg, 600);
+      // Total badge under each hand: big number, coloured by state.
+      const badge = (who: Who, label: string, total: number, final: boolean) => {
+        if (total <= 0) return;
+        const g = geom(who);
+        const y = rowY[who] + ch + 12;
+        const num = total > 21 ? 'BUST' : String(total);
+        const tint = total > 21 ? COLORS.red : total === 21 ? COLORS.gold : COLORS.fg;
+        ctx.save();
+        ctx.font = '800 20px system-ui, sans-serif';
+        const nw = ctx.measureText(num).width;
+        ctx.font = '700 10px system-ui, sans-serif';
+        const lw = ctx.measureText(label).width;
+        const bw = nw + (label ? lw + 8 : 0) + 18;
+        roundRect(ctx, g.centre - bw / 2, y - 12, bw, 24, 12);
+        ctx.fillStyle = 'rgba(8,12,24,0.78)';
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = final ? tint : 'rgba(255,255,255,0.2)';
+        ctx.stroke();
+        ctx.restore();
+        let x = g.centre - bw / 2 + 9;
+        if (label) {
+          ctx.font = '700 10px system-ui, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = COLORS.muted;
+          ctx.fillText(label, x, y + 1);
+          x += lw + 8;
+        }
+        ctx.font = '800 20px system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = tint;
+        ctx.fillText(num, x, y + 1);
+      };
+      const settled = t >= duration - 0.3 * c.speed;
+      badge('d', w < 260 ? 'D' : 'DEALER', shown('d'), settled);
+      badge('p', w < 260 ? 'Y' : split ? 'HAND 1' : 'YOU', shown('p'), settled);
+      if (split) badge('s', w < 260 ? 'H2' : 'HAND 2', shown('s'), settled);
 
-      if (t >= duration - 0.3 * c.speed) {
+      if (settled) {
         const a = easeOut((t - (duration - 0.3 * c.speed)) / (0.3 * c.speed));
         ctx.save();
         ctx.globalAlpha = a;
-        text(ctx, label[0], w / 2, h * 0.5 + 2, Math.min(26, w * 0.06), label[1], 800);
+        // Headline pill between the mats, with any reward tags folded in.
+        const head = [label[0], ...tags].join(' · ');
+        const hs = Math.max(11, Math.min(15, w * 0.045));
+        ctx.font = `800 ${hs}px system-ui, sans-serif`;
+        const hw = Math.min(w - 16, ctx.measureText(head).width + 24);
+        const hy = rowY.d + matH - 2 + (rowY.p - (rowY.d + matH)) / 2 + 2;
+        roundRect(ctx, w / 2 - hw / 2, hy - hs * 0.9, hw, hs * 1.8, hs * 0.9);
+        ctx.fillStyle = 'rgba(8,12,24,0.88)';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = label[1];
+        ctx.stroke();
+        text(ctx, head, w / 2, hy + 1, hs, label[1], 800, hw - 16);
+        // Net, large, under the player's mat.
+        const net = `${fmtSigned(c.result.net)}${c.result.capped ? ' · MAX' : ''}`;
+        text(ctx, net, w / 2, h - 14, Math.max(16, Math.min(26, w * 0.1)), netColor(c.result.net), 800, w - 12);
         ctx.restore();
       }
     },

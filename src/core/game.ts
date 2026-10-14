@@ -183,21 +183,16 @@ export class Game {
     return Math.max(ts.wallet, ts.peakWallet);
   }
 
-  /** Progress (0..1) toward the next ascension; log-scaled since money grows exponentially. */
+  /** Progress (0..1) toward the next ascension: the money reached over the threshold, so the bar matches the stated target. */
   ascensionProgress(): number {
     const money = this.ascensionMoney();
-    if (money <= 1) return 0;
+    if (money <= 0) return 0;
     const threshold = ascensionThreshold(this.state.casino.ascensions);
-    return Math.min(1, Math.max(0, Math.log10(money) / Math.log10(threshold)));
+    return Math.min(1, Math.max(0, money / threshold));
   }
 
   private managerInterval(): number {
     return managerInterval(this.casinoLevel('manager'), this.casinoLevel('overtime'));
-  }
-
-  setAutoPrestige(on: boolean): void {
-    if (this.casinoLevel('concierge') < 1) return;
-    this.state.casino.autoPrestige = on;
   }
 
   /**
@@ -230,7 +225,15 @@ export class Game {
 
   /** One manager pass at a table: (Concierge, if enabled) prestige as soon as possible, otherwise buy an upgrade. */
   private managerStep(id: TableId): boolean {
-    if (this.casinoLevel('concierge') >= 1 && this.state.casino.autoPrestige && this.prestige(id)) return true;
+    if (this.casinoLevel('concierge') >= 1 && this.prestige(id)) {
+      if (!this.quiet) {
+        const def = TABLES[id];
+        const text = `🤵 Floor Manager prestiged ${def.name} (Prestige ${this.state.tables[id].prestige})`;
+        this.managerLog.push({ seq: ++this.seq, text, table: id, upgradeId: 'prestige', at: Date.now() });
+        if (this.managerLog.length > 20) this.managerLog.shift();
+      }
+      return true;
+    }
     return this.autoBuy(id);
   }
 

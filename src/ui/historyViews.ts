@@ -1,4 +1,4 @@
-import type { BlackjackStats, CoinStats, PlayStats, RouletteStats, SlotsStats, TableId } from '../core/types';
+import type { CoinStats, PlayStats, RouletteStats, SlotsStats, TableId } from '../core/types';
 import { SYMBOLS } from '../tables/slots';
 import { colorOf } from '../tables/roulette';
 import { COLORS, setupCanvas } from './stage/canvas';
@@ -37,7 +37,7 @@ export class SlotsCombosView {
 
   update(stats: PlayStats, force = false): void {
     const s = stats.slots;
-    const key = JSON.stringify([s.recent, s.tripleBy, s.pairBy, s.cascades, s.freeSpins, s.scatters]);
+    const key = JSON.stringify([s.recent, s.symbols, s.tripleBy, s.pairBy, s.cascades, s.freeSpins, s.scatters]);
     if (!force && key === this.key) return;
     this.key = key;
     this.strip.replaceChildren(
@@ -64,13 +64,15 @@ export class SlotsCombosView {
       this.last.className = 'slots-last';
       this.last.replaceChildren(h('small', { text: 'Last spin' }), h('div', { class: 'slots-last-tag', text: 'No spins yet' }));
     }
-    // One row per symbol: how often it made a triple and a pair.
-    const head = h('div', { class: 'slots-row head' }, h('span'), h('span', { text: 'Triple' }), h('span', { text: 'Pair' }));
+    // One row per symbol: share of all reel stops, plus how often it made a triple and a pair.
+    const seenTotal = s.symbols.reduce((a, b) => a + b, 0);
+    const head = h('div', { class: 'slots-row head' }, h('span'), h('span', { text: 'Seen' }), h('span', { text: 'Triple' }), h('span', { text: 'Pair' }));
     const rows = SYMBOLS.map((sym, i) =>
       h(
         'div',
         { class: `slots-row${s.tripleBy[i] > 0 ? ' hit' : ''}` },
         h('span', { class: 'slots-sym', text: sym }),
+        h('span', { class: 'slots-n seen', text: pct(s.symbols[i], seenTotal) }),
         h('span', { class: 'slots-n triple', text: fmt(s.tripleBy[i]) }),
         h('span', { class: 'slots-n pair', text: fmt(s.pairBy[i]) }),
       ),
@@ -92,56 +94,74 @@ const handTotal = (cards: number[]) => {
   return t;
 };
 
-/** Blackjack-only: reward counters plus the last few hands as compact chips, newest first. */
+/** Blackjack-only, replacing the old Hands/Deals pair: last hand, outcome table, reward counters, recent-hand ribbon. */
 export class BlackjackHandsView {
   readonly root: HTMLElement;
   private strip: HTMLElement;
-  private list: HTMLElement;
+  private last: HTMLElement;
+  private table: HTMLElement;
+  private ribbon: HTMLElement;
   private key = '';
 
   constructor() {
     this.strip = h('div', { class: 'reward-strip' });
-    this.list = h('div', { class: 'combo-list bj-list' });
-    this.root = h('div', { class: 'combo-view hidden' }, this.strip, this.list);
+    this.last = h('div', { class: 'slots-last' });
+    this.table = h('div', { class: 'slots-table' });
+    this.ribbon = h('div', { class: 'slots-ribbon' });
+    this.root = h('div', { class: 'combo-view hidden' }, this.strip, h('div', { class: 'slots-body' }, this.last, this.table), this.ribbon);
   }
 
   update(stats: PlayStats, force = false): void {
     const s = stats.blackjack;
-    const key = JSON.stringify([s.recent, s.natural, s.doubled, s.split, s.surrendered, s.charlie, s.insured]);
+    const key = JSON.stringify(s);
     if (!force && key === this.key) return;
     this.key = key;
     this.strip.replaceChildren(
       ...rewardStrip(
         [
-          ['naturals', s.natural],
           ['charlies', s.charlie],
           ['doubles', s.doubled],
           ['splits', s.split],
           ['surrenders', s.surrendered],
           ['insured', s.insured],
         ],
-        'No rewards hit yet',
+        'No bonus rewards hit yet',
       ),
     );
-    this.list.replaceChildren();
-    if (s.recent.length === 0) {
-      this.list.append(h('div', { class: 'history-info', text: 'No hands yet' }));
-      return;
-    }
-    for (const hand of s.recent.slice().reverse()) {
-      const total = (cards: number[]) => String(handTotal(cards));
-      const player = hand.split ? `${total(hand.player)}|${total(hand.split)}` : total(hand.player);
-      const badges = [hand.doubled ? '×2' : '', hand.split ? '⑂' : '', hand.surrendered ? '⚑' : ''].filter(Boolean).join('');
-      const title = `${BJ_NAMES[hand.outcome]}: ${handText(hand.player)} vs ${handText(hand.dealer)}`;
-      this.list.append(
-        h(
-          'div',
-          { class: `combo bj-${hand.outcome}`, title },
-          h('span', { class: 'bj-hand' }, h('b', { text: player }), h('span', { class: 'bj-vs', text: ' v ' }), h('span', { text: total(hand.dealer) })),
-          h('span', { class: 'combo-tag', text: badges }),
-        ),
+    const total = BJ_KEYS.reduce((a, k) => a + s[k], 0);
+    const hand = s.recent[s.recent.length - 1];
+    if (hand) {
+      const tot = (cards: number[]) => String(handTotal(cards));
+      const badges = [hand.doubled ? 'Double' : '', hand.split ? 'Split' : '', hand.surrendered ? 'Surrender' : ''].filter(Boolean).join(' · ');
+      this.last.className = `slots-last bj-${hand.outcome}`;
+      this.last.replaceChildren(
+        h('small', { text: 'Last hand' }),
+        h('div', { class: 'bj-last-line' }, h('b', { text: hand.split ? `${tot(hand.player)} | ${tot(hand.split)}` : tot(hand.player) }), h('span', { class: 'bj-vs', text: ' vs ' }), h('span', { text: tot(hand.dealer) })),
+        h('div', { class: 'bj-last-cards', text: `${handText(hand.player)}${hand.split ? ` | ${handText(hand.split)}` : ''}  ·  ${handText(hand.dealer)}` }),
+        h('div', { class: 'slots-last-tag', text: BJ_NAMES[hand.outcome] + (badges ? ` · ${badges}` : '') }),
       );
+    } else {
+      this.last.className = 'slots-last';
+      this.last.replaceChildren(h('small', { text: 'Last hand' }), h('div', { class: 'slots-last-tag', text: 'No hands yet' }));
     }
+    // One row per outcome: count and share of all hands, with a bar behind it.
+    const rows = BJ_KEYS.map((k) => {
+      const share = total > 0 ? s[k] / total : 0;
+      const row = h(
+        'div',
+        { class: `slots-row bj-row bj-${k}` },
+        h('span', { class: 'bj-row-name', text: BJ_NAMES[k] }),
+        h('span', { class: 'slots-n', text: fmt(s[k]) }),
+        h('span', { class: 'slots-n seen', text: pct(s[k], total) }),
+      );
+      row.style.setProperty('--share', `${(share * 100).toFixed(1)}%`);
+      return row;
+    });
+    this.table.replaceChildren(...rows);
+    this.ribbon.replaceChildren(
+      h('small', { text: 'Recent' }),
+      ...s.recent.map((r) => h('span', { class: `blip bj-${r.outcome}`, title: `${BJ_NAMES[r.outcome]}: ${handText(r.player)} vs ${handText(r.dealer)}` })),
+    );
   }
 }
 
@@ -154,13 +174,6 @@ export const VIEW_LABELS: Record<TableId, string> = {
 
 const POCKET_COLORS: Record<string, string> = { red: COLORS.red, black: '#6b5a99', green: COLORS.green };
 const BJ_KEYS = ['natural', 'win', 'push', 'lose', 'bust'] as const;
-const BJ_COLORS: Record<(typeof BJ_KEYS)[number], string> = {
-  natural: COLORS.gold,
-  win: COLORS.green,
-  push: COLORS.cyan,
-  lose: COLORS.red,
-  bust: COLORS.pink,
-};
 const BJ_NAMES: Record<(typeof BJ_KEYS)[number], string> = {
   natural: 'Natural',
   win: 'Win',
@@ -205,10 +218,6 @@ export class GameHistoryView {
         setText(this.info, this.rouletteInfo(stats.roulette));
         if (s) drawRoulette(s.ctx, s.w, s.h, stats.roulette);
         break;
-      case 'blackjack':
-        setText(this.info, this.blackjackInfo(stats.blackjack));
-        if (s) drawBlackjack(s.ctx, s.w, s.h, stats.blackjack);
-        break;
     }
   }
 
@@ -241,12 +250,6 @@ export class GameHistoryView {
       if (n > r.pockets[hot]) hot = i;
     });
     return `Red ${pct(sums.red, total)} · Black ${pct(sums.black, total)} · Zero ${pct(sums.green, total)} · hottest ${hot} (${r.pockets[hot]}×)`;
-  }
-
-  private blackjackInfo(b: BlackjackStats): string {
-    const total = BJ_KEYS.reduce((a, k) => a + b[k], 0);
-    if (total === 0) return 'No hands yet';
-    return BJ_KEYS.map((k) => `${BJ_NAMES[k]} ${pct(b[k], total)}`).join(' · ');
   }
 }
 
@@ -473,59 +476,4 @@ function drawRoulette(ctx: Ctx, w: number, ht: number, r: RouletteStats): void {
   });
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-}
-
-function drawBlackjack(ctx: Ctx, w: number, ht: number, b: BlackjackStats): void {
-  ctx.clearRect(0, 0, w, ht);
-  const total = BJ_KEYS.reduce((a, k) => a + b[k], 0);
-  const pad = 8;
-  const bw = w - pad * 2;
-  const y = 20;
-  const barH = 34;
-  if (total === 0) {
-    ctx.fillStyle = COLORS.line;
-    ctx.fillRect(pad, y, bw, barH);
-    return;
-  }
-  let x = pad;
-  ctx.font = '600 11px system-ui, sans-serif';
-  ctx.textBaseline = 'middle';
-  for (const k of BJ_KEYS) {
-    const seg = (b[k] / total) * bw;
-    if (seg <= 0) continue;
-    ctx.fillStyle = BJ_COLORS[k];
-    ctx.fillRect(x, y, seg, barH);
-    if (seg > 34) {
-      ctx.fillStyle = COLORS.bg;
-      ctx.fillText(BJ_NAMES[k], x + 4, y + barH / 2);
-    }
-    x += seg;
-  }
-  // Win rate marker vs a reference 50% line.
-  ctx.strokeStyle = COLORS.fg;
-  ctx.setLineDash([3, 3]);
-  ctx.beginPath();
-  ctx.moveTo(w / 2, y - 8);
-  ctx.lineTo(w / 2, y + barH + 8);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = COLORS.muted;
-  ctx.fillText(`${fmt(total)} hands`, pad, y + barH + 20);
-  const extras: [string, number][] = [
-    ['Charlie', b.charlie],
-    ['Double', b.doubled],
-    ['Split', b.split],
-    ['Surrender', b.surrendered],
-    ['Insured', b.insured],
-  ];
-  let rx = pad;
-  const ry = y + barH + 42;
-  ctx.fillStyle = COLORS.fg;
-  for (const [label, n] of extras) {
-    if (n <= 0) continue;
-    const text = `${label} ${fmt(n)}`;
-    ctx.fillText(text, rx, ry);
-    rx += ctx.measureText(text).width + 14;
-    if (rx > w - pad) break;
-  }
 }

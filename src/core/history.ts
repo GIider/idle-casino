@@ -9,7 +9,7 @@ export const POCKETS = 37;
 export const RECENT_COINS = 60;
 export const RECENT_POCKETS = 30;
 export const RECENT_SPINS = 20;
-export const RECENT_HANDS = 12;
+export const RECENT_HANDS = 20;
 const BJ_OUTCOMES = ['natural', 'win', 'push', 'lose', 'bust'];
 
 export function newStats(): PlayStats {

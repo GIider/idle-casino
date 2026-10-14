@@ -2,6 +2,9 @@ type Attrs = {
   class?: string;
   text?: string;
   title?: string;
+  href?: string;
+  target?: string;
+  rel?: string;
   type?: string;
   value?: string;
   min?: string;

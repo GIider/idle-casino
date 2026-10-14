@@ -26,8 +26,6 @@ export class CasinoPanel {
   private ascendBtn: HTMLButtonElement;
   private rows: Row[] = [];
   private bonusEl: HTMLElement;
-  private autoPrestige: HTMLLabelElement;
-  private autoPrestigeBox: HTMLInputElement;
 
   constructor(private game: Game) {
     this.chipsEl = h('div', { class: 'chips', text: '0' });
@@ -50,18 +48,7 @@ export class CasinoPanel {
     });
 
     this.bonusEl = h('p', { class: 'auto-info' });
-    this.autoPrestigeBox = h('input', {
-      type: 'checkbox',
-      onchange: () => game.setAutoPrestige(this.autoPrestigeBox.checked),
-    });
-    this.autoPrestige = h(
-      'label',
-      { class: 'auto-buy hidden' },
-      this.autoPrestigeBox,
-      ' Auto-prestige tables as soon as they can',
-    );
-
-    const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }), buyModeSelector(), this.autoPrestige);
+    const shop = h('div', { class: 'card upgrades' }, h('h3', { text: 'Casino shop' }), buyModeSelector());
     for (const def of CASINO_UPGRADES) {
       const level = h('span', { class: 'level' });
       const button = h('button', { class: 'btn buy', onclick: () => game.buyCasinoUpgrade(def.id, buyMode()) });
@@ -116,8 +103,6 @@ export class CasinoPanel {
       this.bonusEl,
       `Ascension bonus: winnings ×${fmt(ascensionMultiplier(casino.ascensions), 2)} on every table (×${fmt(ascensionMultiplier(casino.ascensions + 1), 2)} after the next ascension).`,
     );
-    toggleClass(this.autoPrestige, 'hidden', game.casinoLevel('concierge') < 1);
-    if (this.autoPrestigeBox.checked !== casino.autoPrestige) this.autoPrestigeBox.checked = casino.autoPrestige;
 
     const threshold = ascensionThreshold(casino.ascensions);
     const money = game.ascensionMoney();

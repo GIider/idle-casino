@@ -20,7 +20,8 @@ describe('UI smoke', () => {
     game.tick(1);
     app.update();
     expect(game.table('coinflip').plays).toBe(1);
-    expect(host.querySelector('.result')!.textContent).toMatch(/Heads|Tails/);
+    expect(host.querySelector('.stage-canvas')!.getAttribute('aria-label')).toMatch(/Heads|Tails|Gold|edge/);
+    expect(host.querySelector('.result')).toBeNull();
 
     game.table('coinflip').wallet = 1e6;
     (host.querySelectorAll('.tab')[1] as HTMLButtonElement).click();

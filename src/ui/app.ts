@@ -32,7 +32,7 @@ export class App {
   private handlers: AppHandlers;
   private sides = new Map<TableId, HTMLElement>();
   private qualityBtn: HTMLButtonElement;
-  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; name: HTMLElement; fill: HTMLElement }>();
+  private tiles = new Map<TableId, { root: HTMLButtonElement; sub: HTMLElement; lvl: HTMLElement; icon: HTMLElement; name: HTMLElement; fill: HTMLElement; wallet: HTMLElement; money: HTMLElement }>();
   private chips = new Map<TableId, HTMLElement>();
   private slowAt = 0;
 
@@ -47,6 +47,14 @@ export class App {
       { class: 'top' },
       h('div', { class: 'brand' }, h('span', { class: 'logo', text: '♠ IDLE CASINO ♦' }),
         h('span', { class: 'version', text: `v${__APP_VERSION__} · ${__BUILD_DATE__}`, title: 'Version and build date' }),
+        h('a', {
+          class: 'repo-link',
+          href: 'https://github.com/GIider/idle-casino',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          title: 'Source on GitHub',
+          text: 'GitHub ↗',
+        }),
       ),
       h(
         'div',
@@ -90,8 +98,10 @@ export class App {
       const name = h('strong', { text: def.name });
       const fill = h('div', { class: 'bar-fill' });
       const bar = h('div', { class: 'bar tile-bar' }, fill);
-      const root = h('button', { class: 'tab tile', title: def.name, onclick: () => this.select(id) }, icon, bar, name, lvl, sub);
-      this.tiles.set(id, { root, sub, lvl, icon, name, fill });
+      const money = h('span', { class: 'money', text: '0' });
+      const wallet = h('span', { class: 'tile-wallet', title: `${def.currency.name} in the ${def.name} wallet` }, h('span', { text: def.currency.icon }), money);
+      const root = h('button', { class: 'tab tile', title: def.name, onclick: () => this.select(id) }, icon, bar, name, wallet, lvl, sub);
+      this.tiles.set(id, { root, sub, lvl, icon, name, fill, wallet, money });
       this.tabs.set(id, root);
       if (previousTable(id)) {
         const chip = h('span', { class: 'link-chip', text: '→' });
@@ -215,6 +225,8 @@ export class App {
         setText(chip, `→ ×${now.toFixed(2)}`);
         chip.title = `${TABLES[prev].name} prestige boosts ${TABLES[id].name} winnings: ×${now.toFixed(2)} now, ×${next.toFixed(2)} after the next prestige`;
       }
+      toggleClass(t.wallet, 'hidden', !seen || !ts.unlocked);
+      setText(t.money, fmt(ts.wallet));
       setText(t.icon, seen ? TABLES[id].icon : '?');
       setText(t.name, seen ? TABLES[id].name : '???');
       setText(t.lvl, !seen ? '' : ts.unlocked ? `Prestige ${ts.prestige}` : 'Locked');

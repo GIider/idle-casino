@@ -134,8 +134,6 @@ export interface CasinoState {
   totalChips: number;
   ascensions: number;
   levels: Record<string, number>;
-  /** Floor Manager (level 4): prestige a table automatically as soon as it can. */
-  autoPrestige: boolean;
 }
 
 export interface GameState {

@@ -38,7 +38,7 @@ export function newTableState(def: TableDef): TableState {
 }
 
 export function newCasinoState(): CasinoState {
-  return { chips: 0, totalChips: 0, ascensions: 0, levels: {}, autoPrestige: false };
+  return { chips: 0, totalChips: 0, ascensions: 0, levels: {} };
 }
 
 export function createInitialState(now = Date.now()): GameState {
@@ -116,7 +116,6 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
       }
       state.casino.chips += migrateShop(c.levels, state.casino.levels);
     }
-    state.casino.autoPrestige = c.autoPrestige === true;
   }
   // Saves from before achievements get their grind counts seeded from lifetime play stats.
   state.achievements = r.achievements ? normalizeAchievements(r.achievements) : backfillAchievements(state);

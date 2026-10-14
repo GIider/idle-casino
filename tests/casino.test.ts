@@ -137,7 +137,7 @@ describe('ascension', () => {
 
   it('migrates pre-rebalance shop levels and refunds removed items', () => {
     const raw = JSON.parse(JSON.stringify(newGame().state));
-    raw.casino = { chips: 2, totalChips: 50, ascensions: 1, levels: { manager: 4, luck: 2, payout: 3, startCash: 1, policy: 1 }, autoPrestige: true };
+    raw.casino = { chips: 2, totalChips: 50, ascensions: 1, levels: { manager: 4, luck: 2, payout: 3, startCash: 1, policy: 1 } };
     const s = normalizeState(raw);
     const lv = s.casino.levels;
     expect([lv.manager, lv.overtime, lv.concierge, lv.payout, lv.policy]).toEqual([1, 2, 1, undefined, undefined]);
@@ -148,14 +148,14 @@ describe('ascension', () => {
 
   it('round-trips and sanitizes casino state in saves', () => {
     const g = newGame();
-    g.state.casino = { chips: 7, totalChips: 12, ascensions: 2, levels: { manager: 1, overtime: 9999 }, autoPrestige: false };
+    g.state.casino = { chips: 7, totalChips: 12, ascensions: 2, levels: { manager: 1, overtime: 9999 } };
     const loaded = importSave(exportSave(g.state));
     expect(loaded.casino.chips).toBe(7);
     expect(loaded.casino.ascensions).toBe(2);
     expect(loaded.casino.levels.manager).toBe(1);
     expect(loaded.casino.levels.overtime).toBe(2);
     const junk = normalizeState({ version: SAVE_VERSION, tables: {}, casino: { chips: 'x', levels: 3 } });
-    expect(junk.casino).toEqual({ chips: 0, totalChips: 0, ascensions: 0, levels: {}, autoPrestige: false });
+    expect(junk.casino).toEqual({ chips: 0, totalChips: 0, ascensions: 0, levels: {} });
     expect(normalizeState({ version: SAVE_VERSION, tables: {} }).casino.ascensions).toBe(0);
   });
 });
