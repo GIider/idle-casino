@@ -29,7 +29,6 @@ export class App {
   private casinoFill!: HTMLElement;
   private toastEl: HTMLElement;
   private toastSeq = 0;
-  private managerSeq = 0;
   private handlers: AppHandlers;
   private sides = new Map<TableId, HTMLElement>();
   private qualityBtn: HTMLButtonElement;
@@ -176,17 +175,6 @@ export class App {
     this.casinoTab.title = casinoSeen ? 'Casino' : '';
     if (this.selected === 'casino' ? !casinoSeen : !g.tableVisible(this.selected)) this.select('coinflip');
     this.updateSelected();
-
-    const fresh = g.managerLog.filter((e) => e.seq > this.managerSeq);
-    if (fresh.length > 0) {
-      this.managerSeq = fresh[fresh.length - 1].seq;
-      const texts = fresh.length > 3 ? [`🤵 Floor Manager bought ${fresh.length} upgrades`] : fresh.map((e) => e.text);
-      for (const text of texts) {
-        // Over the animation stage of the table being watched; the casino tab has no stage, so it gets a page toast.
-        if (this.selected === 'casino') this.toast(text, 3000);
-        else this.panels.get(this.selected)!.showNotice(text, 3000);
-      }
-    }
 
     if (g.notice && g.notice.seq !== this.toastSeq) {
       this.toastSeq = g.notice.seq;
