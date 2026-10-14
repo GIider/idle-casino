@@ -319,7 +319,7 @@ export class TablePanel {
     setText(this.bigMax, `${cur.icon} ${fmt(pv ? maxPayout(def, ts.prestige + 1, levels) : curMax)}`);
     setText(this.bigMinOld, pv ? `was ${fmt(curMin)}` : ' ');
     setText(this.bigMaxOld, pv ? `was ${fmt(curMax)}` : ' ');
-    if (pv && this.frozenWin === null) this.frozenWin = curWin;
+    if (pv && this.frozenWin === null) this.frozenWin = payoutMultiplier({}, ts.prestige, game.bonusFor(id), def.baseWinBonus, 0);
     if (!pv) this.frozenWin = null;
     setText(this.winOld, `was ×${(this.frozenWin ?? curWin).toFixed(2)}`);
     toggleClass(this.winOld, 'concealed', !pv);
