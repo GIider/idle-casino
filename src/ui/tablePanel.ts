@@ -54,8 +54,10 @@ export class TablePanel {
   private noticeEl: HTMLElement;
   private managerSeq = 0;
   private bigMin: HTMLElement;
+  private bigMinGhost: HTMLElement;
   private bigMinOld: HTMLElement;
   private bigMax: HTMLElement;
+  private bigMaxGhost: HTMLElement;
   private bigMaxOld: HTMLElement;
   private bigTiles: HTMLElement[] = [];
   private winTile: HTMLElement;
@@ -123,12 +125,16 @@ export class TablePanel {
     this.noticeEl = h('div', { class: 'stage-notice' });
     this.stage = h('div', { class: 'stage' }, this.canvasStage.canvas, this.noticeEl);
 
-    this.bigMin = h('div', { class: 'big-value' });
+    // Each big value stacks its shown text over a hidden copy of the other state, so the tile is always as wide as
+    // the wider of the two and toggling the prestige preview can never change how it wraps (which would move the button).
+    this.bigMin = h('span', { class: 'big-shown' });
+    this.bigMinGhost = h('span', { class: 'big-ghost' });
     this.bigMinOld = h('div', { class: 'big-old' });
-    this.bigMax = h('div', { class: 'big-value' });
+    this.bigMax = h('span', { class: 'big-shown' });
+    this.bigMaxGhost = h('span', { class: 'big-ghost' });
     this.bigMaxOld = h('div', { class: 'big-old' });
-    const bigMinTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Min bet' }), this.bigMin, this.bigMinOld);
-    const bigMaxTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Max payout' }), this.bigMax, this.bigMaxOld);
+    const bigMinTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Min bet' }), h('div', { class: 'big-value' }, this.bigMin, this.bigMinGhost), this.bigMinOld);
+    const bigMaxTile = h('div', { class: 'stat-tile big' }, h('small', { text: 'Max payout' }), h('div', { class: 'big-value' }, this.bigMax, this.bigMaxGhost), this.bigMaxOld);
     this.bigTiles = [bigMinTile, bigMaxTile];
     const bigStats = h('div', { class: 'big-stats' }, bigMinTile, bigMaxTile);
 
@@ -320,8 +326,12 @@ export class TablePanel {
     const pv = this.previewing;
     const nextWin = payoutMultiplier({}, ts.prestige + 1, game.bonusFor(id), def.baseWinBonus, 0);
     setText(this.statTiles.winnings, `×${(pv ? nextWin : curWin).toFixed(2)}`);
-    setText(this.bigMin, `${cur.icon} ${fmt(pv ? minBet(def, ts.prestige + 1) : curMin)}`);
-    setText(this.bigMax, `${cur.icon} ${fmt(pv ? maxPayout(def, ts.prestige + 1, levels) : curMax)}`);
+    const nextMin = minBet(def, ts.prestige + 1);
+    const nextMax = maxPayout(def, ts.prestige + 1, levels);
+    setText(this.bigMin, `${cur.icon} ${fmt(pv ? nextMin : curMin)}`);
+    setText(this.bigMinGhost, `${cur.icon} ${fmt(pv ? curMin : nextMin)}`);
+    setText(this.bigMax, `${cur.icon} ${fmt(pv ? nextMax : curMax)}`);
+    setText(this.bigMaxGhost, `${cur.icon} ${fmt(pv ? curMax : nextMax)}`);
     // Always rendered (just concealed) so the tile keeps its size and the button doesn't move under the cursor.
     setText(this.bigMinOld, `was ${fmt(curMin)}`);
     setText(this.bigMaxOld, `was ${fmt(curMax)}`);
