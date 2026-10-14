@@ -141,7 +141,7 @@ export class CasinoPanel {
         ? `Ready: ascending now earns ${fmt(game.ascendReward())} chips. Earn more first for +3 chips per 10× above ${fmt(threshold)} ${currency.name}.`
         : `Reach ${fmt(threshold)} ${currency.name} at ${TABLES[FINAL_TABLE].name} to ascend (best so far: ${fmt(money)}).`,
     );
-    this.ascendBar.style.transform = `scaleX(${Math.max(0, Math.min(1, money / threshold))})`;
+    this.ascendBar.style.transform = `scaleX(${game.ascensionProgress()})`;
     setDisabled(this.ascendBtn, !game.canAscend());
 
     for (const row of this.rows) {
