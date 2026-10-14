@@ -42,14 +42,18 @@ export function setText(el: HTMLElement, text: string): void {
 }
 
 /** Shows `lines` as stacked rows inside `el`, touching the DOM only when they change. */
-export function setLines(el: HTMLElement, lines: string[]): void {
-  const key = lines.join('\n');
+export type BuyLine = { text: string; short?: boolean };
+
+/** One span per line; `short` marks a currency you don't have enough of, `ok: false` styling otherwise only when a flag is given. */
+export function setLines(el: HTMLElement, input: (string | BuyLine)[]): void {
+  const lines: BuyLine[] = input.map((l) => (typeof l === 'string' ? { text: l } : l));
+  const key = lines.map((l) => `${l.short === undefined ? '' : l.short ? '!' : '+'}${l.text}`).join('\n');
   if (el.dataset.lines === key) return;
   el.dataset.lines = key;
-  el.replaceChildren(...lines.map((text, i) => {
+  el.replaceChildren(...lines.map((l, i) => {
     const row = document.createElement('span');
-    row.className = i === 0 ? 'buy-line' : 'buy-line tie';
-    row.textContent = text;
+    row.className = (i === 0 ? 'buy-line' : 'buy-line tie') + (l.short === undefined ? '' : l.short ? ' short' : ' ok');
+    row.textContent = l.text;
     return row;
   }));
 }

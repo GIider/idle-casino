@@ -65,7 +65,7 @@ export const blackjack: TableDef = {
     dealer: [{ from: 'slots', share: 2, scale: 'flat' }],
     streak: [{ from: 'roulette', share: 8, growth: 1.4 }],
     luck: [{ from: 'roulette', share: 6, growth: 1.4 }],
-    cashback: [{ from: 'coinflip', share: 0.16, scale: 'flat' }],
+    cashback: [{ from: 'coinflip', share: 0.32, scale: 'flat' }],
   },
   upgrades: [
     {

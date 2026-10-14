@@ -195,6 +195,11 @@ export interface UpgradeDef {
   baseCost: number;
   growth: number;
   maxLevel: number;
+  /**
+   * Past `maxLevel` the upgrade keeps going: each further level costs ×`growth` and multiplies its effect by `effect`
+   * (instead of being maxed). Lets income keep pace with the ever-growing prestige targets.
+   */
+  endless?: { growth: number; effect: number };
   /** Extra price components paid in earlier tables' currencies. */
   ties?: CostTie[];
 }

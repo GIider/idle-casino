@@ -2,7 +2,7 @@ import { Game } from '../core/game';
 import { createInitialState } from '../core/state';
 import { mulberry32 } from '../core/rng';
 import { FINAL_TABLE, TABLES, TABLE_IDS } from '../tables';
-import { allUpgrades, prestigeThreshold, priceInOwn, upgradePrice } from '../core/economy';
+import { allUpgrades, isMaxed, prestigeThreshold, priceInOwn, upgradePrice } from '../core/economy';
 import { CASINO_UPGRADES } from '../core/casino';
 import { ACHIEVEMENTS } from '../core/achievements';
 import type { TableId } from '../core/types';
@@ -235,7 +235,7 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
         const rec = (upgradeAt[key] ??= { affordable: null, first: null, maxed: null });
         if (level > 0 && rec.first === null) rec.first = t;
         if (level >= u.maxLevel && rec.maxed === null) rec.maxed = t;
-        if (level >= u.maxLevel) continue;
+        if (isMaxed(u, level)) continue;
         const price = upgradePrice(TABLES[id], u, prestiges, level, g.bonus);
         const ownOk = price.own <= ts.wallet;
         const short = price.ties.filter((x) => x.amount > g.spendable(x.from));
@@ -261,7 +261,7 @@ export function runBot(policy: BotPolicy, opts: RunOptions = {}): RunResult {
         for (const u of allUpgrades(TABLES[id])) {
           if (skip.has(`${id}:${u.id}`) || skip.has(u.id)) continue;
           const lvl = ts.levels[u.id] ?? 0;
-          if (lvl >= u.maxLevel) continue;
+          if (isMaxed(u, lvl)) continue;
           const price = upgradePrice(TABLES[id], u, prestiges, lvl, g.bonus);
           // The spend fraction models caution about the table's own wallet; earlier currencies just have to cover it.
           if (price.own <= ts.wallet * policy.spendFraction && price.ties.every((x) => x.amount <= g.spendable(x.from))) {

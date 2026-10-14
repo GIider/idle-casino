@@ -3,6 +3,10 @@ import { TABLES, TABLE_IDS } from '../tables';
 import { NO_BONUS, type CasinoBonus } from './casino';
 import { CARD_SHARP_LUCK, DOUBLE_LUCK_FRACTION, HEAT_WAVE_CAP, RAISED_CEILING } from './achievements';
 
+/** Past level 20, High Roller Perks never maxes out: each level costs more and compounds its effect. */
+export const PAYOUT_ENDLESS_EFFECT = 1.25;
+export const PAYOUT_ENDLESS_GROWTH = 1.38;
+
 export const COMMON_UPGRADES: UpgradeDef[] = [
   {
     id: 'luck',
@@ -19,6 +23,7 @@ export const COMMON_UPGRADES: UpgradeDef[] = [
     baseCost: 40,
     growth: 1.8,
     maxLevel: 20,
+    endless: { growth: PAYOUT_ENDLESS_GROWTH, effect: PAYOUT_ENDLESS_EFFECT },
   },
   {
     id: 'speed',
@@ -40,9 +45,9 @@ export const COMMON_UPGRADES: UpgradeDef[] = [
     id: 'cashback',
     name: 'Cashback',
     description: 'Lost rounds refund +6% of your bet per level',
-    baseCost: 50,
-    growth: 1.6,
-    maxLevel: 8,
+    baseCost: 100,
+    growth: 1.9,
+    maxLevel: 15,
   },
   {
     id: 'dealer',
@@ -68,6 +73,8 @@ export const AUTO_BET_FRACTIONS = [0, 0.02, 0.05, 0.1, 0.15, 0.25, 0.35, 0.5];
 /** Winnings bonus a table gets per prestige level of the table before it in the chain. */
 export const CROSS_PRESTIGE_BONUS = 0.04;
 export const MIN_BET_GROWTH = 3;
+/** Levels of High Roller Perks that give their plain linear bonus. */
+const PAYOUT_BASE_LEVELS = 20;
 export const MAX_BET_GROWTH = 5;
 export const MAX_PAYOUT_GROWTH = 5;
 /** Upgrade prices grow this much per table prestige (steeper than the max bet). */
@@ -111,6 +118,21 @@ export function allUpgrades(def: TableDef): UpgradeDef[] {
   return list;
 }
 
+/** Whether an upgrade can't be bought any further at `level`. */
+export function isMaxed(upg: UpgradeDef, level: number): boolean {
+  return !upg.endless && level >= upg.maxLevel;
+}
+
+/** Extra price multiplier for levels past `maxLevel` of an endless upgrade (1 otherwise). */
+function endlessCostFactor(upg: UpgradeDef, level: number): number {
+  return upg.endless ? upg.endless.growth ** Math.max(0, level - upg.maxLevel) : 1;
+}
+
+/** Compounding effect of an endless upgrade's levels past its base cap (1 until then). */
+function endlessEffect(levels: Record<string, number>, id: string, cap: number, effect: number): number {
+  return effect ** Math.max(0, (levels[id] ?? 0) - cap);
+}
+
 export function minBet(def: TableDef, prestige: number): number {
   return def.baseMinBet * MIN_BET_GROWTH ** prestige;
 }
@@ -121,7 +143,8 @@ export function maxBet(def: TableDef, prestige: number): number {
 
 export function maxPayout(def: TableDef, prestige: number, levels: Record<string, number> = {}): number {
   const ceiling = levels.perk_ceilingBreaker ? 1 + RAISED_CEILING : 1;
-  return def.baseMaxPayout * MAX_PAYOUT_GROWTH ** prestige * ceiling;
+  const endless = endlessEffect(levels, 'payout', PAYOUT_BASE_LEVELS, PAYOUT_ENDLESS_EFFECT);
+  return def.baseMaxPayout * MAX_PAYOUT_GROWTH ** prestige * ceiling * endless;
 }
 
 export function upgradeCost(
@@ -131,7 +154,8 @@ export function upgradeCost(
   level: number,
   bonus: CasinoBonus = NO_BONUS,
 ): number {
-  const base = upg.baseCost * def.baseMinBet * UPGRADE_PRESTIGE_GROWTH ** prestige * upg.growth ** level;
+  const base =
+    upg.baseCost * def.baseMinBet * UPGRADE_PRESTIGE_GROWTH ** prestige * upg.growth ** Math.min(level, upg.maxLevel) * endlessCostFactor(upg, level);
   return Math.ceil(base * bonus.upgradeCost);
 }
 
@@ -180,7 +204,7 @@ export function upgradePrice(
     const mine = scale === 'self' ? UPGRADE_PRESTIGE_GROWTH ** (prestiges[def.id] ?? 0) : 1;
     const distance = TABLE_IDS.indexOf(def.id) - TABLE_IDS.indexOf(tie.from);
     const far = TIE_DISTANCE_GROWTH ** Math.max(0, distance - 1);
-    const base = tie.share * upg.baseCost * unit * mine * far * (tie.growth ?? upg.growth) ** level;
+    const base = tie.share * upg.baseCost * unit * mine * far * (tie.growth ?? upg.growth) ** level * endlessCostFactor(upg, level);
     ties.push({ from: tie.from, amount: Math.max(1, Math.ceil(base * bonus.upgradeCost)) });
   }
   // Nearest currency first; each further one is asked for at least TIE_FURTHER_MIN_RATIO times the previous amount.
@@ -263,7 +287,8 @@ export function payoutMultiplier(
 ): number {
   return (
     (1 + baseWinBonus) *
-    (1 + 0.08 * (levels.payout ?? 0)) *
+    (1 + 0.08 * Math.min(PAYOUT_BASE_LEVELS, levels.payout ?? 0)) *
+    endlessEffect(levels, 'payout', PAYOUT_BASE_LEVELS, PAYOUT_ENDLESS_EFFECT) *
     (1 + PRESTIGE_PAYOUT_BONUS * prestige) *
     bonus.payout *
     streakMultiplier(levels, streak)
@@ -272,7 +297,11 @@ export function payoutMultiplier(
 
 /** Plays per second a table runs on its own; every unlocked table plays from the start. */
 export function autoPlaysPerSecond(levels: Record<string, number>, bonus: CasinoBonus = NO_BONUS): number {
-  return AUTO_BASE_RATE * (1 + SPEED_PER_LEVEL * (levels.speed ?? 0)) * bonus.speed;
+  return (
+    AUTO_BASE_RATE *
+    (1 + SPEED_PER_LEVEL * (levels.speed ?? 0)) *
+    bonus.speed
+  );
 }
 
 /** Plays per second including the expected extra plays from Second Dealer (what display and offline use). */

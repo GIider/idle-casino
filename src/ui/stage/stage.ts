@@ -1,6 +1,6 @@
 import type { TableId } from '../../core/types';
 import type { LastPlay } from '../../core/game';
-import { COLORS, prefersReducedMotion, roundRect, setupCanvas } from './canvas';
+import { COLORS, clamp01, prefersReducedMotion, roundRect, setupCanvas } from './canvas';
 import { Fx } from './fx';
 import { drawBackdrop } from './backdrop';
 import { createScene, type Scene } from './scenes';
@@ -10,6 +10,8 @@ import { perfBegin, perfEnd } from '../perf';
 const MAX_SEATS = 16;
 /** How long a settled result stays up before the lane may show the next round (ms). */
 const HOLD_MS = 1300;
+/** After the hold, a lane with no new round fades out to the idle icon instead of freezing on its last frame (ms). */
+const FADE_MS = 700;
 
 /** One animation in flight: a lane holds its latest round and stays on the settled frame until replaced. */
 interface Flight {
@@ -44,6 +46,8 @@ export class Stage {
   private dirty = true;
   private bg: HTMLCanvasElement | null = null;
   private bgLow = false;
+  /** Scratch layer a lane is drawn into while fading, so scenes that set their own alpha still fade as a whole. */
+  private fadeLayer: HTMLCanvasElement | null = null;
   private id: TableId;
 
   constructor(icon: string, id: TableId) {
@@ -88,6 +92,11 @@ export class Stage {
   /** True while a lane is animating or holding its settled result. */
   private occupied(f: Flight | null, now: number): boolean {
     return f !== null && now - f.start < f.scene.duration * 1000 + HOLD_MS;
+  }
+
+  /** True once a lane has held and faded out completely. */
+  private faded(f: Flight, now: number): boolean {
+    return now - f.start >= f.scene.duration * 1000 + HOLD_MS + FADE_MS;
   }
 
   private start(lane: number, play: LastPlay, levels: Record<string, number>, now: number): void {
@@ -154,7 +163,7 @@ export class Stage {
 
   private busy(now: number): boolean {
     if (this.fx.alive || this.pulses.some((p) => p > 0) || this.queues.some((q) => q !== null)) return true;
-    return this.lanes.some((f) => f !== null && (!f.fired || this.occupied(f, now)));
+    return this.lanes.some((f) => f !== null && (!f.fired || !this.faded(f, now)));
   }
 
   private frame = (now: number): void => {
@@ -201,8 +210,12 @@ export class Stage {
         this.start(i, q.play, q.levels, now);
       }
     });
-    this.lanes.forEach((f, i) => {
+    this.lanes.forEach((f: Flight | null, i) => {
       const x = i * laneW;
+      if (f && this.faded(f, now) && !this.queues[i]) {
+        this.lanes[i] = null;
+        f = null;
+      }
       if (!f) {
         ctx.font = `${Math.min(h * 0.4, laneW * 0.5, 72)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -213,13 +226,42 @@ export class Stage {
         return;
       }
       const t = Math.min((now - f.start) / 1000, f.scene.duration);
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(x, 0, laneW, h);
-      ctx.clip();
-      ctx.translate(x, 0);
-      f.scene.draw(ctx, t, laneW, h);
-      ctx.restore();
+      const fade = clamp01((now - f.start - f.scene.duration * 1000 - HOLD_MS) / FADE_MS);
+      if (fade > 0) {
+        const layer = this.fadeLayerFor(this.canvas.width, this.canvas.height);
+        const lctx = layer?.getContext('2d');
+        if (layer && lctx) {
+          lctx.setTransform(1, 0, 0, 1, 0, 0);
+          lctx.clearRect(0, 0, layer.width, layer.height);
+          const scale = this.canvas.width / w;
+          lctx.setTransform(scale, 0, 0, scale, 0, 0);
+          lctx.beginPath();
+          lctx.rect(x, 0, laneW, h);
+          lctx.clip();
+          lctx.translate(x, 0);
+          f.scene.draw(lctx, t, laneW, h);
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.globalAlpha = 1 - fade;
+          ctx.drawImage(layer, 0, 0);
+          ctx.restore();
+          // Idle icon fades in underneath as the round fades out.
+          ctx.font = `${Math.min(h * 0.4, laneW * 0.5, 72)}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.globalAlpha = 0.5 * fade;
+          ctx.fillText(this.idleIcon, x + laneW / 2, h / 2);
+          ctx.globalAlpha = 1;
+        }
+      } else {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, 0, laneW, h);
+        ctx.clip();
+        ctx.translate(x, 0);
+        f.scene.draw(ctx, t, laneW, h);
+        ctx.restore();
+      }
       if (n > 1 && i > 0) {
         ctx.strokeStyle = COLORS.line;
         ctx.globalAlpha = 0.5;
@@ -247,6 +289,15 @@ export class Stage {
     this.fx.step(dt);
     this.fx.draw(ctx);
     return true;
+  }
+
+  private fadeLayerFor(w: number, h: number): HTMLCanvasElement | null {
+    if (!this.fadeLayer) this.fadeLayer = document.createElement('canvas');
+    if (this.fadeLayer.width !== w || this.fadeLayer.height !== h) {
+      this.fadeLayer.width = w;
+      this.fadeLayer.height = h;
+    }
+    return this.fadeLayer;
   }
 
   /** Static felt gradient, rendered once per size instead of every frame. */

@@ -105,7 +105,7 @@ export function normalizeState(raw: unknown, now = Date.now()): GameState {
       // Only current upgrades survive (e.g. the retired `auto` level is dropped), clamped to their max.
       for (const upg of allUpgrades(def)) {
         const level = Math.floor(num(src.levels[upg.id], 0));
-        if (level > 0) ts.levels[upg.id] = Math.min(upg.maxLevel, level);
+        if (level > 0) ts.levels[upg.id] = upg.endless ? level : Math.min(upg.maxLevel, level);
       }
     }
   }

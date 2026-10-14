@@ -22,6 +22,7 @@ import {
   bulkPurchase,
   upgradePrice,
   priceInOwn,
+  isMaxed,
   type Prestiges,
   SINGLE_BUY,
   type BuyMode,
@@ -312,7 +313,7 @@ export class Game {
     const prestiges = this.prestiges();
     for (const upg of allUpgrades(def)) {
       const level = ts.levels[upg.id] ?? 0;
-      if (level >= upg.maxLevel) continue;
+      if (isMaxed(upg, level)) continue;
       const price = upgradePrice(def, upg, prestiges, level, this.bonus);
       if (!this.canPay(id, price, reserve)) continue;
       const cost = priceInOwn(def, price);
@@ -429,7 +430,7 @@ export class Game {
     let count = 0;
     let cost = 0;
     const budget = ts.wallet * mode.fraction;
-    while (count < mode.cap && level + count < upg.maxLevel) {
+    while (count < mode.cap && !isMaxed(upg, level + count)) {
       const price = priceAt(level + count);
       if (cost + price.own > budget) break;
       const short = price.ties.some((t) => {
@@ -441,7 +442,7 @@ export class Game {
       for (const t of price.ties) owed.set(t.from, (owed.get(t.from) ?? 0) + t.amount);
       count++;
     }
-    const next = level < upg.maxLevel ? priceAt(level) : null;
+    const next = !isMaxed(upg, level) ? priceAt(level) : null;
     return {
       count,
       cost,
@@ -472,7 +473,7 @@ export class Game {
     const prestiges = this.prestiges();
     for (const upg of allUpgrades(def)) {
       const level = ts.levels[upg.id] ?? 0;
-      if (level >= upg.maxLevel) continue;
+      if (isMaxed(upg, level)) continue;
       const price = upgradePrice(def, upg, prestiges, level, this.bonus);
       if (!this.canPay(id, price)) continue;
       const cost = priceInOwn(def, price);

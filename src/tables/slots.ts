@@ -30,7 +30,7 @@ export const slots: TableDef = {
     dealer: [{ from: 'coinflip', share: 10, scale: 'flat' }],
     streak: [{ from: 'coinflip', share: 8, growth: 1.4 }],
     luck: [{ from: 'coinflip', share: 6, growth: 1.4 }],
-    cashback: [{ from: 'coinflip', share: 4, scale: 'flat' }],
+    cashback: [{ from: 'coinflip', share: 8, scale: 'flat' }],
   },
   upgrades: [
     {

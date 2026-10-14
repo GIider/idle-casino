@@ -84,8 +84,14 @@ export function buyLines(
   fmt: (n: number) => string,
   /** The table's own currency icon, shown before the first price. */
   icon: string,
-  extras: { icon: string; amount: number }[] = [],
-): string[] {
+  extras: { icon: string; amount: number; short?: boolean }[] = [],
+  /** Whether the own price is the one you can't afford; undefined leaves the line unmarked. */
+  headShort?: boolean,
+): { text: string; short?: boolean }[] {
+  const mark = (short?: boolean) => (short === undefined ? '' : short ? '✗ ' : '✓ ');
   const head = count > 0 ? `×${count} · ${icon} ${fmt(cost)}` : `${icon} ${fmt(nextCost)}`;
-  return [head, ...extras.map((e) => `+ ${e.icon} ${fmt(e.amount)}`)];
+  return [
+    { text: mark(headShort) + head, short: headShort },
+    ...extras.map((e) => ({ text: `${mark(e.short)}+ ${e.icon} ${fmt(e.amount)}`, short: e.short })),
+  ];
 }

@@ -51,7 +51,7 @@ export const roulette: TableDef = {
     dealer: [{ from: 'slots', share: 4 }, { from: 'coinflip', share: 1.5, scale: 'flat' }],
     streak: [{ from: 'slots', share: 8, growth: 1.4 }],
     luck: [{ from: 'slots', share: 6, growth: 1.4 }],
-    cashback: [{ from: 'coinflip', share: 0.8, scale: 'flat' }],
+    cashback: [{ from: 'coinflip', share: 1.6, scale: 'flat' }],
   },
   upgrades: [
     {

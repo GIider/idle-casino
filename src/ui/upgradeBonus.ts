@@ -5,6 +5,7 @@ import {
   SPEED_PER_LEVEL,
   STREAK_BONUS_PER_LEVEL,
   STREAK_CAP,
+  PAYOUT_ENDLESS_EFFECT,
 } from '../core/economy';
 
 const pct = (x: number): string => `${Number((x * 100).toFixed(1))}%`;
@@ -16,7 +17,9 @@ export function bonusLabel(upgradeId: string, level: number): string {
     case 'luck':
       return `${pct(0.03 * l)} chance to re-roll a loss`;
     case 'payout':
-      return `+${pct(0.08 * l)} on all winnings`;
+      return l > 20
+        ? `×${(2.6 * PAYOUT_ENDLESS_EFFECT ** (l - 20)).toFixed(2)} on all winnings`
+        : `+${pct(0.08 * l)} on all winnings`;
     case 'speed':
       return `${(1 + SPEED_PER_LEVEL * l).toFixed(1)}× plays per second`;
     case 'streak':

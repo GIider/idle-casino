@@ -8,6 +8,7 @@ import {
   payoutMultiplier,
   prestigeThreshold,
 } from '../core/economy';
+import { isMaxed } from '../core/economy';
 import { h, setDisabled, setFill, setLines, setText, toggleClass } from './dom';
 import { fmt } from './format';
 import { previousTable } from '../tables';
@@ -402,9 +403,9 @@ export class TablePanel {
     let maxedCount = 0;
     for (const row of slow ? this.rows : []) {
       const level = ts.levels[row.def.id] ?? 0;
-      const maxed = level >= row.def.maxLevel;
-      if (maxed) maxedCount++;
-      setText(row.level, `Lv ${level}/${row.def.maxLevel}`);
+      const maxed = isMaxed(row.def, level);
+      if (level >= row.def.maxLevel) maxedCount++;
+      setText(row.level, row.def.endless && level > row.def.maxLevel ? `Lv ${level} ∞` : `Lv ${level}/${row.def.maxLevel}`);
       setFill(row.root, level, row.def.maxLevel);
       const nowText = bonusLabel(row.def.id, level);
       setText(row.bonusNow, nowText);
@@ -414,9 +415,24 @@ export class TablePanel {
         setDisabled(row.button, true);
       } else {
         const q = game.quoteUpgrade(id, row.def.id, buyMode());
-        const ties = (q.count > 0 ? q.ties : q.nextTies).map((t) => ({ icon: game.def(t.from).currency.icon, amount: t.amount }));
-        setLines(row.button, buyLines(q.count, q.cost, q.nextCost, fmt, cur.icon, ties));
-        row.button.title = ties.length ? `Also costs ${(q.count > 0 ? q.ties : q.nextTies).map((t) => `${fmt(t.amount)} ${game.def(t.from).currency.name}`).join(' and ')}` : '';
+        const rawTies = q.count > 0 ? q.ties : q.nextTies;
+        const blocked = q.count <= 0;
+        const ties = rawTies.map((t) => ({
+          icon: game.def(t.from).currency.icon,
+          amount: t.amount,
+          short: blocked ? t.amount > game.spendable(t.from) : false,
+        }));
+        const ownShort = blocked ? ts.wallet < q.nextCost : false;
+        // Only mark lines when there is more than one currency to tell apart.
+        const marked = ties.length > 0;
+        setLines(row.button, buyLines(q.count, q.cost, q.nextCost, fmt, cur.icon, marked ? ties : [], marked ? ownShort : undefined));
+        const missing = [
+          ...(ownShort ? [`${cur.name}`] : []),
+          ...rawTies.filter((t, i) => ties[i].short).map((t) => game.def(t.from).currency.name),
+        ];
+        row.button.title = ties.length
+          ? `Also costs ${rawTies.map((t) => `${fmt(t.amount)} ${game.def(t.from).currency.name}`).join(' and ')}${missing.length ? `. Missing: ${missing.join(', ')}` : ''}`
+          : '';
         setDisabled(row.button, q.count <= 0);
       }
     }
