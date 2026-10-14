@@ -1,17 +1,25 @@
 import type { TableId } from '../core/types';
 import type { Game } from '../core/game';
-import { achievementsFor } from '../core/achievements';
+import { achievementsFor, type AchievementDef } from '../core/achievements';
 import { TABLES, TABLE_IDS } from '../tables';
 import { h, setText, toggleClass } from './dom';
 import { achievementStatus, type AchievementStatus } from './achievementsPanel';
 
-type StatusFilter = 'all' | 'progress' | 'done' | 'locked';
+type StatusFilter = 'all' | 'progress' | 'done';
+
+type KindFilter = 'all' | AchievementDef['kind'];
+
+const KIND_LABELS: [KindFilter, string][] = [
+  ['all', 'All types'],
+  ['grind', 'Grind'],
+  ['streak', 'Streak'],
+  ['collect', 'Collect'],
+];
 
 const STATUS_LABELS: [StatusFilter, string][] = [
   ['all', 'All'],
   ['progress', 'In progress'],
   ['done', 'Completed'],
-  ['locked', 'Locked'],
 ];
 
 /** Casino-wide overview of every table's achievements, with filters and the closest goals first. */
@@ -23,10 +31,12 @@ export class AchievementsPage {
   private body: HTMLElement;
   private tableFilter: TableId | 'all' = 'all';
   private statusFilter: StatusFilter = 'all';
+  private kindFilter: KindFilter = 'all';
   private collapsed = new Set<TableId>();
   private key = '';
   private tableBtns = new Map<TableId | 'all', HTMLButtonElement>();
   private statusBtns = new Map<StatusFilter, HTMLButtonElement>();
+  private kindBtns = new Map<KindFilter, HTMLButtonElement>();
 
   constructor(private game: Game) {
     this.summary = h('strong');
@@ -60,7 +70,20 @@ export class AchievementsPage {
       this.statusBtns.set(id, btn);
       statusRow.append(btn);
     }
-    this.filters.append(tableRow, statusRow);
+    const kindRow = h('div', { class: 'history-range side-tabs' });
+    for (const [id, label] of KIND_LABELS) {
+      const btn = h('button', {
+        class: 'btn small',
+        text: label,
+        onclick: () => {
+          this.kindFilter = id;
+          this.update();
+        },
+      });
+      this.kindBtns.set(id, btn);
+      kindRow.append(btn);
+    }
+    this.filters.append(tableRow, statusRow, kindRow);
 
     this.root = h(
       'section',
@@ -115,14 +138,32 @@ export class AchievementsPage {
     setText(this.summary, `${earned} / ${total} achievements unlocked`);
     this.summaryFill.style.transform = `scaleX(${total ? earned / total : 0})`;
 
+    // Each button's counter is the result count if that button were selected, other filters unchanged.
+    const count = (t: TableId | 'all', st: StatusFilter, k: KindFilter): number => {
+      let n = 0;
+      for (const [id, list] of all) {
+        if (t !== 'all' && t !== id) continue;
+        for (const s of list) if (this.pass(s, st, k)) n++;
+      }
+      return n;
+    };
     for (const [id, btn] of this.tableBtns) {
       toggleClass(btn, 'active', this.tableFilter === id);
       toggleClass(btn, 'hidden', id !== 'all' && !visible.includes(id));
+      setText(btn, `${id === 'all' ? 'All tables' : TABLES[id].name} (${count(id, this.statusFilter, this.kindFilter)})`);
     }
-    for (const [id, btn] of this.statusBtns) toggleClass(btn, 'active', this.statusFilter === id);
+    for (const [id, btn] of this.statusBtns) {
+      toggleClass(btn, 'active', this.statusFilter === id);
+      setText(btn, `${STATUS_LABELS.find(([i]) => i === id)![1]} (${count(this.tableFilter, id, this.kindFilter)})`);
+    }
+    for (const [id, btn] of this.kindBtns) {
+      toggleClass(btn, 'active', this.kindFilter === id);
+      setText(btn, `${KIND_LABELS.find(([i]) => i === id)![1]} (${count(this.tableFilter, this.statusFilter, id)})`);
+    }
 
     const key = JSON.stringify([
       this.tableFilter,
+      this.kindFilter,
       this.statusFilter,
       [...this.collapsed],
       [...all].map(([id, l]) => [id, l.map((s) => [s.def.id, s.unlocked, s.label])]),
@@ -133,10 +174,14 @@ export class AchievementsPage {
   }
 
   private matches(s: AchievementStatus): boolean {
-    switch (this.statusFilter) {
+    return this.pass(s, this.statusFilter, this.kindFilter);
+  }
+
+  private pass(s: AchievementStatus, status: StatusFilter, kind: KindFilter): boolean {
+    if (kind !== 'all' && s.def.kind !== kind) return false;
+    switch (status) {
       case 'done': return s.unlocked;
-      case 'locked': return !s.unlocked && s.fraction === 0;
-      case 'progress': return !s.unlocked && s.fraction > 0;
+      case 'progress': return !s.unlocked;
       default: return true;
     }
   }
@@ -144,7 +189,7 @@ export class AchievementsPage {
   private render(all: Map<TableId, AchievementStatus[]>, visible: TableId[]): void {
     const sections: HTMLElement[] = [];
     // "Next up": the closest unfinished goals across the casino.
-    if (this.tableFilter === 'all' && this.statusFilter === 'all') {
+    if (this.tableFilter === 'all' && this.statusFilter === 'all' && this.kindFilter === 'all') {
       const next = [...all.values()]
         .flat()
         .filter((s) => !s.unlocked && s.fraction > 0)
