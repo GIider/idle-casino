@@ -145,7 +145,7 @@ export class TablePanel {
       class: 'btn small',
       text: 'Buy cheapest',
       title: 'Keep buying the cheapest affordable upgrade until your wallet runs out',
-      onclick: () => game.buyCheapest(id),
+      onclick: () => this.buyCheapest(),
     });
     const upgrades = h('div', { class: 'card upgrades' }, h('h3', { text: 'Upgrades' }), buyModeSelector(), this.cheapestBtn);
     for (const u of allUpgrades(def)) {
@@ -259,6 +259,23 @@ export class TablePanel {
     this.root = h('section', { class: 'panel' }, this.locked, this.body);
   }
 
+  /** Highlights an upgrade row that was just bought. */
+  private flashRow(row: UpgradeRow): void {
+    row.root.classList.remove('manager-buy');
+    void row.root.offsetWidth; // restart the animation
+    row.root.classList.add('manager-buy');
+    window.setTimeout(() => row.root.classList.remove('manager-buy'), 1500);
+  }
+
+  /** "Buy cheapest": buys, then flashes every row whose level went up. */
+  private buyCheapest(): void {
+    const levels = this.rows.map((r) => this.game.upgradeLevel(this.id, r.def.id));
+    this.game.buyCheapest(this.id);
+    this.rows.forEach((r, i) => {
+      if (this.game.upgradeLevel(this.id, r.def.id) > levels[i]) this.flashRow(r);
+    });
+  }
+
   /** Shows a popup over the animation stage. */
   showNotice(text: string, ms = 5000): void {
     const el = h('div', { class: 'stage-toast', text });
@@ -347,10 +364,7 @@ export class TablePanel {
       if (Date.now() - e.at > 1500) continue;
       const row = this.rows.find((r) => r.def.id === e.upgradeId);
       if (!row) continue;
-      row.root.classList.remove('manager-buy');
-      void row.root.offsetWidth; // restart the animation
-      row.root.classList.add('manager-buy');
-      window.setTimeout(() => row.root.classList.remove('manager-buy'), 1500);
+      this.flashRow(row);
     }
     for (const row of this.rows) {
       toggleClass(row.auto, 'hidden', !toggles);
