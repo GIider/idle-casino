@@ -1573,9 +1573,8 @@ body {
 .bonus-next {
   min-width: 0;
   min-height: 1.3em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1666,7 +1665,8 @@ a:focus-visible {
   min-width: 0;
   padding-inline: 6px;
   font-size: 15px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   overflow: visible;
   display: flex;
   flex-direction: column;
@@ -1683,6 +1683,11 @@ a:focus-visible {
 
 .upgrade-text {
   min-width: 0;
+}
+
+.upgrade-text strong,
+.upgrade-text small {
+  overflow-wrap: anywhere;
 }
 
 /* Gambling terms with a hover definition */

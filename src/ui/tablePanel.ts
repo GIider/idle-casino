@@ -408,7 +408,6 @@ export class TablePanel {
       setFill(row.root, level, row.def.maxLevel);
       const nowText = bonusLabel(row.def.id, level);
       setText(row.bonusNow, nowText);
-      row.bonusNow.title = nowText;
       setText(row.bonusNext, maxed ? 'Max level reached' : `Next: ${bonusLabel(row.def.id, level + 1)}`);
       if (maxed) {
         setLines(row.button, ['Maxed']);
