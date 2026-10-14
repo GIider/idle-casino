@@ -5,6 +5,7 @@ import { h, setText, toggleClass } from './dom';
 import { fmt, fmtSigned } from './format';
 import { RANGES, visiblePoints, type Range } from './chartRange';
 import { perfBegin, perfEnd } from './perf';
+import { profile } from './quality';
 
 type Mode = 'game' | 'combos';
 
@@ -112,13 +113,11 @@ export class HistoryChart {
 
   private viewKey = '';
   private lastRefresh = 0;
-  /** Income and outcome cards repaint at most this often (ms); plays arrive far faster at high speed. */
-  private static readonly REFRESH_MS = 250;
 
   update(history: History, plays: number): void {
     this.history = history;
     const now = performance.now();
-    if (this.key !== '' && now - this.lastRefresh < HistoryChart.REFRESH_MS) return;
+    if (this.key !== '' && now - this.lastRefresh < profile.historyRefreshMs) return;
     this.lastRefresh = now;
     const t0 = perfBegin();
     this.refresh(history, plays);

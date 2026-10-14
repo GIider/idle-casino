@@ -3,6 +3,7 @@ import { SYMBOLS } from '../../tables/slots';
 import { colorOf } from '../../tables/roulette';
 import { COLORS, clamp01, easeOut, hash, roundRect } from './canvas';
 import { fmtSigned } from '../format';
+import { profile } from '../quality';
 
 /** What the round paid; scenes draw this into the animation once they settle. */
 export interface ResultInfo {
@@ -148,8 +149,8 @@ function slotsScene(view: Extract<PlayView, { kind: 'slots' }>, c: SceneCtx): Sc
         ctx.fillStyle = '#0d0820';
         ctx.fill();
         ctx.shadowColor = win ? COLORS.gold : 'transparent';
-        ctx.shadowBlur = win ? 18 : 0;
-        ctx.lineWidth = 3;
+        ctx.shadowBlur = win && profile.canvasShadows ? 18 : 0;
+        ctx.lineWidth = win && !profile.canvasShadows ? 4 : 3;
         ctx.strokeStyle = win ? COLORS.gold : COLORS.line;
         ctx.stroke();
         ctx.shadowBlur = 0;
@@ -284,8 +285,10 @@ function rouletteScene(view: Extract<PlayView, { kind: 'roulette' }>, c: SceneCt
       ctx.beginPath();
       ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, Math.max(3, R * 0.045), 0, Math.PI * 2);
       ctx.fillStyle = '#fff';
-      ctx.shadowColor = '#fff';
-      ctx.shadowBlur = 8;
+      if (profile.canvasShadows) {
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 8;
+      }
       ctx.fill();
       ctx.shadowBlur = 0;
 
@@ -426,8 +429,10 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
         const faceDown = who === 'd' && i === 1 && holeHidden;
         ctx.save();
         ctx.globalAlpha = e;
-        ctx.shadowColor = 'rgba(0,0,0,0.55)';
-        ctx.shadowBlur = 8;
+        if (profile.canvasShadows) {
+          ctx.shadowColor = 'rgba(0,0,0,0.55)';
+          ctx.shadowBlur = 8;
+        }
         roundRect(ctx, x, y, cw, ch, 6);
         ctx.fillStyle = faceDown ? COLORS.pink : '#f8f4ff';
         ctx.fill();

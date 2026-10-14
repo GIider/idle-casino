@@ -7,7 +7,7 @@ import { fmt } from './format';
 import { TablePanel } from './tablePanel';
 import { CasinoPanel } from './casinoPanel';
 import { AchievementsPage } from './achievementsPage';
-import { cycleQuality } from './quality';
+import { cycleQuality, qualityLabel } from './quality';
 import { CROSS_PRESTIGE_BONUS, allUpgrades } from '../core/economy';
 import { previousTable } from '../tables';
 
@@ -67,10 +67,10 @@ export class App {
         (this.qualityBtn = h('button', {
           class: 'btn small',
           title: 'Graphics quality',
-          text: `Quality: ${document.documentElement.dataset.quality ?? 'auto'}`,
+          text: qualityLabel(),
           onclick: () => {
             cycleQuality();
-            setText(this.qualityBtn, `Quality: ${document.documentElement.dataset.quality}`);
+            setText(this.qualityBtn, qualityLabel());
           },
         })),
         h('button', { class: 'btn small', text: 'Export', onclick: () => this.doExport() }),

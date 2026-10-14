@@ -3,7 +3,7 @@ import type { LastPlay } from '../../core/game';
 import { COLORS, prefersReducedMotion, roundRect, setupCanvas } from './canvas';
 import { Fx } from './fx';
 import { createScene, drawSlotsBackdrop, type Scene } from './scenes';
-import { probeFrame } from '../quality';
+import { probeFrame, profile } from '../quality';
 import { perfBegin, perfEnd } from '../perf';
 
 const MAX_SEATS = 16;
@@ -170,6 +170,11 @@ export class Stage {
       this.dirty = true;
       return;
     }
+    // Low quality caps the stage to ~30 fps: wait for the next rAF instead of drawing, `last` keeps accumulating.
+    if (profile.stageFrameMs > 0 && now - this.last < profile.stageFrameMs) {
+      this.raf = requestAnimationFrame(this.frame);
+      return;
+    }
     probeFrame(now - this.last);
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
@@ -191,7 +196,7 @@ export class Stage {
     const { ctx, w, h } = s;
 
     ctx.drawImage(this.background(w, h, this.canvas.width / w), 0, 0, w, h);
-    if (this.id === 'slots' && this.backdropSlots.length > 0) {
+    if (this.id === 'slots' && this.backdropSlots.length > 0 && !profile.low) {
       const scale = this.canvas.width / w;
       ctx.drawImage(this.backdropLayer(w, h, scale), 0, 0, w, h);
     }

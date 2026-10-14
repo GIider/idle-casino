@@ -10,6 +10,7 @@ interface Stat {
 const WINDOW_MS = 1000;
 let stats = new Map<string, Stat>();
 let frames = 0;
+let gaps: number[] = [];
 
 /** Starts a measurement; pair with `perfEnd`. */
 export function perfBegin(): number {
@@ -34,8 +35,11 @@ export function mountPerfOverlay(): void {
     'position:fixed;right:8px;bottom:8px;z-index:9999;margin:0;padding:6px 8px;font:11px/1.35 monospace;' +
     'background:rgba(0,0,0,.8);color:#9f9;border-radius:6px;pointer-events:none;white-space:pre';
   document.body.append(el);
-  const count = (): void => {
+  let prev = performance.now();
+  const count = (t: number): void => {
     frames++;
+    gaps.push(t - prev);
+    prev = t;
     requestAnimationFrame(count);
   };
   requestAnimationFrame(count);
@@ -45,7 +49,12 @@ export function mountPerfOverlay(): void {
     const secs = (now - since) / 1000;
     since = now;
     const rows = [...stats].sort((a, b) => b[1].total - a[1].total);
-    const lines = [`fps ${(frames / secs).toFixed(0)}   quality ${document.documentElement.dataset.quality ?? '?'}`];
+    gaps.sort((a, b) => a - b);
+    const p95 = gaps.length ? gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * 0.95))] : 0;
+    const long = gaps.filter((g) => g > 33).length;
+    const lines = [
+      `fps ${(frames / secs).toFixed(0)}  p95 ${p95.toFixed(1)}ms  long ${long}  quality ${document.documentElement.dataset.quality ?? '?'}`,
+    ];
     lines.push('label            calls/s  avg ms  max ms  ms/s');
     for (const [label, s] of rows) {
       lines.push(
@@ -55,5 +64,6 @@ export function mountPerfOverlay(): void {
     el.textContent = lines.join('\n');
     stats = new Map();
     frames = 0;
+    gaps = [];
   }, WINDOW_MS);
 }

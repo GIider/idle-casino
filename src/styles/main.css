@@ -575,13 +575,25 @@ small {
   }
 }
 
-/* Low-end devices: drop decorative effects. */
-:root[data-quality='low'] * {
-  box-shadow: none !important;
-  text-shadow: none !important;
-  animation: none !important;
-  transition: none !important;
+/* Low quality: drop animations and the layers/transitions that keep the compositor busy.
+   Explicit selectors (not `*`) so a mode flip doesn't restyle every element. Static cues are kept. */
+:root[data-quality='low'] .tab.affordable,
+:root[data-quality='low'] .tile.ready,
+:root[data-quality='low'] .link-chip.hot,
+:root[data-quality='low'] .tab.tile.maxed::after,
+:root[data-quality='low'] .upgrade.manager-buy,
+:root[data-quality='low'] .toast,
+:root[data-quality='low'] .stage-toast {
+  animation: none;
 }
+:root[data-quality='low'] .tab.affordable { box-shadow: 0 0 8px #ffd84a88; }
+:root[data-quality='low'] .tab.tile.maxed::after { background: var(--gold); }
+/* Progress bars repaint every tick; a 0.3s transition + own layer each makes that continuous work. */
+:root[data-quality='low'] .bar-fill {
+  transition: none;
+  will-change: auto;
+}
+:root[data-quality='low'] .bar-label { text-shadow: none; }
 
 /* Your casino tiles + hero stat tiles */
 .your-casino {

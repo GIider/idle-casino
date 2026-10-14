@@ -3,7 +3,7 @@ import { Game } from './core/game';
 import { clearSave, freshGame, importSave, loadGame, saveGame } from './core/save';
 import { normalizeState } from './core/state';
 import { App } from './ui/app';
-import { applyQuality } from './ui/quality';
+import { applyQuality, profile } from './ui/quality';
 import { mountPerfOverlay, perfBegin, perfEnd } from './ui/perf';
 import { fmt, fmtDuration } from './ui/format';
 
@@ -48,6 +48,7 @@ function start(state = loadGame() ?? freshGame(), offline = true): void {
   if (!document.hidden) app.update();
 }
 
+let lastUi = 0;
 setInterval(() => {
   const now = performance.now();
   const dt = (now - lastTick) / 1000;
@@ -60,9 +61,13 @@ setInterval(() => {
     game.tick(dt);
   }
   perfEnd('game.tick', t0);
-  const t1 = perfBegin();
-  app.update();
-  perfEnd('app.update', t1);
+  // Simulation ticks every time; the DOM refresh is rate-limited on low quality.
+  if (now - lastUi >= profile.uiTickMs) {
+    lastUi = now;
+    const t1 = perfBegin();
+    app.update();
+    perfEnd('app.update', t1);
+  }
 }, TICK_MS);
 
 setInterval(() => saveGame(game.state), 5000);

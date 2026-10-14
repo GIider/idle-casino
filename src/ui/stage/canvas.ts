@@ -1,3 +1,5 @@
+import { profile } from '../quality';
+
 export const COLORS = {
   bg: '#0a1226',
   felt: '#122046',
@@ -30,8 +32,7 @@ export function setupCanvas(canvas: HTMLCanvasElement): Surface | null {
     ctx = null;
   }
   if (!ctx) return null;
-  const low = document.documentElement.dataset.quality === 'low';
-  const dpr = Math.min(window.devicePixelRatio || 1, low ? 1 : 1.5);
+  const dpr = Math.min(window.devicePixelRatio || 1, profile.dprCap);
   const bw = Math.round(w * dpr);
   const bh = Math.round(h * dpr);
   if (canvas.width !== bw || canvas.height !== bh) {

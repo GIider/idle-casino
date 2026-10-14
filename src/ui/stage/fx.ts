@@ -1,4 +1,5 @@
 import { COLORS } from './canvas';
+import { profile } from '../quality';
 
 interface Particle {
   x: number;
@@ -21,7 +22,7 @@ export class Fx {
   }
 
   burst(x: number, y: number, count: number, color = COLORS.gold): void {
-    for (let i = 0; i < count && this.ps.length < (document.documentElement.dataset.quality === 'low' ? 60 : 200); i++) {
+    for (let i = 0; i < count && this.ps.length < (profile.maxParticles); i++) {
       const a = Math.random() * Math.PI * 2;
       const s = 60 + Math.random() * 180;
       this.ps.push({
