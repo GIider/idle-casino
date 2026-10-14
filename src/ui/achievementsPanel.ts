@@ -71,9 +71,8 @@ export class AchievementsCard {
       const levels = this.game.table(this.table).levels;
       const upgrades = allUpgrades(this.game.def(this.table));
       const owned = upgrades.filter((u) => (levels[u.id] ?? 0) >= 1).length;
-      const maxed = upgrades.filter((u) => (levels[u.id] ?? 0) >= u.maxLevel).length;
-      lines.push('Own at least one level of every upgrade on this table, then max them all.');
-      lines.push(`Current: ${owned}/${upgrades.length} owned, ${maxed}/${upgrades.length} maxed.`);
+      lines.push('Own at least one level of every upgrade on this table.');
+      lines.push(`Current: ${owned}/${upgrades.length} owned.`);
     } else if (def.kind === 'grind') {
       lines.push(`${def.goal}, counted in total across all your plays.`);
       lines.push(`Progress: ${fmt(p?.count ?? 0)} of ${fmt(def.target)}.`);
@@ -94,7 +93,7 @@ export interface AchievementStatus {
   unlocked: boolean;
   /** 0..1 progress toward the goal (1 once unlocked). */
   fraction: number;
-  /** "123 / 1,000", "best 4 / 7", "3 / 5 maxed" or "Complete". */
+  /** "123 / 1,000", "best 4 / 7", "3 / 5 owned" or "Complete". */
   label: string;
   /** The unlock requirement; kept visible once unlocked. */
   goal: string;
@@ -110,14 +109,11 @@ export function achievementStatus(game: Game, def: AchievementDef): AchievementS
     const upgrades = allUpgrades(game.def(def.table));
     const levels = game.table(def.table).levels;
     const owned = upgrades.filter((u) => (levels[u.id] ?? 0) >= 1).length;
-    const maxed = upgrades.filter((u) => (levels[u.id] ?? 0) >= u.maxLevel).length;
-    const allOwned = owned === upgrades.length;
-    const have = allOwned ? maxed : owned;
     return {
       def, unlocked, effect,
-      fraction: unlocked ? 1 : have / Math.max(1, upgrades.length),
-      label: unlocked ? 'Complete' : `${have} / ${upgrades.length} ${allOwned ? 'maxed' : 'owned'}`,
-      goal: !unlocked && allOwned ? 'Max every upgrade' : 'Own every upgrade, then max them all',
+      fraction: unlocked ? 1 : owned / Math.max(1, upgrades.length),
+      label: unlocked ? 'Complete' : `${owned} / ${upgrades.length} owned`,
+      goal: 'Own every upgrade',
     };
   }
   const value = def.kind === 'grind' ? p.count : p.best;

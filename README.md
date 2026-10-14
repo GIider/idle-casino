@@ -27,7 +27,7 @@ A single-player browser idle game. Every table plays itself the moment it opens;
   - **Slots**: *Cascade* (triples chain free spins), *Hold & Respin*, *Free Spins*, *Wild Diamond* (💎 completes low lines) and *Scatter Sevens*.
   - **Roulette**: *Green Machine* (zero wins), *House Chip* (free chip on 17), *Black Bleed*, *Dozen Creep* and *Double Spin*.
   - **Blackjack**: rich shoe, burn card and surrender, plus card-count goals (win, or lose to the dealer, with 2-6 cards) that unlock a free double down, free split, Charlie, hole-card peek, perfect pairs, even money, dealer mulligan, card sharp, second hand and dealer tilt.
-  - **Collection** (own every upgrade, then max them all) gives each table a unique capstone: *Gold Coin*, *Jackpot Seed*, *Biased Wheel* and *Card Counter*.
+  - **Collection** (own every upgrade once) gives each table a unique capstone: *Gold Coin*, *Jackpot Seed*, *Biased Wheel* and *Card Counter*.
 - **Offline progress**: tables keep playing while you're away (50% efficiency, capped at 8 hours).
 - Saves live in `localStorage`; Export/Import copies a save code.
 

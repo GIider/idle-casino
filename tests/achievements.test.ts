@@ -100,17 +100,17 @@ describe('achievements', () => {
     }
   });
 
-  it('collection achievement: unlocks once every upgrade is maxed, permanently', () => {
+  it('collection achievement: unlocks once every upgrade is owned, permanently', () => {
     const g = new Game(createInitialState(0), mulberry32(2));
     g.table('coinflip').wallet = 1e15;
     const ups = allUpgrades(TABLES.coinflip);
-    for (const u of ups) g.buyUpgrade('coinflip', u.id);
+    for (const u of ups.slice(0, -1)) g.buyUpgrade('coinflip', u.id);
     expect(g.state.achievements.collect_coinflip.unlocked).toBe(false);
-    expect(g.state.achievements.collect_coinflip.count).toBe(ups.length);
+    expect(g.state.achievements.collect_coinflip.count).toBe(ups.length - 1);
     // Other tables are unaffected.
     expect(g.levelsFor('slots').perk_collect_slots).toBeUndefined();
 
-    for (const u of ups) while (g.upgradeLevel('coinflip', u.id) < u.maxLevel) g.buyUpgrade('coinflip', u.id);
+    g.buyUpgrade('coinflip', ups[ups.length - 1].id);
     expect(g.state.achievements.collect_coinflip.unlocked).toBe(true);
     expect(g.notice?.text).toContain('Gold Coin');
 

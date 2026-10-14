@@ -8,7 +8,7 @@ export interface AchievementDef {
   name: string;
   /** What the player has to do, e.g. "Flip heads". */
   goal: string;
-  /** `collect` is earned by upgrade purchases, not rounds: every upgrade owned, then every upgrade maxed. */
+  /** `collect` is earned by upgrade purchases, not rounds: every upgrade on the table owned at least once. */
   kind: 'grind' | 'streak' | 'collect';
   /** Grind: cumulative count. Streak: run length. Collect: unused (0). */
   target: number;
@@ -178,12 +178,12 @@ const cardCount = (cards: number, won: boolean): AchievementDef => ({
   perk: won ? CARD_WIN_PERKS[cards] : CARD_LOSS_PERKS[cards],
 });
 
-/** Capstone for owning, then maxing, every upgrade on a table: one unique rule change per table. */
+/** Capstone for owning every upgrade on a table: one unique rule change per table. */
 const collection = (table: TableId, name: string, perk: AchievementDef['perk']): AchievementDef => ({
   id: `collect_${table}`,
   table,
   name,
-  goal: 'Own every upgrade on this table, then max them all',
+  goal: 'Own every upgrade on this table',
   kind: 'collect',
   target: 0,
   score: () => 0,
@@ -529,7 +529,7 @@ export function observeUpgrades(
     const p = (achievements[def.id] ??= newProgress());
     p.count = Math.max(p.count, owned);
     p.best = Math.max(p.best, maxed);
-    if (!p.unlocked && maxed === upgrades.length) {
+    if (!p.unlocked && owned === upgrades.length) {
       p.unlocked = true;
       gained.push(def);
     }
