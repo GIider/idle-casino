@@ -136,7 +136,6 @@ export class App {
       { class: 'tab tile', title: 'Achievements', onclick: () => this.select('achievements') },
       h('span', { class: 'tile-icon', text: '🏆' }),
       h('div', { class: 'bar tile-bar' }, (this.achFill = h('div', { class: 'bar-fill' }))),
-      h('strong', { text: 'Achievements' }),
       this.achLabel,
     );
     tileRow.append(this.achTab);
