@@ -109,10 +109,17 @@ export class HistoryChart {
     }
   }
 
+  private viewKey = '';
+
   update(history: History, plays: number): void {
     this.history = history;
-    if (this.mode === 'combos') this.combosView?.update(history.stats);
-    else this.gameView.update(history.stats);
+    // Stats only change when a round is played, so skip the (stringify-keyed) view diff otherwise.
+    const viewKey = `${plays}|${this.mode}|${this.canvas.clientWidth}x${this.canvas.clientHeight}`;
+    if (viewKey !== this.viewKey) {
+      this.viewKey = viewKey;
+      if (this.mode === 'combos') this.combosView?.update(history.stats);
+      else this.gameView.update(history.stats);
+    }
     const series = history.rate.points;
     const last = series[series.length - 1];
     const key = `${last?.[0]}|${last?.[1]}|${series.length}|${plays}|${this.range}|${this.canvas.clientWidth}x${this.canvas.clientHeight}`;
@@ -141,8 +148,12 @@ export class HistoryChart {
 
     const padX = 8;
     const padY = 14;
-    let lo = Math.min(0, ...pts.map((p) => p[1]));
-    let hi = Math.max(0, ...pts.map((p) => p[1]));
+    let lo = 0;
+    let hi = 0;
+    for (const p of pts) {
+      if (p[1] < lo) lo = p[1];
+      if (p[1] > hi) hi = p[1];
+    }
     if (hi === lo) hi = lo + 1;
     const span = hi - lo;
     lo -= span * 0.05;

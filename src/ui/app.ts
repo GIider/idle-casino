@@ -2,7 +2,7 @@ import type { TableId } from '../core/types';
 import type { Game } from '../core/game';
 import { TABLES, TABLE_IDS } from '../tables';
 import { exportSave } from '../core/save';
-import { h, setText, toggleClass } from './dom';
+import { h, setDisabled, setText, toggleClass } from './dom';
 import { fmt } from './format';
 import { TablePanel } from './tablePanel';
 import { CasinoPanel } from './casinoPanel';
@@ -203,8 +203,9 @@ export class App {
     toggleClass(this.casinoTab, 'affordable', casinoSeen && canAscend);
     toggleClass(this.casinoTab, 'ready', casinoSeen && canAscend);
     toggleClass(this.casinoTab, 'hidden-feature', !casinoSeen);
-    this.casinoTab.disabled = !casinoSeen;
-    this.casinoTab.title = casinoSeen ? 'Casino' : '';
+    setDisabled(this.casinoTab, !casinoSeen);
+    const casinoTitle = casinoSeen ? 'Casino' : '';
+    if (this.casinoTab.title !== casinoTitle) this.casinoTab.title = casinoTitle;
     if (this.selected === 'achievements') {
       // always available
     } else if (this.selected === 'casino' ? !casinoSeen : !g.tableVisible(this.selected)) this.select('coinflip');

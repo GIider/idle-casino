@@ -41,6 +41,8 @@ export class Stage {
   private bg: HTMLCanvasElement | null = null;
   private id: TableId;
   private recentSlots: number[][] = [];
+  /** `recentSlots` without the newest spin, as the backdrop draws it. */
+  private backdropSlots: number[][] = [];
 
   constructor(icon: string, id: TableId) {
     this.idleIcon = icon;
@@ -59,6 +61,7 @@ export class Stage {
   setRecentSpins(recent: number[][]): void {
     const changed = recent.length !== this.recentSlots.length || recent[recent.length - 1] !== this.recentSlots[this.recentSlots.length - 1];
     this.recentSlots = recent;
+    this.backdropSlots = recent.slice(0, -1);
     if (changed && this.id === 'slots') this.request();
   }
 
@@ -177,7 +180,7 @@ export class Stage {
     const { ctx, w, h } = s;
 
     ctx.drawImage(this.background(w, h, this.canvas.width / w), 0, 0, w, h);
-    if (this.id === 'slots') drawSlotsBackdrop(ctx, w, h, this.recentSlots.slice(0, -1));
+    if (this.id === 'slots') drawSlotsBackdrop(ctx, w, h, this.backdropSlots);
 
     const n = this.laneCount();
     this.fitLanes(n);

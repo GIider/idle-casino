@@ -94,6 +94,8 @@ export class Game {
     return this.state.tables[id];
   }
 
+  private estimateCache: Partial<Record<TableId, { key: string; net: number }>> = {};
+
   /** Table upgrade levels plus the perks earned from achievements, as `TableDef.play` reads them. */
   levelsFor(id: TableId): Record<string, number> {
     return { ...this.state.tables[id].levels, ...perkLevels(this.state.achievements, id) };
@@ -117,9 +119,10 @@ export class Game {
     if (stake <= 0) return null;
 
     ts.wallet -= stake;
-    const outcome = resolvePlay(def, this.levelsFor(id), ts.prestige, stake, this.rng, this.bonusFor(id), ts.streak);
+    const levels = this.levelsFor(id);
+    const outcome = resolvePlay(def, levels, ts.prestige, stake, this.rng, this.bonusFor(id), ts.streak);
     ts.wallet += outcome.payout;
-    ts.streak = nextStreak(ts.streak, outcome.net, this.levelsFor(id));
+    ts.streak = nextStreak(ts.streak, outcome.net, levels);
     ts.plays++;
     ts.profit += outcome.net;
     ts.lifetimeProfit += outcome.net;
@@ -507,6 +510,14 @@ export class Game {
     const rate = effectivePlaysPerSecond(ts.levels, bonus);
     const bet = chooseAutoBet(def, ts);
     if (bet <= 0) return 0;
-    return rate * estimateNetPerPlay(def, this.levelsFor(id), ts.prestige, bet, mulberry32(7), 400, this.bonusFor(id));
+    const levels = this.levelsFor(id);
+    const bonusFor = this.bonusFor(id);
+    // The estimate is deterministic (fixed seed), so reuse it until an input changes.
+    const key = JSON.stringify([levels, ts.prestige, bet, bonusFor]);
+    const hit = this.estimateCache[id];
+    if (hit && hit.key === key) return rate * hit.net;
+    const net = estimateNetPerPlay(def, levels, ts.prestige, bet, mulberry32(7), 400, bonusFor);
+    this.estimateCache[id] = { key, net };
+    return rate * net;
   }
 }

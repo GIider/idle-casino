@@ -44,7 +44,7 @@ function start(state = loadGame() ?? freshGame(), offline = true): void {
       }
     }
   }
-  app.update();
+  if (!document.hidden) app.update();
 }
 
 setInterval(() => {

@@ -43,7 +43,12 @@ export class AchievementsCard {
     }
   }
 
+  private lastUpdate = 0;
+
   update(): void {
+    const now = performance.now();
+    if (now - this.lastUpdate < 500) return;
+    this.lastUpdate = now;
     const earned = this.rows.filter((r) => this.game.state.achievements[r.def.id]?.unlocked).length;
     setText(this.summary, `${earned}/${this.rows.length}`);
     for (const row of this.rows) {
@@ -54,7 +59,8 @@ export class AchievementsCard {
       setText(row.goal, s.goal ? `▸ ${s.goal}` : '');
       setText(row.gain, `✦ ${s.effect}`);
       toggleClass(row.root, 'earned', s.unlocked);
-      row.root.title = this.tooltip(row.def, this.game.state.achievements[row.def.id]);
+      const tip = this.tooltip(row.def, this.game.state.achievements[row.def.id]);
+      if (row.root.title !== tip) row.root.title = tip;
     }
   }
 
