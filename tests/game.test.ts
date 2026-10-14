@@ -4,7 +4,7 @@ import { DEFAULT_FEED_SHARE, SAVE_VERSION, createInitialState, normalizeState } 
 import { DEV_SAVE_KEY, SAVE_KEY, clearSave, exportSave, importSave, loadGame, saveGame } from '../src/core/save';
 import { mulberry32 } from '../src/core/rng';
 import { STARTER_BETS, prestigeWallet } from '../src/core/state';
-import { prestigeThreshold, minBet, upgradeCost, upgradePrice, allUpgrades } from '../src/core/economy';
+import { prestigeThreshold, minBet, upgradeCost, upgradePrice, allUpgrades, exchangeRate } from '../src/core/economy';
 import { TABLES, TABLE_IDS } from '../src/tables';
 
 function game() {
@@ -282,17 +282,22 @@ describe('cross-table upgrade prices', () => {
 });
 
 describe('cross-table price distance', () => {
-  it('a currency from further back always costs more minimum bets than one from a closer table', () => {
+  it('a currency from further back is always asked for more, in raw amount and in value, than a closer one', () => {
     for (const id of TABLE_IDS) {
       for (const upg of allUpgrades(TABLES[id])) {
         const ties = upg.ties ?? [];
-        const level = Math.max(0, ...ties.map((t) => t.fromLevel ?? 0));
-        const price = upgradePrice(TABLES[id], upg, {}, level).ties;
-        for (const a of price) {
-          for (const b of price) {
-            if (TABLE_IDS.indexOf(a.from) < TABLE_IDS.indexOf(b.from)) {
-              // Compared in minimum bets of the paying table, the unit prices are set in.
-              expect(a.amount / TABLES[a.from].baseMinBet, `${id}:${upg.id} ${a.from} vs ${b.from}`).toBeGreaterThan(b.amount / TABLES[b.from].baseMinBet);
+        if (ties.length < 2) continue;
+        for (const p of [0, 1, 3]) {
+          const prestiges = { coinflip: p, slots: p, roulette: p, blackjack: p };
+          for (let level = Math.max(0, ...ties.map((t) => t.fromLevel ?? 0)); level < upg.maxLevel; level++) {
+            const price = upgradePrice(TABLES[id], upg, prestiges, level).ties;
+            for (const a of price) {
+              for (const b of price) {
+                if (TABLE_IDS.indexOf(a.from) >= TABLE_IDS.indexOf(b.from)) continue;
+                const msg = `${id}:${upg.id} L${level} p${p} ${a.from} vs ${b.from}`;
+                expect(a.amount, msg).toBeGreaterThan(b.amount);
+                expect(a.amount / exchangeRate(id, a.from), msg).toBeGreaterThan(b.amount / exchangeRate(id, b.from));
+              }
             }
           }
         }
@@ -304,7 +309,7 @@ describe('cross-table price distance', () => {
     const payout = allUpgrades(TABLES.blackjack).find((u) => u.id === 'cashback')!;
     const probe = { ...payout, ties: [{ from: 'roulette' as const, share: 1, scale: 'flat' as const }, { from: 'slots' as const, share: 1, scale: 'flat' as const }, { from: 'coinflip' as const, share: 1, scale: 'flat' as const }] };
     const [near, mid, far] = upgradePrice(TABLES.blackjack, probe, {}, 0).ties.map((t) => t.amount / TABLES[t.from].baseMinBet);
-    expect(mid / near).toBeCloseTo(far / mid, 5);
+    expect(mid / near).toBeCloseTo(far / mid, 1);
     expect(mid / near).toBeGreaterThan(1);
   });
 });

@@ -145,6 +145,13 @@ export function exchangeRate(own: TableId, from: TableId): number {
 /** Each table further back multiplies a cross-table price (in that table's units) by this: reaching far back is exponentially dearer. */
 export const TIE_DISTANCE_GROWTH = 5;
 
+/**
+ * Within one upgrade's price, a currency from further back is asked for at least this many times the amount of the
+ * nearer one. Further currencies are cheaper to produce, so asking for less of them (as the min-bet units alone would)
+ * makes them the easy part of the bill. Raw amounts ordered this way are also ordered in value (`exchangeRate` < 1).
+ */
+export const TIE_FURTHER_MIN_RATIO = 1.5;
+
 export type Prestiges = Partial<Record<TableId, number>>;
 
 export interface UpgradePrice {
@@ -175,6 +182,12 @@ export function upgradePrice(
     const far = TIE_DISTANCE_GROWTH ** Math.max(0, distance - 1);
     const base = tie.share * upg.baseCost * unit * mine * far * (tie.growth ?? upg.growth) ** level;
     ties.push({ from: tie.from, amount: Math.max(1, Math.ceil(base * bonus.upgradeCost)) });
+  }
+  // Nearest currency first; each further one is asked for at least TIE_FURTHER_MIN_RATIO times the previous amount.
+  const order = (t: { from: TableId }) => TABLE_IDS.indexOf(t.from);
+  const byNear = [...ties].sort((a, b) => order(b) - order(a));
+  for (let i = 1; i < byNear.length; i++) {
+    byNear[i].amount = Math.max(byNear[i].amount, Math.ceil(byNear[i - 1].amount * TIE_FURTHER_MIN_RATIO));
   }
   return { own, ties };
 }
