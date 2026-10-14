@@ -70,9 +70,17 @@ describe('achievements page', () => {
     expect(titles.length).toBe(expected);
     expect(host.querySelector('.ach-summary')!.textContent).toContain(' achievements unlocked');
 
-    const done = Array.from(host.querySelectorAll('.ach-filters button')).find((b) => b.textContent === 'Completed') as HTMLButtonElement;
+    const done = Array.from(host.querySelectorAll('.ach-filters button')).find((b) => b.textContent === 'Completed (0)') as HTMLButtonElement;
     done.click();
     expect(host.querySelectorAll('.ach-section .ach-card').length).toBe(0);
     expect(host.textContent).toContain('Nothing matches');
+
+    const button = (label: string) =>
+      Array.from(host.querySelectorAll('.ach-filters button')).find((b) => b.textContent?.startsWith(label)) as HTMLButtonElement;
+    button('All (').click();
+    const grind = visible.reduce((n, id) => n + achievementsFor(id).filter((d) => d.kind === 'grind').length, 0);
+    expect(button('Grind (').textContent).toBe(`Grind (${grind})`);
+    button('Grind (').click();
+    expect(host.querySelectorAll('.ach-section .ach-card').length).toBe(grind);
   });
 });
