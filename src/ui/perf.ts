@@ -62,6 +62,12 @@ export function mountPerfOverlay(): void {
       );
     }
     el.textContent = lines.join('\n');
+    (window as unknown as { __perf?: unknown }).__perf = {
+      fps: frames / secs,
+      p95,
+      long,
+      labels: Object.fromEntries(rows.map(([l, s]) => [l, { calls: s.calls / secs, avg: s.total / s.calls, max: s.max, msPerSec: s.total / secs }])),
+    };
     stats = new Map();
     frames = 0;
     gaps = [];

@@ -164,6 +164,7 @@ export class TablePanel {
       if (u.id === 'autobet') {
         const set = (on: boolean): void => {
           this.previewUpgrade = on ? u.id : null;
+          this.invalidate();
           this.update();
         };
         button.addEventListener('mouseenter', () => set(true));
@@ -299,42 +300,50 @@ export class TablePanel {
         return;
     }
 
-    const levels = game.levelsFor(id);
-    setText(this.statTiles.prestige, `${ts.prestige}`);
-    setText(this.statTiles.luck, `${(luckChance(levels, game.bonus) * 100).toFixed(1)}%`);
-    const curWin = payoutMultiplier(levels, ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak);
-    const autobetLvl = ts.levels.autobet ?? 0;
-    const curBet = betAtLevel(def, ts.prestige, ts.wallet, autobetLvl);
-    const curMax = maxPayout(def, ts.prestige, levels);
-    const prestigePv = this.previewing;
-    const betPv = !prestigePv && this.previewUpgrade === 'autobet' && autobetLvl < 7;
-    const pv = prestigePv;
-    const nextWin = payoutMultiplier({}, ts.prestige + 1, game.bonusFor(id), def.baseWinBonus, 0);
-    setText(this.statTiles.winnings, `×${(pv ? nextWin : curWin).toFixed(2)}`);
-    let shownBet = curBet;
-    let shownMax = curMax;
-    if (prestigePv) {
-      shownBet = betAtLevel(def, ts.prestige + 1, ts.wallet, autobetLvl);
-      shownMax = maxPayout(def, ts.prestige + 1, levels);
-    } else if (betPv) {
-      const n = Math.max(1, game.quoteUpgrade(id, 'autobet', buyMode()).count);
-      shownBet = betAtLevel(def, ts.prestige, ts.wallet, Math.min(7, autobetLvl + n));
+    const nowMs = performance.now();
+    const slow = this.slowDirty || nowMs - this.slowAt >= SLOW_MS;
+    if (slow) {
+      this.slowDirty = false;
+      this.slowAt = nowMs;
     }
-    const line = (b: number, m: number): string => `${cur.icon} ${fmt(b)} → ${cur.icon} ${fmt(m)}`;
-    setText(this.bigBet, line(shownBet, shownMax));
-    // Ghost holds the widest candidate so toggling a preview never changes the tile's width.
-    setText(this.bigBetGhost, line(Math.max(shownBet, curBet), Math.max(shownMax, curMax)));
-    // Always rendered (just concealed) so the tile keeps its size and the button doesn't move under the cursor.
-    setText(this.bigBetOld, `was ${line(curBet, curMax)}`);
-    const anyPv = prestigePv || betPv;
-    toggleClass(this.bigBetOld, 'concealed', !anyPv);
-    if (pv && this.frozenWin === null) this.frozenWin = payoutMultiplier({}, ts.prestige, game.bonusFor(id), def.baseWinBonus, 0);
-    if (!pv) this.frozenWin = null;
-    setText(this.winOld, `was ×${(this.frozenWin ?? curWin).toFixed(2)}`);
-    toggleClass(this.winOld, 'concealed', !pv);
-    for (const t of this.bigTiles) toggleClass(t, 'preview', anyPv);
-    toggleClass(this.winTile, 'preview', pv);
+    if (slow) {
+      const levels = game.levelsFor(id);
+      setText(this.statTiles.prestige, `${ts.prestige}`);
+      setText(this.statTiles.luck, `${(luckChance(levels, game.bonus) * 100).toFixed(1)}%`);
+      const curWin = payoutMultiplier(levels, ts.prestige, game.bonusFor(id), def.baseWinBonus, ts.streak);
+      const autobetLvl = ts.levels.autobet ?? 0;
+      const curBet = betAtLevel(def, ts.prestige, ts.wallet, autobetLvl);
+      const curMax = maxPayout(def, ts.prestige, levels);
+      const prestigePv = this.previewing;
+      const betPv = !prestigePv && this.previewUpgrade === 'autobet' && autobetLvl < 7;
+      const pv = prestigePv;
+      const nextWin = payoutMultiplier({}, ts.prestige + 1, game.bonusFor(id), def.baseWinBonus, 0);
+      setText(this.statTiles.winnings, `×${(pv ? nextWin : curWin).toFixed(2)}`);
+      let shownBet = curBet;
+      let shownMax = curMax;
+      if (prestigePv) {
+        shownBet = betAtLevel(def, ts.prestige + 1, ts.wallet, autobetLvl);
+        shownMax = maxPayout(def, ts.prestige + 1, levels);
+      } else if (betPv) {
+        const n = Math.max(1, game.quoteUpgrade(id, 'autobet', buyMode()).count);
+        shownBet = betAtLevel(def, ts.prestige, ts.wallet, Math.min(7, autobetLvl + n));
+      }
+      const line = (b: number, m: number): string => `${cur.icon} ${fmt(b)} → ${cur.icon} ${fmt(m)}`;
+      setText(this.bigBet, line(shownBet, shownMax));
+      // Ghost holds the widest candidate so toggling a preview never changes the tile's width.
+      setText(this.bigBetGhost, line(Math.max(shownBet, curBet), Math.max(shownMax, curMax)));
+      // Always rendered (just concealed) so the tile keeps its size and the button doesn't move under the cursor.
+      setText(this.bigBetOld, `was ${line(curBet, curMax)}`);
+      const anyPv = prestigePv || betPv;
+      toggleClass(this.bigBetOld, 'concealed', !anyPv);
+      if (pv && this.frozenWin === null) this.frozenWin = payoutMultiplier({}, ts.prestige, game.bonusFor(id), def.baseWinBonus, 0);
+      if (!pv) this.frozenWin = null;
+      setText(this.winOld, `was ×${(this.frozenWin ?? curWin).toFixed(2)}`);
+      toggleClass(this.winOld, 'concealed', !pv);
+      for (const t of this.bigTiles) toggleClass(t, 'preview', anyPv);
+      toggleClass(this.winTile, 'preview', pv);
 
+    }
     toggleClass(this.cheapestBtn, 'hidden', game.casinoLevel('bulkbuy') < 1);
     setDisabled(this.cheapestBtn, !game.canBuyCheapest(id));
     // Light up rows the Floor Manager just bought (only recent entries, so a freshly shown tab doesn't replay old ones).
@@ -345,12 +354,6 @@ export class TablePanel {
       const row = this.rows.find((r) => r.def.id === e.upgradeId);
       if (!row) continue;
       this.flashRow(row);
-    }
-    const nowMs = performance.now();
-    const slow = this.slowDirty || nowMs - this.slowAt >= SLOW_MS;
-    if (slow) {
-      this.slowDirty = false;
-      this.slowAt = nowMs;
     }
     for (const row of slow ? this.rows : []) {
       const level = ts.levels[row.def.id] ?? 0;
@@ -373,7 +376,7 @@ export class TablePanel {
     const threshold = prestigeThreshold(def, ts.prestige, game.bonus);
     const progress = Math.max(0, Math.min(1, ts.profit / threshold));
     setText(this.barLabel, game.canPrestige(id) ? 'Ready to prestige!' : `${Math.floor(progress * 100)}%`);
-    this.barWrap.title = `${fmt(Math.max(0, ts.profit))} / ${fmt(threshold)} ${cur.name} profit to prestige`;
+    if (slow) this.barWrap.title = `${fmt(Math.max(0, ts.profit))} / ${fmt(threshold)} ${cur.name} profit to prestige`;
     this.prestigeBar.style.transform = `scaleX(${progress})`;
     setDisabled(this.prestigeBtn, !game.canPrestige(id));
 

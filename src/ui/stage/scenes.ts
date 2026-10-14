@@ -4,6 +4,7 @@ import { betHits, colorOf } from '../../tables/roulette';
 import { COLORS, clamp01, easeOut, hash, roundRect } from './canvas';
 import { fmtSigned } from '../format';
 import { profile } from '../quality';
+import { blit, measure, sprite } from './sprites';
 
 /** What the round paid; scenes draw this into the animation once they settle. */
 export interface ResultInfo {
@@ -31,6 +32,8 @@ export interface Scene {
   draw(ctx: CanvasRenderingContext2D, t: number, w: number, h: number): void;
 }
 
+const FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+
 function text(
   ctx: CanvasRenderingContext2D,
   s: string,
@@ -41,7 +44,28 @@ function text(
   weight = 700,
   maxWidth?: number,
 ): void {
-  ctx.font = `${weight} ${size}px system-ui, -apple-system, 'Segoe UI', sans-serif`;
+  // Glyph runs (emoji especially) are expensive to rasterise; draw each (string, size, colour) once into a sprite.
+  const q = Math.max(1, Math.round(size));
+  const font = `${weight} ${q}px ${FONT_FAMILY}`;
+  const natural = measure(font, s);
+  const k = size / q;
+  // Anything wider than its budget is squeezed by fillText(maxWidth); keep that on the direct path.
+  if (maxWidth === undefined || natural * k <= maxWidth) {
+    const w = Math.ceil(natural) + 2;
+    const h = Math.ceil(q * 1.5);
+    const spr = sprite(`t|${weight}|${q}|${color}|${s}`, w, h, 2, (c) => {
+      c.font = font;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillStyle = color;
+      c.fillText(s, w / 2, h / 2);
+    });
+    if (spr) {
+      blit(ctx, spr, x - (w / 2) * k, y - (h / 2) * k, w * k, h * k, 2 * k);
+      return;
+    }
+  }
+  ctx.font = `${weight} ${size}px ${FONT_FAMILY}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = color;
@@ -367,41 +391,14 @@ function rouletteScene(view: Extract<PlayView, { kind: 'roulette' }>, c: SceneCt
   const col = colorOf(view.pocket);
   const tint = col === 'red' ? COLORS.red : col === 'green' ? COLORS.green : COLORS.fg;
   const BET_LABEL: Record<string, string> = { color: 'Red', dozen: '1st dozen', number: 'Lucky 17' };
-  return {
-    duration,
-    draw(ctx, t, w, h) {
-      const p = clamp01(t / duration);
-      const R = Math.max(30, Math.min(h * 0.36, w * 0.42));
-      const cx = w / 2;
-      const cy = h * 0.43;
-      const rot = easeOut(p) * 2.6;
-      const settled = p >= 1;
-      const won = settled && c.net > 0;
-
-      // Outer rim and ball track.
-      const rim = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R * 1.1);
-      rim.addColorStop(0, '#2b1a05');
-      rim.addColorStop(0.5, '#ffd35c');
-      rim.addColorStop(1, '#7a4a00');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R * 1.1, 0, Math.PI * 2);
-      ctx.fillStyle = rim;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(cx, cy, R * 1.0, 0, Math.PI * 2);
-      ctx.fillStyle = '#0a0f24';
-      ctx.fill();
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(rot);
+    const drawWheel = (ctx: CanvasRenderingContext2D, R: number, hotPocket: number): void => {
       const rIn = R * 0.62;
       const rOut = R * 0.93;
       for (let i = 0; i < WHEEL.length; i++) {
         const n = WHEEL[i];
         const a0 = i * slice - Math.PI / 2 - slice / 2;
         const colr = colorOf(n);
-        const hot = settled && n === view.pocket;
+        const hot = hotPocket === n;
         ctx.beginPath();
         ctx.arc(0, 0, rOut, a0, a0 + slice);
         ctx.arc(0, 0, rIn, a0 + slice, a0, true);
@@ -446,7 +443,54 @@ function rouletteScene(view: Extract<PlayView, { kind: 'roulette' }>, c: SceneCt
       ctx.arc(0, 0, R * 0.12, 0, Math.PI * 2);
       ctx.fillStyle = COLORS.gold;
       ctx.fill();
-      ctx.restore();
+    };
+  return {
+    duration,
+    draw(ctx, t, w, h) {
+      const p = clamp01(t / duration);
+      const R = Math.max(30, Math.min(h * 0.36, w * 0.42));
+      const cx = w / 2;
+      const cy = h * 0.43;
+      const rot = easeOut(p) * 2.6;
+      const settled = p >= 1;
+      const won = settled && c.net > 0;
+
+      // Outer rim and ball track.
+      const rim = ctx.createRadialGradient(cx, cy, R * 0.9, cx, cy, R * 1.1);
+      rim.addColorStop(0, '#2b1a05');
+      rim.addColorStop(0.5, '#ffd35c');
+      rim.addColorStop(1, '#7a4a00');
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.1, 0, Math.PI * 2);
+      ctx.fillStyle = rim;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.0, 0, Math.PI * 2);
+      ctx.fillStyle = '#0a0f24';
+      ctx.fill();
+
+      // The wheel is static apart from its rotation, so render it once per size/result and rotate the sprite.
+      const q = Math.max(1, Math.round(R));
+      const k = R / q;
+      const hotPocket = settled ? view.pocket : -1;
+      const span = q * 2 * 0.95;
+      const spr = sprite(`wheel|${q}|${hotPocket}|${magnet}`, span, span, 2, (c) => {
+        c.translate(span / 2, span / 2);
+        drawWheel(c, q, hotPocket);
+      });
+      if (spr) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rot);
+        blit(ctx, spr, -(span / 2) * k, -(span / 2) * k, span * k, span * k, 2 * k);
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rot);
+        drawWheel(ctx, R, hotPocket);
+        ctx.restore();
+      }
 
       // Ball: orbits the track against the wheel, slows, then drops into the pocket with a couple of bounces.
       const ease = easeOut(p);
@@ -685,20 +729,34 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
         ctx.rotate((1 - e) * 0.4);
         ctx.scale(sxScale, 1);
         ctx.translate(-cw / 2, -ch / 2);
-        if (profile.canvasShadows) {
-          ctx.shadowColor = 'rgba(0,0,0,0.55)';
-          ctx.shadowBlur = 8;
-        }
+        // Cards (with their drop shadow) are rendered once per face and size, then blitted.
+        const SH = profile.canvasShadows ? 10 : 0;
+        const qw = Math.round(cw * 2) / 2;
+        const qh = Math.round(ch * 2) / 2;
+        let key: string;
+        let face: ((c: CanvasRenderingContext2D) => void) | null = null;
         if (!faceUp) {
-          drawCardBack(ctx, 0, 0, cw, ch);
+          key = `back|${qw}|${qh}|${SH}`;
+          face = (c) => drawCardBack(c, 0, 0, qw, qh);
         } else {
           const v = hands[who][i];
           const faceKey = who === 'p' ? i : who === 's' ? i + 30 : i + 9;
           const rank = v === 10 ? FACES[Math.floor(hash(c.seed, faceKey) * 4)] : RANK_LABEL[v];
           const suit = SUITS[Math.floor(hash(c.seed + 7, faceKey + 50) * 4)];
           const red = suit === '♥' || suit === '♦';
-          drawCardFace(ctx, 0, 0, cw, ch, rank, suit, red ? '#d3213f' : '#17122a');
+          key = `face|${qw}|${qh}|${SH}|${rank}|${suit}`;
+          face = (c) => drawCardFace(c, 0, 0, qw, qh, rank, suit, red ? '#d3213f' : '#17122a');
         }
+        const draw = face;
+        const spr = sprite(key, qw, qh, SH, (c) => {
+          if (SH) {
+            c.shadowColor = 'rgba(0,0,0,0.55)';
+            c.shadowBlur = 8;
+          }
+          draw(c);
+        });
+        if (spr) blit(ctx, spr, 0, 0, cw, ch, SH * (cw / qw));
+        else draw(ctx);
         ctx.restore();
       };
       order.forEach((o, k) => drawCard(o.who, o.i, k));

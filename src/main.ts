@@ -5,7 +5,7 @@ import { normalizeState } from './core/state';
 import type { GameState } from './core/types';
 import { App } from './ui/app';
 import { applyQuality, profile } from './ui/quality';
-import { mountPerfOverlay, perfBegin, perfEnd } from './ui/perf';
+import { mountPerfOverlay, perfBegin, perfEnd, perfOn } from './ui/perf';
 import { fmt, fmtDuration } from './ui/format';
 
 applyQuality();
@@ -83,3 +83,5 @@ document.addEventListener('visibilitychange', () => {
 
 start();
 mountPerfOverlay();
+// Profiling harness hook (scripts/perf-measure.mjs).
+if (perfOn) Object.defineProperty(window, '__game', { get: () => game });

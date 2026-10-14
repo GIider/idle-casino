@@ -69,6 +69,9 @@ export class Game {
   private acc: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
   private managerClock: Record<TableId, number> = { coinflip: 0, slots: 0, roulette: 0, blackjack: 0 };
 
+  /** Per-table levels/bonus reused across the many plays of one `tick`; null outside a tick (state may change freely). */
+  private tickCtx: Partial<Record<TableId, { levels: Record<string, number>; bonus: CasinoBonus }>> | null = null;
+
   constructor(state: GameState, private rng: Rng = Math.random) {
     this.state = state;
   }
@@ -109,6 +112,7 @@ export class Game {
 
   private announce(gained: AchievementDef[]): void {
     if (gained.length === 0) return;
+    this.tickCtx = this.tickCtx && {};
     this.say(gained.map((a) => `🏆 ${a.perk.name}! ${a.perk.describe()}`).join(' · '));
   }
 
@@ -125,8 +129,13 @@ export class Game {
     if (stake <= 0) return null;
 
     ts.wallet -= stake;
-    const levels = this.levelsFor(id);
-    const outcome = resolvePlay(def, levels, ts.prestige, stake, this.rng, this.bonusFor(id), ts.streak);
+    let ctx = this.tickCtx?.[id];
+    if (!ctx) {
+      ctx = { levels: this.levelsFor(id), bonus: this.bonusFor(id) };
+      if (this.tickCtx) this.tickCtx[id] = ctx;
+    }
+    const { levels } = ctx;
+    const outcome = resolvePlay(def, levels, ts.prestige, stake, this.rng, ctx.bonus, ts.streak);
     ts.wallet += outcome.payout;
     ts.streak = nextStreak(ts.streak, outcome.net, levels);
     ts.plays++;
@@ -142,6 +151,15 @@ export class Game {
 
   /** Advances every unlocked table by `dt` seconds of play. */
   tick(dt: number): void {
+    this.tickCtx = {};
+    try {
+      this.tickInner(dt);
+    } finally {
+      this.tickCtx = null;
+    }
+  }
+
+  private tickInner(dt: number): void {
     const bonus = this.bonus;
     for (const id of TABLE_IDS) {
       const ts = this.state.tables[id];
@@ -322,6 +340,7 @@ export class Game {
     const ts = this.state.tables[id];
     const { count, cost } = this.quoteUpgrade(id, upgradeId, mode);
     if (count <= 0) return false;
+    this.tickCtx = this.tickCtx && {};
     ts.wallet -= cost;
     ts.levels[upgradeId] = (ts.levels[upgradeId] ?? 0) + count;
     this.announce(observeUpgrades(this.state.achievements, id, allUpgrades(def), ts.levels));
@@ -373,6 +392,7 @@ export class Game {
   /** Resets the table's upgrades, wallet and run profit, permanently raising its stakes. */
   prestige(id: TableId): boolean {
     if (!this.canPrestige(id)) return false;
+    this.tickCtx = this.tickCtx && {};
     const ts = this.state.tables[id];
     markPrestige(ts.history, ts.plays);
     ts.prestige += 1;

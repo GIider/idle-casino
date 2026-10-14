@@ -25,6 +25,8 @@ const STATUS_LABELS: [StatusFilter, string][] = [
   ['done', 'Completed'],
 ];
 
+const UPDATE_MS = 400;
+
 /** Casino-wide overview of every table's achievements, with filters and the closest goals first. */
 export class AchievementsPage {
   readonly root: HTMLElement;
@@ -37,6 +39,7 @@ export class AchievementsPage {
   private kindFilter: KindFilter = 'all';
   private collapsed = new Set<TableId>();
   private key = '';
+  private updatedAt = 0;
   /** Achievements hovered while the New filter is on: they stay listed there until the filter or page changes. */
   private pinned = new Set<string>();
   private tableBtns = new Map<TableId | 'all', HTMLButtonElement>();
@@ -57,7 +60,7 @@ export class AchievementsPage {
         text: id === 'all' ? 'All tables' : TABLES[id].name,
         onclick: () => {
           this.tableFilter = id;
-          this.update();
+          this.update(true);
         },
       });
       this.tableBtns.set(id, btn);
@@ -71,7 +74,7 @@ export class AchievementsPage {
         onclick: () => {
           this.statusFilter = id;
           this.pinned.clear();
-          this.update();
+          this.update(true);
         },
       });
       this.statusBtns.set(id, btn);
@@ -84,7 +87,7 @@ export class AchievementsPage {
         text: label,
         onclick: () => {
           this.kindFilter = id;
-          this.update();
+          this.update(true);
         },
       });
       this.kindBtns.set(id, btn);
@@ -102,7 +105,7 @@ export class AchievementsPage {
           title: `Show ${TABLES[id].name} achievements`,
           onclick: () => {
             this.tableFilter = this.tableFilter === id ? 'all' : id;
-            this.update();
+            this.update(true);
           },
         },
         h('span', { class: 'ach-chip-name', text: `${TABLES[id].icon} ${TABLES[id].name}` }),
@@ -138,6 +141,7 @@ export class AchievementsPage {
   setHidden(hidden: boolean): void {
     toggleClass(this.root, 'hidden', hidden);
     if (hidden) this.pinned.clear();
+    else this.updatedAt = 0;
   }
 
   /** Unlocked / total achievements across every unlocked table. */
@@ -147,15 +151,18 @@ export class AchievementsPage {
     for (const id of TABLE_IDS) {
       if (!this.game.state.tables[id].unlocked) continue;
       for (const def of achievementsFor(id)) {
-        const s = achievementStatus(this.game, def);
-        if (s.unlocked) earned++;
+        if (this.game.state.achievements[def.id]?.unlocked) earned++;
         total++;
       }
     }
     return { earned, total };
   }
 
-  update(): void {
+  /** Progress text only changes slowly, so the full refresh is rate-limited unless a filter/click forces it. */
+  update(force = false): void {
+    const now = performance.now();
+    if (!force && now - this.updatedAt < UPDATE_MS) return;
+    this.updatedAt = now;
     const g = this.game;
     const visible = TABLE_IDS.filter((id) => g.state.tables[id].unlocked);
     if (this.tableFilter !== 'all' && !visible.includes(this.tableFilter)) this.tableFilter = 'all';
@@ -263,7 +270,7 @@ export class AchievementsPage {
           onclick: () => {
             if (this.collapsed.has(id)) this.collapsed.delete(id);
             else this.collapsed.add(id);
-            this.update();
+            this.update(true);
           },
         },
         h('span', { text: `${closed ? '▸' : '▾'} ${TABLES[id].icon} ${TABLES[id].name}` }),

@@ -463,8 +463,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   ...CARD_COUNTS.map((n) => cardCount(n, false)),
 ];
 
+const BY_TABLE = new Map<TableId, AchievementDef[]>();
+
 export function achievementsFor(table: TableId): AchievementDef[] {
-  return ACHIEVEMENTS.filter((a) => a.table === table);
+  let list = BY_TABLE.get(table);
+  if (!list) BY_TABLE.set(table, (list = ACHIEVEMENTS.filter((a) => a.table === table)));
+  return list;
 }
 
 export function newProgress(): AchievementProgress {
