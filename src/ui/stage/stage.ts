@@ -37,6 +37,8 @@ export class Stage {
   private seats = 0;
   private pulses: number[] = [];
   private observer: ResizeObserver | null = null;
+  /** CSS size of the canvas as last reported by the observer (null until the first report). */
+  private size: { w: number; h: number } | null = null;
   private idleIcon: string;
   private seenSeq = -1;
   private dirty = true;
@@ -52,7 +54,11 @@ export class Stage {
     this.canvas.setAttribute('role', 'img');
     this.canvas.setAttribute('aria-label', `${id} table`);
     if (typeof ResizeObserver !== 'undefined') {
-      this.observer = new ResizeObserver(() => this.request());
+      this.observer = new ResizeObserver((entries) => {
+        const box = entries[entries.length - 1]?.contentRect;
+        if (box) this.size = { w: box.width, h: box.height };
+        this.request();
+      });
       this.observer.observe(this.canvas);
     }
   }
@@ -118,8 +124,8 @@ export class Stage {
       this.nextLane = lane + 1;
       this.start(lane, play, levels, now);
     } else {
-      const w = this.canvas.clientWidth || 300;
-      const h = this.canvas.clientHeight || 160;
+      const w = this.size?.w || this.canvas.clientWidth || 300;
+      const h = this.size?.h || this.canvas.clientHeight || 160;
       const sx = this.seats > 0 ? w * (0.1 + (0.8 * (seat + 0.5)) / this.seats) : w / 2;
       this.fx.chip(sx, h * 0.92, o.net > 0 ? COLORS.gold : o.net < 0 ? COLORS.red : COLORS.muted);
       let soonest = 0;
@@ -180,7 +186,7 @@ export class Stage {
   };
 
   private render(now: number, dt: number): boolean {
-    const s = setupCanvas(this.canvas);
+    const s = setupCanvas(this.canvas, this.size);
     if (!s) return false;
     const { ctx, w, h } = s;
 

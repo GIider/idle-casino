@@ -110,57 +110,65 @@ function coinScene(view: Extract<PlayView, { kind: 'coin' }>, c: SceneCtx): Scen
     ctx.globalAlpha = alpha;
     ctx.translate(cx, cy);
     ctx.scale(1, sy);
-    // Rim: stacked discs give the coin visible thickness while it turns.
+    // Rim: two end discs and the band between them give the coin visible thickness while it turns.
     ctx.fillStyle = heads ? '#8a5a00' : '#6a6a8a';
-    for (let d = thick; d >= 0; d -= 1.5) {
-      ctx.beginPath();
-      ctx.arc(0, d / sy, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
-    if (heads) {
-      g.addColorStop(0, gold ? '#ffffff' : '#fff6bf');
-      g.addColorStop(0.5, gold ? '#ffe36a' : COLORS.gold);
-      g.addColorStop(1, '#b87400');
-    } else {
-      g.addColorStop(0, '#ffffff');
-      g.addColorStop(0.5, '#cfd2ea');
-      g.addColorStop(1, '#7c80a8');
-    }
-    ctx.fillStyle = g;
+    const off = thick / sy;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.moveTo(r, off);
+    ctx.arc(0, off, r, 0, Math.PI * 2);
+    ctx.rect(-r, 0, r * 2, off);
     ctx.fill();
-    // Milled edge ticks and the inner ring.
-    ctx.strokeStyle = heads ? 'rgba(122,74,0,0.55)' : 'rgba(70,72,110,0.55)';
-    ctx.lineWidth = Math.max(1, r * 0.03);
-    if (sy > 0.3) {
-      for (let k = 0; k < 28; k++) {
-        const a = (k / 28) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9);
-        ctx.lineTo(Math.cos(a) * r * 0.97, Math.sin(a) * r * 0.97);
-        ctx.stroke();
+    // Face (gradient, milled edge ticks, inner ring, emblem) is the same every frame: render once and blit.
+    const ticks = sy > 0.3;
+    const qr = Math.max(1, Math.round(r));
+    const span = qr * 2;
+    const face = sprite(`coin|${heads}|${gold}|${qr}|${ticks}`, span, span, 2, (c) => {
+      c.translate(qr, qr);
+      const g = c.createRadialGradient(-qr * 0.35, -qr * 0.35, qr * 0.1, 0, 0, qr);
+      if (heads) {
+        g.addColorStop(0, gold ? '#ffffff' : '#fff6bf');
+        g.addColorStop(0.5, gold ? '#ffe36a' : COLORS.gold);
+        g.addColorStop(1, '#b87400');
+      } else {
+        g.addColorStop(0, '#ffffff');
+        g.addColorStop(0.5, '#cfd2ea');
+        g.addColorStop(1, '#7c80a8');
       }
-    }
-    ctx.lineWidth = Math.max(1.5, r * 0.05);
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
-    ctx.stroke();
-    // Emblem.
-    if (heads) {
-      text(ctx, '♛', 0, r * 0.02, r * 1.0, '#7a4a00', 800);
-    } else {
-      ctx.fillStyle = '#5a5e90';
-      ctx.beginPath();
-      for (let k = 0; k < 8; k++) {
-        const rr = k % 2 === 0 ? r * 0.5 : r * 0.14;
-        const a = (k / 8) * Math.PI * 2 - Math.PI / 2;
-        ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      c.fillStyle = g;
+      c.beginPath();
+      c.arc(0, 0, qr, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = heads ? 'rgba(122,74,0,0.55)' : 'rgba(70,72,110,0.55)';
+      c.lineWidth = Math.max(1, qr * 0.03);
+      if (ticks) {
+        c.beginPath();
+        for (let k = 0; k < 28; k++) {
+          const a = (k / 28) * Math.PI * 2;
+          c.moveTo(Math.cos(a) * qr * 0.9, Math.sin(a) * qr * 0.9);
+          c.lineTo(Math.cos(a) * qr * 0.97, Math.sin(a) * qr * 0.97);
+        }
+        c.stroke();
       }
-      ctx.closePath();
-      ctx.fill();
-    }
+      c.lineWidth = Math.max(1.5, qr * 0.05);
+      c.beginPath();
+      c.arc(0, 0, qr * 0.78, 0, Math.PI * 2);
+      c.stroke();
+      if (heads) {
+        text(c, '♛', 0, qr * 0.02, qr * 1.0, '#7a4a00', 800);
+      } else {
+        c.fillStyle = '#5a5e90';
+        c.beginPath();
+        for (let k = 0; k < 8; k++) {
+          const rr = k % 2 === 0 ? qr * 0.5 : qr * 0.14;
+          const a = (k / 8) * Math.PI * 2 - Math.PI / 2;
+          c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        }
+        c.closePath();
+        c.fill();
+      }
+    });
+    if (face) blit(ctx, face, -r, -r, r * 2, r * 2, 2 * (r / qr));
     ctx.restore();
   };
 
@@ -670,7 +678,7 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
 
       // Felt mats; the side that won glows in the outcome colour, the other fades.
       const settledNow = t >= duration - 0.3 * c.speed;
-      const mat = (y: number, x: number, mw: number, glow: string | null, dim: boolean) => {
+      const mat = (ctx: CanvasRenderingContext2D, y: number, x: number, mw: number, glow: string | null, dim: boolean) => {
         roundRect(ctx, x, y, mw, matH, 16);
         const g = ctx.createLinearGradient(0, y, 0, y + matH);
         g.addColorStop(0, '#0f5a44');
@@ -687,25 +695,31 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
       };
       const dealerGlow = settledNow && dealerWon ? COLORS.red : null;
       const playerGlow = settledNow && playerWon ? label[1] : null;
-      mat(topY, 8, w - 16, dealerGlow, settledNow && playerWon);
-      if (split) {
-        mat(playerTop, 8, w / 2 - 12, playerGlow, settledNow && dealerWon);
-        mat(playerTop, w / 2 + 4, w / 2 - 12, playerGlow, settledNow && dealerWon);
-      } else {
-        mat(playerTop, 8, w - 16, playerGlow, settledNow && dealerWon);
-      }
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-      (split ? (['d', 'p', 's'] as Who[]) : (['d', 'p'] as Who[])).forEach((who) => {
-        const g = geom(who);
-        for (let i = 0; i < 2; i++) {
-          roundRect(ctx, g.x0 + i * g.spread, cardY[who], cw, ch, 6);
-          ctx.stroke();
+      const layerKey = `bjmat|${w.toFixed(1)}|${h.toFixed(1)}|${hands.p.length}|${hands.s.length}|${hands.d.length}|${dealerGlow}|${playerGlow}|${settledNow && playerWon}|${settledNow && dealerWon}`;
+      const paintLayer = (c: CanvasRenderingContext2D): void => {
+        mat(c, topY, 8, w - 16, dealerGlow, settledNow && playerWon);
+        if (split) {
+          mat(c, playerTop, 8, w / 2 - 12, playerGlow, settledNow && dealerWon);
+          mat(c, playerTop, w / 2 + 4, w / 2 - 12, playerGlow, settledNow && dealerWon);
+        } else {
+          mat(c, playerTop, 8, w - 16, playerGlow, settledNow && dealerWon);
         }
-      });
-      ctx.restore();
+        c.save();
+        c.setLineDash([4, 4]);
+        c.lineWidth = 1;
+        c.strokeStyle = 'rgba(255,255,255,0.14)';
+        (split ? (['d', 'p', 's'] as Who[]) : (['d', 'p'] as Who[])).forEach((who) => {
+          const g = geom(who);
+          for (let i = 0; i < 2; i++) {
+            roundRect(c, g.x0 + i * g.spread, cardY[who], cw, ch, 6);
+            c.stroke();
+          }
+        });
+        c.restore();
+      };
+      const layer = sprite(layerKey, w, h, 0, paintLayer);
+      if (layer) blit(ctx, layer, 0, 0, w, h, 0);
+      else paintLayer(ctx);
 
       const drawCard = (who: Who, i: number, k: number) => {
         const born = k * step;
@@ -774,11 +788,8 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
         const y = cardY[who] + ch + 15;
         const num = total > 21 ? 'BUST' : String(total);
         const tint = total > 21 ? COLORS.red : total === 21 ? COLORS.gold : COLORS.fg;
-        ctx.save();
-        ctx.font = '800 18px system-ui, sans-serif';
-        const nw = ctx.measureText(num).width;
-        ctx.font = '700 10px system-ui, sans-serif';
-        const lw = ctx.measureText(name).width;
+        const nw = measure(`800 18px ${FONT_FAMILY}`, num);
+        const lw = measure(`700 10px ${FONT_FAMILY}`, name);
         const bw = nw + (name ? lw + 8 : 0) + 18;
         roundRect(ctx, g.centre - bw / 2, y - 12, bw, 24, 12);
         ctx.fillStyle = 'rgba(8,12,24,0.85)';
@@ -786,21 +797,12 @@ function blackjackScene(view: Extract<PlayView, { kind: 'blackjack' }>, c: Scene
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = final ? tint : 'rgba(255,255,255,0.2)';
         ctx.stroke();
-        ctx.restore();
         let x = g.centre - bw / 2 + 9;
         if (name) {
-          ctx.font = '700 10px system-ui, sans-serif';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = COLORS.muted;
-          ctx.fillText(name, x, y + 1);
+          text(ctx, name, x + lw / 2, y + 1, 10, COLORS.muted, 700);
           x += lw + 8;
         }
-        ctx.font = '800 18px system-ui, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = tint;
-        ctx.fillText(num, x, y + 1);
+        text(ctx, num, x + nw / 2, y + 1, 18, tint, 800);
       };
       badge('d', w < 260 ? 'D' : 'DEALER', shown('d'), settledNow);
       badge('p', w < 260 ? 'Y' : split ? 'HAND 1' : 'YOU', shown('p'), settledNow);

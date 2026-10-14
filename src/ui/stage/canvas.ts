@@ -21,9 +21,10 @@ export interface Surface {
 }
 
 /** Sizes the backing store for the device pixel ratio. Returns null when hidden or unsupported. */
-export function setupCanvas(canvas: HTMLCanvasElement): Surface | null {
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
+export function setupCanvas(canvas: HTMLCanvasElement, size?: { w: number; h: number } | null): Surface | null {
+  // Callers that track size with a ResizeObserver pass it in; reading clientWidth after DOM writes forces a layout.
+  const w = size ? size.w : canvas.clientWidth;
+  const h = size ? size.h : canvas.clientHeight;
   if (w <= 0 || h <= 0) return null;
   let ctx: CanvasRenderingContext2D | null = null;
   try {

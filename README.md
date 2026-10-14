@@ -48,7 +48,14 @@ Game logic lives in `src/core` and `src/tables` (no DOM); the UI is in `src/ui`.
 ## Dev
 Open the game with `?cardcounting=1` for dev mode: every table is unlocked, Floor Manager, Overtime and Concierge granted, wallets filled enough to max every table's upgrades at once, enough Markers to ascend, and casino shop upgrades are free. It uses its own separate save, so your regular save is untouched.
 
-Open it with `?perf=1` to show a profiling overlay (`src/ui/perf.ts`): fps plus, per measured step (`game.tick`, `app.update`, each table's stage canvas, panel and history refresh), calls/s, average and max ms, and total ms per second. The header's *Quality* button cycles auto / high / low graphics; low drops decorative effects.
+Open it with `?perf=1` to show a profiling overlay (`src/ui/perf.ts`): fps plus, per measured step (`game.tick`, `app.update`, each table's stage canvas, panel and history refresh), calls/s, average and max ms, and total ms per second. The header's *Quality* button cycles auto / high / low graphics; low drops decorative effects. `?quality=low|high` forces a mode for one page load without saving it (handy for A/B runs). With `?perf=1` the latest per-second snapshot is also available as `window.__perf`, and `window.__game` exposes the running `Game`.
+
+## Performance measuring
+`node scripts/perf-measure.mjs [out.md] [--quick]` starts a Vite server and drives headless Chromium (Playwright) through every screen (each table, casino, achievements) for high / low / auto quality, normal / dev mode, and base / max-speed upgrades (all upgrades bought). Each cell is warmed up, then sampled for 12 s from the `?perf=1` data. The report lists fps, p95 frame gap, long frames/s, JS heap change and the most expensive steps in ms per second (`stage.*`, `panel.*`, `app.update`, `history`, `game.tick`). `--quick` runs only dev / max speed / high.
+
+- Results are written to `perf-results/` (gitignored). Keep a `baseline.md` and rerun after a change to compare.
+- Timings are wall-clock, so they are inflated when the machine is busy: compare runs taken back to back.
+- Stage rendering relies on cached sprites (`src/ui/stage/sprites.ts`): glyphs, coin faces, cards, the roulette wheel and the blackjack mats are rendered once per size and blitted each frame. New per-frame drawing should go through `sprite()` rather than redrawing text, gradients or shadows every frame.
 
 ## Balance simulator
 
