@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_HISTORY_POINTS, compact, newHistory, normalizeHistory, recordSample, skipRate } from '../src/core/history';
+import { MAX_HISTORY_POINTS, compact, newHistory, normalizeHistory, recordSample, recordSpan, skipRate } from '../src/core/history';
 import { Game } from '../src/core/game';
 import { createInitialState, normalizeState } from '../src/core/state';
 import { exportSave, importSave } from '../src/core/save';
@@ -113,5 +113,17 @@ describe('reward counters', () => {
     const old = normalizeStats({ coin: { heads: 2, tails: 1, recent: [] } });
     expect(old.coin.gold).toBe(0);
     expect(old.blackjack.charlie).toBe(0);
+  });
+});
+
+describe('recordSpan', () => {
+  it('spreads an offline span over several monotone samples and ends at the new totals', () => {
+    const h = newHistory();
+    recordSpan(h, 0, 0, 1000, 500, 100);
+    expect(h.points.length).toBeGreaterThan(10);
+    expect(h.points[h.points.length - 1]).toEqual([1000, 500]);
+    for (let i = 1; i < h.points.length; i++) expect(h.points[i][0]).toBeGreaterThan(h.points[i - 1][0]);
+    expect(h.rate.points.length).toBeGreaterThan(10);
+    expect(h.rate.points[h.rate.points.length - 1][1]).toBeCloseTo(5);
   });
 });

@@ -4,6 +4,8 @@ export const MAX_HISTORY_POINTS = 400;
 /** Income is averaged over at least this many seconds of play per chart sample. */
 export const RATE_WINDOW_SECONDS = 5;
 
+/** Interpolated chart samples an offline span is spread over. */
+export const OFFLINE_SAMPLES = 24;
 export const SLOT_SYMBOLS = 6;
 export const POCKETS = 37;
 export const RECENT_COINS = 240;
@@ -141,6 +143,20 @@ export function recordRate(h: History, seconds: number, plays: number, lifetimeP
 export function skipRate(h: History, seconds: number, lifetimeProfit: number): void {
   h.clock += seconds;
   h.rateFrom = [h.clock, lifetimeProfit];
+}
+
+/** Spreads an offline span over interpolated samples so the charts show a ramp (and a plateau in the rate) instead of one long segment. */
+export function recordSpan(h: History, fromPlays: number, fromProfit: number, toPlays: number, toProfit: number, seconds: number): void {
+  const n = toPlays > fromPlays ? OFFLINE_SAMPLES : 1;
+  const rate = seconds > 0 ? (toProfit - fromProfit) / seconds : 0;
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const x = i === n ? toPlays : Math.round(fromPlays + (toPlays - fromPlays) * t);
+    const y = i === n ? toProfit : fromProfit + (toProfit - fromProfit) * t;
+    recordSample(h, x, y, true);
+    if (seconds > 0) recordSample(h.rate, x, rate, true);
+  }
+  skipRate(h, seconds, toProfit);
 }
 
 export function markPrestige(h: Series, plays: number): void {

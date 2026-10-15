@@ -30,7 +30,7 @@ import {
 } from './economy';
 import { START_MONEY, newTableState, prestigeWallet, starterWallet } from './state';
 import { observeRound, observeUpgrades, perkLevels, type AchievementDef } from './achievements';
-import { markPrestige, newStats, recordRate, recordSample, recordView, skipRate } from './history';
+import { markPrestige, newStats, recordRate, recordSample, recordSpan, recordView } from './history';
 import {
   CASINO_UPGRADES,
   MANAGER_RESERVE_BETS,
@@ -644,11 +644,12 @@ export class Game {
       } else {
         ts.wallet += applied;
       }
+      const fromPlays = ts.plays;
+      const fromProfit = ts.lifetimeProfit;
       ts.profit += applied;
       ts.lifetimeProfit += applied;
       ts.plays += plays;
-      recordSample(ts.history, ts.plays, ts.lifetimeProfit, true);
-      skipRate(ts.history, effective, ts.lifetimeProfit);
+      recordSpan(ts.history, fromPlays, fromProfit, ts.plays, ts.lifetimeProfit, effective * efficiency);
       report.plays += plays;
       report.net += applied;
     }
